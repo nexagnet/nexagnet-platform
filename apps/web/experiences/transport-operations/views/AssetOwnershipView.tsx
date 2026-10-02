@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { PermissionGate } from '../components/PermissionGate';
 import { DataTable, PageHeader, StatusBadge } from '../components/primitives';
 import { EmptyState, ErrorState, LoadingState } from '../components/SectionState';
 import {
@@ -10,7 +11,7 @@ import {
   useOwnershipRegister,
   useVehicles,
 } from '../hooks/useTransportWorkspace';
-import { hasOperationsScope, operationsEmptyMessage } from '../transport-actions';
+import { canPerform, hasOperationsScope, operationsEmptyMessage } from '../transport-actions';
 import {
   OPERATIONAL_CONTROL_LABEL,
   OWNERSHIP_CLASS_LABEL,
@@ -99,11 +100,11 @@ export function AssetOwnershipView() {
     return vehicleRows.filter((row) => row.control === 'INTERNAL_OPERATED');
   }, [vehicleRows, filter]);
 
-  if (!hasOperationsScope(navigation.role)) {
+  if (!hasOperationsScope(navigation)) {
     return (
       <>
         <PageHeader title="Sở hữu tài sản" />
-        <ErrorState message={operationsEmptyMessage(navigation.role)} />
+        <ErrorState message={operationsEmptyMessage(navigation)} />
       </>
     );
   }
@@ -129,39 +130,49 @@ export function AssetOwnershipView() {
         không sinh ra bất kỳ khoản phải trả nào từ con số này.
       </p>
 
-      <div className="tx-tabs" role="group" aria-label="Lọc theo nhóm sở hữu">
-        {OWNERSHIP_FILTERS.map((option) => (
-          <button
-            key={option.id}
-            type="button"
-            className="tx-tab"
-            aria-pressed={filter === option.id}
-            onClick={() => setFilter(option.id)}
-          >
-            {option.label}
-          </button>
-        ))}
-      </div>
-
-      {vehicles.isLoading ? <LoadingState label="Đang tải đội xe" /> : null}
-      {vehicles.errorMessage === null ? null : <ErrorState message={vehicles.errorMessage} />}
-
-      {filtered.length === 0 && !vehicles.isLoading ? (
-        <EmptyState title="Không có xe nào trong nhóm đang lọc." />
+      {/*
+        `#395` — so dang ky doc THEO XE, chon tu danh sach xe (`transport.vehicle.read`). Chua duoc
+        xem danh sach xe thi phan chon xe noi mot cau; ho so ben huu quan ben duoi van dung duoc.
+      */}
+      {!canPerform(navigation, 'transport.vehicle.read') ? (
+        <PermissionGate viewer={navigation} action="transport.vehicle.read" />
       ) : (
-        <DataTable
-          caption="Đội xe — chọn một xe để xem sổ đăng ký sở hữu"
-          rows={filtered}
-          rowKey={(row) => row.id}
-          selectedKey={selectedVehicleId}
-          onSelect={(row) => setSelectedVehicleId(row.id)}
-          columns={[
-            { key: 'plate', header: 'Biển số', render: (row) => row.plate },
-            { key: 'class', header: 'Hạng xe', render: (row) => row.vehicleClass },
-            { key: 'control', header: 'Quyền điều hành', render: (row) => row.controlLabel },
-            { key: 'register', header: 'Sổ đăng ký', render: (row) => row.registerLabel },
-          ]}
-        />
+        <>
+          <div className="tx-tabs" role="group" aria-label="Lọc theo nhóm sở hữu">
+            {OWNERSHIP_FILTERS.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                className="tx-tab"
+                aria-pressed={filter === option.id}
+                onClick={() => setFilter(option.id)}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+
+          {vehicles.isLoading ? <LoadingState label="Đang tải đội xe" /> : null}
+          {vehicles.errorMessage === null ? null : <ErrorState message={vehicles.errorMessage} />}
+
+          {vehicles.errorMessage !== null ? null : filtered.length === 0 && !vehicles.isLoading ? (
+            <EmptyState title="Không có xe nào trong nhóm đang lọc." />
+          ) : (
+            <DataTable
+              caption="Đội xe — chọn một xe để xem sổ đăng ký sở hữu"
+              rows={filtered}
+              rowKey={(row) => row.id}
+              selectedKey={selectedVehicleId}
+              onSelect={(row) => setSelectedVehicleId(row.id)}
+              columns={[
+                { key: 'plate', header: 'Biển số', render: (row) => row.plate },
+                { key: 'class', header: 'Hạng xe', render: (row) => row.vehicleClass },
+                { key: 'control', header: 'Quyền điều hành', render: (row) => row.controlLabel },
+                { key: 'register', header: 'Sổ đăng ký', render: (row) => row.registerLabel },
+              ]}
+            />
+          )}
+        </>
       )}
 
       {selectedVehicleId === null ? null : (

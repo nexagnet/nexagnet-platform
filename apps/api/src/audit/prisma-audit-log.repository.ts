@@ -1,5 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import { auditLogSchema, auditLogFilterSchema, type AuditLog, type AuditLogFilter } from '@netviet/shared';
+import {
+  auditLogSchema,
+  auditLogFilterSchema,
+  type AuditLog,
+  type AuditLogFilter,
+} from '@netviet/shared';
 import { Prisma, type AuditLog as PrismaAuditLog } from '@prisma/client';
 import { PrismaService } from '../config/prisma.service.js';
 import { AuditLogRepository, type AppendAuditLogInput } from './audit-log.repository.js';
@@ -8,6 +13,11 @@ import { AuditLogRepository, type AppendAuditLogInput } from './audit-log.reposi
 export class PrismaAuditLogRepository extends AuditLogRepository {
   constructor(private readonly prisma: PrismaService) {
     super();
+  }
+
+  /** Client giao dich co CUNG delegate `auditLog` — cung cau lenh, trong giao dich cua nguoi goi. */
+  override onTransaction(client: unknown): AuditLogRepository {
+    return new PrismaAuditLogRepository(client as PrismaService);
   }
 
   async append(input: AppendAuditLogInput): Promise<AuditLog> {
@@ -59,6 +69,8 @@ function toAuditLog(row: PrismaAuditLog): AuditLog {
   });
 }
 
-function jsonOrNull(value: Prisma.JsonValue | typeof Prisma.DbNull | null): Prisma.JsonValue | null {
+function jsonOrNull(
+  value: Prisma.JsonValue | typeof Prisma.DbNull | null,
+): Prisma.JsonValue | null {
   return value === null || value === Prisma.DbNull ? null : (value as Prisma.JsonValue);
 }

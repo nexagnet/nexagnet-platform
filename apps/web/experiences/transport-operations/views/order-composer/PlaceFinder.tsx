@@ -130,7 +130,7 @@ function KnownList({
   return (
     <div className="tx-finder__groups">
       {groupKnownPlaces(places).map((group) => (
-        <section key={group.kind} className="tx-finder__group" aria-label={group.title}>
+        <section key={group.key} className="tx-finder__group" aria-label={group.title}>
           <h3 className="tx-finder__grouptitle">{group.title}</h3>
           <ul className="tx-finder__list">
             {group.places.map((place) => (

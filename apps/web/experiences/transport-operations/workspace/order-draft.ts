@@ -6,7 +6,12 @@ import type {
   PlaceCandidate,
   TransportOrder,
 } from '../transport-types';
-import { accuracyPhrase, knownPlaceSourceLine, type PickerMarker } from './place-lookup';
+import {
+  accuracyPhrase,
+  knownPlaceKindLabel,
+  knownPlaceSourceLine,
+  type PickerMarker,
+} from './place-lookup';
 
 /**
  * BAN NHAP CUA MOT DON MOI (`#379`) — reducer THUAN cho man tao don.
@@ -42,6 +47,8 @@ export type PlaceProvenance =
       readonly kind: 'KNOWN_PLACE';
       readonly placeKind: KnownPlaceKind;
       readonly owner: string | null;
+      /** Nhan loai may chu tinh (`#395`), `null` = suy tu `placeKind`. */
+      readonly kindLabel?: string | null;
     }
   | { readonly kind: 'SEARCH_RESULT'; readonly address: string | null }
   | {
@@ -226,7 +233,8 @@ export function draftReducer(draft: OrderDraft, action: DraftAction): OrderDraft
     }
     case 'RENAMED': {
       const place = slotOf(draft, action.endpoint);
-      if (place === null) return draft;
+      // Ten BAI XE khoa (`#395` §2.3): khau lap ke hoach nhan ra bai xe bang DUNG ten nay.
+      if (place === null || isNameLocked(place)) return draft;
       return withSlot(draft, action.endpoint, { ...place, name: action.name, isNameEdited: true });
     }
     case 'CLEARED':
@@ -245,8 +253,24 @@ export function draftReducer(draft: OrderDraft, action: DraftAction): OrderDraft
 export const choiceFromKnownPlace = (place: KnownPlace): PlaceChoice => ({
   point: place.point,
   name: place.name,
-  provenance: { kind: 'KNOWN_PLACE', placeKind: place.kind, owner: place.detail },
+  provenance: {
+    kind: 'KNOWN_PLACE',
+    placeKind: place.kind,
+    owner: place.detail,
+    kindLabel: place.kindLabel ?? null,
+  },
 });
+
+/**
+ * TEN BAI XE KHONG SUA DUOC tren don (`#395` §2.3). Khau lap ke hoach nhan ra chang rong va "xe da
+ * ve bai" bang CHINH ten bai trong "Địa điểm vận hành"; mot ten go tay ("Bãi xe HN — cổng sau") se
+ * sinh mot chang rong gia va khong bao gio dong vong chay. Keo ghim di cho khac thi diem khong con
+ * la bai xe nua, va ten lai sua duoc.
+ */
+export const isNameLocked = (place: DraftPlace): boolean =>
+  place.provenance.kind === 'KNOWN_PLACE' && place.provenance.placeKind === 'DEPOT';
+
+export const DEPOT_NAME_LOCK_HINT = 'Tên bãi xe lấy từ Địa điểm vận hành.';
 
 export const choiceFromSearchResult = (candidate: PlaceCandidate): PlaceChoice => ({
   point: candidate.point,
@@ -282,7 +306,7 @@ export function sourceLineOf(place: DraftPlace): SourceLine {
   switch (provenance.kind) {
     case 'KNOWN_PLACE':
       return {
-        source: knownPlaceSourceLine(provenance.placeKind, provenance.owner),
+        source: knownPlaceSourceLine(provenance.placeKind, provenance.owner, provenance.kindLabel),
         detail: null,
       };
     case 'SEARCH_RESULT':
@@ -492,7 +516,7 @@ export function pickerMarkers(sources: MarkerSources): readonly PickerMarker[] {
     key: knownPlaceMarkerKey(place.id),
     kind: place.kind,
     point: place.point,
-    label: `${knownPlaceSourceLine(place.kind, null)}: ${place.name}`,
+    label: `${knownPlaceKindLabel(place)}: ${place.name}`,
     badge: null,
     isHighlighted: false,
     isDraggable: false,

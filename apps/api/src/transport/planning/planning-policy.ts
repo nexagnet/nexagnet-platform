@@ -92,7 +92,33 @@ export type DepotResolution =
   | { readonly kind: 'AMBIGUOUS'; readonly codes: readonly string[] };
 
 export function resolveDepot(policy: TransportPlanningPolicy): DepotResolution {
-  const active = policy.depots.filter((depot) => depot.active !== false);
+  return resolveDepotFrom(
+    policy.depots.map((depot) => ({
+      code: depot.code,
+      label: depot.label,
+      active: depot.active !== false,
+    })),
+  );
+}
+
+/**
+ * MOT bai trong danh ba — du de giai bai, khong hon. `DepotEntry` (`depot-directory.ts`) thoa kieu
+ * nay, nen danh ba doc tu cau hinh hay tu "Dia diem van hanh" di qua CUNG mot luat.
+ */
+export interface DepotCandidate {
+  readonly code: string;
+  readonly label: string;
+  readonly active: boolean;
+}
+
+/**
+ * GIAI BAI XE tu MOT danh sach da doc san (`#395`). Ham THUAN: nguoi goi doc danh ba MOT lan cho
+ * mot thao tac — truoc moi khoa hang vong chay — roi truyen danh sach xuong. Luat giu nguyen nhu
+ * `resolveDepot`: dung mot bai dang bat thi `RESOLVED`, khong bai nao thi `NOT_CONFIGURED`, tu hai
+ * bai tro len thi `AMBIGUOUS`.
+ */
+export function resolveDepotFrom(candidates: readonly DepotCandidate[]): DepotResolution {
+  const active = candidates.filter((depot) => depot.active);
   if (active.length === 0) return { kind: 'NOT_CONFIGURED' };
   if (active.length > 1) {
     return { kind: 'AMBIGUOUS', codes: active.map((depot) => depot.code) };

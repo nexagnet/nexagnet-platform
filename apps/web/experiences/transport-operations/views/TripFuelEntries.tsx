@@ -88,7 +88,7 @@ export function TripFuelEntries({
     return <ErrorState message={entries.errorMessage} onRetry={entries.refetch} />;
   }
 
-  const rows = toFuelEntryRows(entries.data ?? [], suppliers.data ?? [], navigation.role);
+  const rows = toFuelEntryRows(entries.data ?? [], suppliers.data ?? [], navigation);
   if (rows.length === 0) {
     return <EmptyState title="Chưa có phiếu đổ dầu nào cho chuyến này." />;
   }

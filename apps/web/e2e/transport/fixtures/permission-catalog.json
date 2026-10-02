@@ -1,0 +1,1143 @@
+{
+  "domains": [
+    {
+      "id": "transport",
+      "groups": [
+        {
+          "id": "dieu-hanh",
+          "label": "Điều hành đơn / vòng xe / chặng",
+          "summary": "Đơn vận chuyển, chuyến xe, vòng xe, chặng, điều xe và bảng điều hành.",
+          "grantable": true,
+          "actions": [
+            {
+              "code": "transport.order.read",
+              "label": "Xem đơn vận chuyển",
+              "kind": "XEM",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.order.manage",
+              "label": "Tạo và sửa đơn vận chuyển",
+              "kind": "THAO_TAC",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.run.read",
+              "label": "Xem vòng xe và chặng",
+              "kind": "XEM",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.run.manage",
+              "label": "Lập kế hoạch, gán xe và cập nhật vòng xe, chặng",
+              "kind": "THAO_TAC",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.dispatch.suggest.read",
+              "label": "Xem gợi ý xe cho một đơn",
+              "kind": "XEM",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.control_tower.read",
+              "label": "Xem bảng điều hành",
+              "kind": "XEM",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.trip.read",
+              "label": "Xem chuyến xe",
+              "kind": "XEM",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.trip.create",
+              "label": "Tạo chuyến xe",
+              "kind": "THAO_TAC",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.trip.update",
+              "label": "Sửa thông tin chuyến xe",
+              "kind": "THAO_TAC",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.trip.assign",
+              "label": "Phân công xe và lái xe cho chuyến",
+              "kind": "THAO_TAC",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.trip.transition",
+              "label": "Chuyển trạng thái chuyến (xuất phát, hoàn thành…)",
+              "kind": "THAO_TAC",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.trip.cancel",
+              "label": "Huỷ chuyến xe",
+              "kind": "NHAY_CAM",
+              "directorOnly": false,
+              "escalation": true,
+              "sod": null
+            }
+          ],
+          "needs": ["transport.customer.read", "transport.vehicle.read"]
+        },
+        {
+          "id": "hien-truong",
+          "label": "Hiện trường & bằng chứng",
+          "summary": "Mốc hiện trường, chờ người nhận, chứng từ và chứng cứ giao hàng.",
+          "grantable": true,
+          "actions": [
+            {
+              "code": "transport.checkpoint.read",
+              "label": "Xem dòng thời gian mốc hiện trường",
+              "kind": "XEM",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.checkpoint.record",
+              "label": "Ghi bù mốc hiện trường từ văn phòng",
+              "kind": "NHAY_CAM",
+              "directorOnly": false,
+              "escalation": true,
+              "sod": "EVIDENCE"
+            },
+            {
+              "code": "transport.waiting.read",
+              "label": "Xem phiên chờ người nhận",
+              "kind": "XEM",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.waiting.close",
+              "label": "Đóng phiên chờ bị bỏ quên",
+              "kind": "NHAY_CAM",
+              "directorOnly": false,
+              "escalation": true,
+              "sod": "EVIDENCE"
+            },
+            {
+              "code": "transport.operational_document.read",
+              "label": "Xem chứng từ vận hành (biên nhận, phiếu giao)",
+              "kind": "XEM",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.operational_document.record",
+              "label": "Ghi bù chứng từ vận hành thay lái xe",
+              "kind": "NHAY_CAM",
+              "directorOnly": false,
+              "escalation": true,
+              "sod": "EVIDENCE"
+            },
+            {
+              "code": "transport.operational_document.withdraw",
+              "label": "Gỡ chứng từ vận hành khỏi hồ sơ",
+              "kind": "NHAY_CAM",
+              "directorOnly": false,
+              "escalation": true,
+              "sod": "EVIDENCE"
+            },
+            {
+              "code": "transport.receipt_handover.record",
+              "label": "Ghi nhận biên nhận giấy đã về văn phòng",
+              "kind": "THAO_TAC",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.proof.read",
+              "label": "Xem chứng cứ giao hàng",
+              "kind": "XEM",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.proof.withdraw",
+              "label": "Rút một chứng cứ khỏi hồ sơ",
+              "kind": "NHAY_CAM",
+              "directorOnly": false,
+              "escalation": true,
+              "sod": "EVIDENCE"
+            }
+          ],
+          "needs": ["transport.order.read", "transport.run.read"]
+        },
+        {
+          "id": "doi-xe",
+          "label": "Đội xe & lái xe",
+          "summary": "Hồ sơ xe, hồ sơ lái xe và sở hữu xe.",
+          "grantable": true,
+          "actions": [
+            {
+              "code": "transport.vehicle.read",
+              "label": "Xem danh sách xe",
+              "kind": "XEM",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.vehicle.manage",
+              "label": "Thêm và sửa hồ sơ xe",
+              "kind": "THAO_TAC",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.driver.read",
+              "label": "Xem hồ sơ lái xe",
+              "kind": "XEM",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.driver.manage",
+              "label": "Thêm và sửa hồ sơ lái xe",
+              "kind": "THAO_TAC",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.asset_ownership.read",
+              "label": "Xem sở hữu xe và bên góp vốn",
+              "kind": "XEM",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.asset_ownership.manage",
+              "label": "Cập nhật sở hữu xe và bên góp vốn",
+              "kind": "THAO_TAC",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            }
+          ],
+          "needs": []
+        },
+        {
+          "id": "khach-hang",
+          "label": "Khách hàng / đối tác",
+          "summary": "Khách hàng, nhà xe đối tác và pháp nhân, kể cả nhà máy, kho của đối tác.",
+          "grantable": true,
+          "actions": [
+            {
+              "code": "transport.customer.read",
+              "label": "Xem khách hàng",
+              "kind": "XEM",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.customer.manage",
+              "label": "Thêm và sửa khách hàng",
+              "kind": "THAO_TAC",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.partner.read",
+              "label": "Xem đối tác (nhà xe thuê ngoài, người giới thiệu)",
+              "kind": "XEM",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.partner.manage",
+              "label": "Thêm và sửa đối tác",
+              "kind": "THAO_TAC",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.counterparty.read",
+              "label": "Xem pháp nhân của khách hàng, đối tác",
+              "kind": "XEM",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.counterparty.manage",
+              "label": "Thêm, sửa pháp nhân và nhà máy, kho của họ",
+              "kind": "THAO_TAC",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            }
+          ],
+          "needs": ["transport.order.read"]
+        },
+        {
+          "id": "ke-toan",
+          "label": "Kế toán & công nợ",
+          "summary": "Chi phí chuyến, kỳ kế toán, đối soát và thu tiền khách, nghiệm thu chứng từ.",
+          "grantable": true,
+          "actions": [
+            {
+              "code": "transport.costing.expense.read",
+              "label": "Xem chi phí chuyến",
+              "kind": "XEM",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.costing.expense.record",
+              "label": "Ghi chi phí chuyến",
+              "kind": "THAO_TAC",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.costing.reversal.post",
+              "label": "Đảo một khoản chi đã ghi",
+              "kind": "THAO_TAC",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.costing.period.read",
+              "label": "Xem kỳ kế toán",
+              "kind": "XEM",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.costing.period.manage",
+              "label": "Mở và đóng kỳ kế toán",
+              "kind": "THAO_TAC",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.costing.period.reopen",
+              "label": "Mở lại kỳ kế toán đã đóng",
+              "kind": "NHAY_CAM",
+              "directorOnly": true,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.commercial_acceptance.read",
+              "label": "Xem hồ sơ chờ nghiệm thu",
+              "kind": "XEM",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.commercial_acceptance.decide",
+              "label": "Duyệt nghiệm thu chứng từ",
+              "kind": "DUYET",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": "DECISION"
+            },
+            {
+              "code": "transport.customer_reconciliation.read",
+              "label": "Xem đối soát với khách hàng",
+              "kind": "XEM",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.customer_reconciliation.confirm",
+              "label": "Xác nhận đối soát thành công nợ phải thu",
+              "kind": "DUYET",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": "DECISION"
+            },
+            {
+              "code": "transport.customer_payment.read",
+              "label": "Xem tiền khách đã trả",
+              "kind": "XEM",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.customer_payment.record",
+              "label": "Ghi nhận tiền khách trả",
+              "kind": "THAO_TAC",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.customer_payment.allocate",
+              "label": "Phân bổ tiền khách trả vào công nợ",
+              "kind": "THAO_TAC",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.customer_payment.correct",
+              "label": "Sửa phân bổ tiền khách trả",
+              "kind": "THAO_TAC",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.settlement.document.read",
+              "label": "Xem chuỗi chứng từ gốc và các lần điều chỉnh",
+              "kind": "XEM",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            }
+          ],
+          "needs": [
+            "transport.customer.read",
+            "transport.order.read",
+            "transport.operational_document.read"
+          ]
+        },
+        {
+          "id": "nhien-lieu",
+          "label": "Nhiên liệu",
+          "summary": "Phiếu đổ dầu, cây xăng, hoá đơn và đối soát nhiên liệu.",
+          "grantable": true,
+          "actions": [
+            {
+              "code": "transport.fuel.entry.read",
+              "label": "Xem phiếu đổ dầu",
+              "kind": "XEM",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.fuel.entry.submit_for_driver",
+              "label": "Nộp phiếu đổ dầu thay lái xe",
+              "kind": "THAO_TAC",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.fuel.entry.verify",
+              "label": "Duyệt phiếu đổ dầu",
+              "kind": "THAO_TAC",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.fuel.cost_attribution.record",
+              "label": "Phân bổ chi phí nhiên liệu vào vòng xe, chặng",
+              "kind": "THAO_TAC",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.fuel.station.read",
+              "label": "Xem danh mục cây xăng",
+              "kind": "XEM",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.fuel.station.manage",
+              "label": "Quản lý danh mục cây xăng",
+              "kind": "THAO_TAC",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.fuel.document.read",
+              "label": "Xem hoá đơn, chứng từ nhiên liệu",
+              "kind": "XEM",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.fuel.document.ingest",
+              "label": "Nhập hoá đơn nhiên liệu",
+              "kind": "THAO_TAC",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.fuel.statement.import",
+              "label": "Nhập bảng kê của cây xăng",
+              "kind": "THAO_TAC",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.fuel.reconciliation.read",
+              "label": "Xem đối soát nhiên liệu",
+              "kind": "XEM",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.fuel.reconciliation.match",
+              "label": "Khớp phiếu đổ dầu với bảng kê",
+              "kind": "THAO_TAC",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.fuel.reconciliation.resolve",
+              "label": "Xử lý chênh lệch đối soát nhiên liệu",
+              "kind": "THAO_TAC",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.fuel.reconciliation.close",
+              "label": "Đóng kỳ đối soát nhiên liệu",
+              "kind": "THAO_TAC",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.fuel.reconciliation.reopen",
+              "label": "Mở lại kỳ đối soát nhiên liệu đã đóng",
+              "kind": "NHAY_CAM",
+              "directorOnly": true,
+              "escalation": false,
+              "sod": null
+            }
+          ],
+          "needs": ["transport.vehicle.read"]
+        },
+        {
+          "id": "quy-luong",
+          "label": "Quỹ lái xe / lương",
+          "summary": "Tạm ứng, đề nghị chi, phụ cấp chờ, lương và quyết toán lái xe.",
+          "grantable": true,
+          "actions": [
+            {
+              "code": "transport.costing.driver_fund.read",
+              "label": "Xem quỹ tạm ứng của lái xe",
+              "kind": "XEM",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.costing.driver_fund.advance",
+              "label": "Tạm ứng tiền cho lái xe",
+              "kind": "THAO_TAC",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.costing.driver_fund.return",
+              "label": "Ghi lái xe hoàn tạm ứng",
+              "kind": "THAO_TAC",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.costing.driver_fund.adjust",
+              "label": "Điều chỉnh quỹ lái xe",
+              "kind": "THAO_TAC",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.expense.claim.read",
+              "label": "Xem đề nghị chi của lái xe",
+              "kind": "XEM",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.expense.claim.submit",
+              "label": "Nhập đề nghị chi thay lái xe",
+              "kind": "THAO_TAC",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.expense.claim.review",
+              "label": "Duyệt hoặc từ chối đề nghị chi",
+              "kind": "THAO_TAC",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.waiting_allowance.propose",
+              "label": "Đề nghị phụ cấp chờ cho lái xe",
+              "kind": "THAO_TAC",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.waiting_allowance.decide",
+              "label": "Duyệt phụ cấp chờ",
+              "kind": "DUYET",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": "DECISION"
+            },
+            {
+              "code": "transport.payroll.period.read",
+              "label": "Xem kỳ lương",
+              "kind": "XEM",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.payroll.period.manage",
+              "label": "Mở và đóng kỳ lương",
+              "kind": "THAO_TAC",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.payroll.run",
+              "label": "Tính lương cho kỳ",
+              "kind": "THAO_TAC",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.payslip.approve",
+              "label": "Duyệt phiếu lương",
+              "kind": "THAO_TAC",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.payslip.pay",
+              "label": "Ghi đã trả lương",
+              "kind": "THAO_TAC",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.payslip.correct",
+              "label": "Sửa phiếu lương đã chốt bằng phiếu bổ sung",
+              "kind": "THAO_TAC",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.driver_settlement.read",
+              "label": "Xem quyết toán lái xe",
+              "kind": "XEM",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.driver_settlement.cashout",
+              "label": "Chi tiền quyết toán cho lái xe",
+              "kind": "THAO_TAC",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.driver_settlement.reverse",
+              "label": "Đảo một lần chi quyết toán",
+              "kind": "NHAY_CAM",
+              "directorOnly": true,
+              "escalation": false,
+              "sod": null
+            }
+          ],
+          "needs": ["transport.driver.read"]
+        },
+        {
+          "id": "bao-duong",
+          "label": "Bảo dưỡng / giấy tờ",
+          "summary": "Kế hoạch bảo dưỡng, lệnh sửa xe, giấy tờ xe, tình trạng đội xe và cảnh báo.",
+          "grantable": true,
+          "actions": [
+            {
+              "code": "transport.maintenance.plan.read",
+              "label": "Xem kế hoạch bảo dưỡng",
+              "kind": "XEM",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.maintenance.plan.manage",
+              "label": "Lập kế hoạch bảo dưỡng",
+              "kind": "THAO_TAC",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.maintenance.work_order.open",
+              "label": "Mở lệnh sửa xe",
+              "kind": "THAO_TAC",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.maintenance.work_order.close",
+              "label": "Đóng lệnh sửa xe",
+              "kind": "THAO_TAC",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.compliance.document.read",
+              "label": "Xem giấy tờ xe (đăng kiểm, bảo hiểm…)",
+              "kind": "XEM",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.compliance.document.manage",
+              "label": "Cập nhật giấy tờ xe",
+              "kind": "THAO_TAC",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.fleet_status.read",
+              "label": "Xem tình trạng sẵn sàng của đội xe",
+              "kind": "XEM",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.alerts.read",
+              "label": "Xem cảnh báo vận hành",
+              "kind": "XEM",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            }
+          ],
+          "needs": ["transport.vehicle.read", "transport.driver.read"]
+        },
+        {
+          "id": "ban-do",
+          "label": "Bản đồ, vị trí & địa điểm",
+          "summary": "Vị trí xe, đường đi chi tiết và địa điểm vận hành trên bản đồ.",
+          "grantable": true,
+          "actions": [
+            {
+              "code": "transport.tracking.read",
+              "label": "Xem tóm tắt vị trí của chuyến (không có toạ độ)",
+              "kind": "XEM",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.location.history.read",
+              "label": "Xem đường đi chi tiết của xe và lái xe",
+              "kind": "NHAY_CAM",
+              "directorOnly": false,
+              "escalation": true,
+              "sod": null
+            },
+            {
+              "code": "transport.telematics.observation.ingest",
+              "label": "Nhập vị trí từ thiết bị định vị trên xe",
+              "kind": "NHAY_CAM",
+              "directorOnly": false,
+              "escalation": true,
+              "sod": "EVIDENCE"
+            },
+            {
+              "code": "transport.geofence.read",
+              "label": "Xem địa điểm vận hành",
+              "kind": "XEM",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.geofence.manage",
+              "label": "Thêm, sửa, tắt địa điểm vận hành",
+              "kind": "NHAY_CAM",
+              "directorOnly": false,
+              "escalation": true,
+              "sod": "EVIDENCE"
+            }
+          ],
+          "needs": ["transport.vehicle.read", "transport.run.read"]
+        },
+        {
+          "id": "phi-duong",
+          "label": "Phí đường bộ (ETC)",
+          "summary": "Tài khoản thu phí, dữ liệu ETC và đối soát phí đường bộ.",
+          "grantable": true,
+          "actions": [
+            {
+              "code": "transport.toll.account.read",
+              "label": "Xem tài khoản thu phí và xe gắn vào",
+              "kind": "XEM",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.toll.account.manage",
+              "label": "Quản lý tài khoản thu phí, gắn xe",
+              "kind": "THAO_TAC",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.toll.import",
+              "label": "Nhập dữ liệu phí đường bộ",
+              "kind": "THAO_TAC",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.toll.review.read",
+              "label": "Xem các dòng phí cần đối soát",
+              "kind": "XEM",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.toll.review.resolve",
+              "label": "Xử lý dòng phí cần đối soát",
+              "kind": "THAO_TAC",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            }
+          ],
+          "needs": ["transport.vehicle.read"]
+        },
+        {
+          "id": "bao-cao",
+          "label": "Báo cáo",
+          "summary": "Báo cáo công nợ, quyết toán và chỉ số vận hành của đội xe.",
+          "grantable": true,
+          "actions": [
+            {
+              "code": "transport.settlement.report.read",
+              "label": "Xem báo cáo công nợ và quyết toán",
+              "kind": "XEM",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.analytics.read",
+              "label": "Xem chỉ số vận hành (km rỗng, hiệu quả chuyến)",
+              "kind": "XEM",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            }
+          ],
+          "needs": ["transport.customer.read", "transport.partner.read"]
+        },
+        {
+          "id": "quan-tri",
+          "label": "Quản trị",
+          "summary": "Nối tài khoản đăng nhập với hồ sơ lái xe, bên góp vốn.",
+          "grantable": true,
+          "actions": [
+            {
+              "code": "transport.account_link.manage",
+              "label": "Nối tài khoản đăng nhập với hồ sơ lái xe, bên góp vốn",
+              "kind": "NHAY_CAM",
+              "directorOnly": true,
+              "escalation": false,
+              "sod": null
+            }
+          ],
+          "needs": []
+        },
+        {
+          "id": "lai-xe",
+          "label": "Việc của chính lái xe",
+          "summary": "Có khi tài khoản được nối với một hồ sơ lái xe — không cấp bằng quyền riêng.",
+          "grantable": false,
+          "actions": [
+            {
+              "code": "transport.driver.self.trip.read",
+              "label": "Xem chuyến của mình",
+              "kind": "XEM",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.driver.self.trip.update",
+              "label": "Cập nhật chuyến của mình",
+              "kind": "THAO_TAC",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.driver.self.fund.read",
+              "label": "Xem quỹ tạm ứng của mình",
+              "kind": "XEM",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.driver.self.fuel.read",
+              "label": "Xem phiếu đổ dầu của mình",
+              "kind": "XEM",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.driver.self.fuel.submit",
+              "label": "Nộp phiếu đổ dầu của mình",
+              "kind": "THAO_TAC",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.driver.self.expense.record",
+              "label": "Ghi khoản chi từ tiền tạm ứng của mình",
+              "kind": "THAO_TAC",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.driver.self.expense.claim.submit",
+              "label": "Nộp đề nghị chi của mình",
+              "kind": "THAO_TAC",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.driver.self.payslip.read",
+              "label": "Xem phiếu lương của mình",
+              "kind": "XEM",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.driver.self.settlement.read",
+              "label": "Xem quyết toán của mình",
+              "kind": "XEM",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.driver.self.tracking.start",
+              "label": "Bật chia sẻ vị trí",
+              "kind": "THAO_TAC",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.driver.self.tracking.report",
+              "label": "Gửi vị trí trong chuyến",
+              "kind": "THAO_TAC",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.driver.self.tracking.stop",
+              "label": "Tắt chia sẻ vị trí",
+              "kind": "THAO_TAC",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.driver.self.proof.record",
+              "label": "Chụp chứng cứ bắt đầu và giao hàng",
+              "kind": "THAO_TAC",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.driver.self.checkpoint.record",
+              "label": "Ghi mốc hiện trường (đến nơi, bốc hàng, giao xong…)",
+              "kind": "THAO_TAC",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.driver.self.site_intake.propose",
+              "label": "Xem gợi ý nhận việc tại chỗ",
+              "kind": "THAO_TAC",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.driver.self.site_intake.confirm",
+              "label": "Nhận việc tại chỗ",
+              "kind": "THAO_TAC",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.driver.self.waiting.start",
+              "label": "Bắt đầu tính giờ chờ người nhận",
+              "kind": "THAO_TAC",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.driver.self.document.record",
+              "label": "Ghi chứng từ vận hành của mình",
+              "kind": "THAO_TAC",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            },
+            {
+              "code": "transport.driver.self.receipt_handover.record",
+              "label": "Báo đang giữ biên nhận giấy",
+              "kind": "THAO_TAC",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            }
+          ],
+          "needs": []
+        },
+        {
+          "id": "chu-xe",
+          "label": "Xe mình có cổ phần",
+          "summary": "Có khi tài khoản được nối với một hồ sơ bên góp vốn — không cấp bằng quyền riêng.",
+          "grantable": false,
+          "actions": [
+            {
+              "code": "transport.stakeholder.self.vehicle.read",
+              "label": "Xem xe mình có cổ phần",
+              "kind": "XEM",
+              "directorOnly": false,
+              "escalation": false,
+              "sod": null
+            }
+          ],
+          "needs": []
+        }
+      ],
+      "presets": [
+        {
+          "role": "ADMIN",
+          "label": "Giám đốc",
+          "summary": "Toàn quyền vận hành, duyệt tiền và quản trị tài khoản."
+        },
+        {
+          "role": "ACCOUNTING",
+          "label": "Kế toán",
+          "summary": "Sổ sách, công nợ, quỹ và lương. Không sửa bằng chứng hiện trường, không mở lại kỳ đã đóng."
+        },
+        {
+          "role": "MANAGER",
+          "label": "Điều hành / Quản lý",
+          "summary": "Bắt đầu trống — chọn nhóm quyền cần dùng. Chủ xe, bên góp vốn cũng dùng vai này rồi nối hồ sơ bên góp vốn."
+        },
+        {
+          "role": "SALE",
+          "label": "Lái xe",
+          "summary": "Chỉ việc của chính mình; cần nối với một hồ sơ lái xe."
+        }
+      ]
+    }
+  ],
+  "platform": [
+    {
+      "code": "platform.accounts.manage",
+      "label": "Quản trị tài khoản & phân quyền"
+    }
+  ]
+}

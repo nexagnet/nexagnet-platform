@@ -12,6 +12,7 @@ import {
   emptyDetails,
   ENDPOINT_MARKER_KEY,
   isDraftDirty,
+  isNameLocked,
   MAP_POINT_PENDING_NAME,
   MAP_POINT_UNNAMED,
   missingRequirements,
@@ -230,7 +231,21 @@ describe('bam ban do: toa do NGAY, ten sau — va ma luot chan ket qua ve muon',
 describe('dong nguon tren phieu tuyen', () => {
   it('nha may noi ten phap nhan so huu', () => {
     const draft = run([{ type: 'PLACE_CHOSEN', choice: choiceFromKnownPlace(DINH_VU) }]);
-    expect(sourceLineOf(draft.origin!).source).toBe('Nhà máy / kho của Công ty CP Thép Đông Á');
+    expect(sourceLineOf(draft.origin!).source).toBe(
+      'Nhà máy / kho đối tác của Công ty CP Thép Đông Á',
+    );
+  });
+
+  it('kho cua khach hang noi nhan may chu tinh (#395 §2.1)', () => {
+    const draft = run([
+      {
+        type: 'PLACE_CHOSEN',
+        choice: choiceFromKnownPlace({ ...DINH_VU, kindLabel: 'Địa điểm khách hàng' }),
+      },
+    ]);
+    expect(sourceLineOf(draft.origin!).source).toBe(
+      'Địa điểm khách hàng của Công ty CP Thép Đông Á',
+    );
   });
 
   it('bai xe noi "Bãi xe"', () => {
@@ -282,9 +297,10 @@ describe('con thieu gi — liet ke THAT, theo thu tu tren man hinh', () => {
     const draft = run([
       { type: 'PLACE_CHOSEN', choice: choiceFromKnownPlace(DEPOT) },
       { type: 'PLACE_CHOSEN', choice: choiceFromKnownPlace(DINH_VU) },
-      { type: 'RENAMED', endpoint: 'ORIGIN', name: 'x'.repeat(201) },
+      // Diem GIAO (nha may) — ten bai xe o diem lay da khoa tu `#395` §2.3.
+      { type: 'RENAMED', endpoint: 'DESTINATION', name: 'x'.repeat(201) },
     ]);
-    expect(missingRequirements(draft, DETAILS)).toEqual(['tên điểm lấy hàng']);
+    expect(missingRequirements(draft, DETAILS)).toEqual(['tên điểm giao hàng']);
   });
 
   it('cau "Còn thiếu" doc len duoc', () => {
@@ -442,5 +458,29 @@ describe('ghim tren ban do chon diem', () => {
       myPosition: null,
     });
     expect(markers.every((marker) => !marker.isDraggable)).toBe(true);
+  });
+});
+
+/*
+ * `#395` §2.3 — TEN BAI XE KHOA tren don. Khau lap ke hoach nhan ra chang rong va "xe da ve bai"
+ * bang DUNG ten bai trong "Địa điểm vận hành"; mot ten go tay la mot chang rong gia.
+ */
+describe('ten bai xe lay tu Dia diem van hanh', () => {
+  it('chon bai xe → ten khoa; go ten khong doi gi', () => {
+    const chosen = run([{ type: 'PLACE_CHOSEN', choice: choiceFromKnownPlace(DEPOT) }]);
+    expect(isNameLocked(chosen.origin!)).toBe(true);
+    const renamed = draftReducer(chosen, { type: 'RENAMED', endpoint: 'ORIGIN', name: 'Bãi khác' });
+    expect(renamed.origin?.name).toBe(DEPOT.name);
+    expect(renamed).toBe(chosen);
+  });
+
+  it('nha may/kho van sua ten duoc; keo ghim bai xe di cho khac thi het khoa', () => {
+    const site = run([{ type: 'PLACE_CHOSEN', choice: choiceFromKnownPlace(DINH_VU) }]);
+    expect(isNameLocked(site.origin!)).toBe(false);
+    const moved = run([
+      { type: 'PLACE_CHOSEN', choice: choiceFromKnownPlace(DEPOT) },
+      { type: 'POINT_DRAGGED', endpoint: 'ORIGIN', point: { latitude: 21, longitude: 105.9 } },
+    ]);
+    expect(isNameLocked(moved.origin!)).toBe(false);
   });
 });

@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { USER_ROLES } from '../auth/auth.types.js';
 import {
+  ACCOUNTING_DENIED,
+  DIRECTOR_ONLY_ACTIONS,
   STAKEHOLDER_SCOPE_ACTIONS,
   TRANSPORT_ACTIONS,
   actionsForRole,
   isStakeholderScopeAction,
-  roleCanPerform,
+  presetIncludes,
   type TransportAction,
 } from './transport-actions.js';
 
@@ -174,6 +176,9 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
       'transport.asset_ownership.manage',
       // Pham vi CUA CHINH MINH cua ben huu quan — CHI DOC, va KHONG cap qua vai nao.
       'transport.stakeholder.self.vehicle.read',
+      // `#395` — NOI tai khoan dang nhap voi ho so lai xe / ben huu quan. Ma rieng, chi Giam doc:
+      // noi mot tai khoan vao ho so la CAP QUYEN cho mot con nguoi, khong phai sua du lieu.
+      'transport.account_link.manage',
       // `TX-08` mo rong (Lane J, #269) — NAP DU LIEU ETC. Bon ma, va su tach bach giua chung la co
       // that: NAP mot ban sao cua su that nha cung cap KHAC voi QUYET rang ban sao do khop hay
       // khong. Khong ma nao trong so nay noi ve tien da tra.
@@ -201,9 +206,9 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
       for (const action of TRANSPORT_ACTIONS) {
         if (action.startsWith('transport.driver.self.')) continue;
         if (isStakeholderScopeAction(action)) continue;
-        expect(roleCanPerform('ADMIN', action), action).toBe(true);
+        expect(presetIncludes('ADMIN', action), action).toBe(true);
       }
-      expect(roleCanPerform('ADMIN', 'transport.trip.cancel')).toBe(true);
+      expect(presetIncludes('ADMIN', 'transport.trip.cancel')).toBe(true);
     });
 
     /**
@@ -213,10 +218,10 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
      * dang ky phai thuoc ve ADMIN, va toan bo be mat doi xe cu phai con nguyen.
      */
     it('quan ly duoc so dang ky so huu, va van giu nguyen quyen doi xe cu', () => {
-      expect(roleCanPerform('ADMIN', 'transport.asset_ownership.read')).toBe(true);
-      expect(roleCanPerform('ADMIN', 'transport.asset_ownership.manage')).toBe(true);
-      expect(roleCanPerform('ADMIN', 'transport.vehicle.manage')).toBe(true);
-      expect(roleCanPerform('ADMIN', 'transport.driver.manage')).toBe(true);
+      expect(presetIncludes('ADMIN', 'transport.asset_ownership.read')).toBe(true);
+      expect(presetIncludes('ADMIN', 'transport.asset_ownership.manage')).toBe(true);
+      expect(presetIncludes('ADMIN', 'transport.vehicle.manage')).toBe(true);
+      expect(presetIncludes('ADMIN', 'transport.driver.manage')).toBe(true);
     });
   });
 
@@ -230,7 +235,7 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
   describe('TX-08 — pham vi ben huu quan (#242 E3)', () => {
     it.each(USER_ROLES)('vai %s KHONG duoc cap pham vi ben huu quan qua bang vai', (role) => {
       for (const action of STAKEHOLDER_SCOPE_ACTIONS) {
-        expect(roleCanPerform(role, action), `${role} / ${action}`).toBe(false);
+        expect(presetIncludes(role, action), `${role} / ${action}`).toBe(false);
       }
     });
 
@@ -254,10 +259,10 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
 
   describe('ACCOUNTING — vai Ke toan (VT-082)', () => {
     it('nhap va sua duoc du lieu van hanh', () => {
-      expect(roleCanPerform('ACCOUNTING', 'transport.trip.create')).toBe(true);
-      expect(roleCanPerform('ACCOUNTING', 'transport.trip.assign')).toBe(true);
-      expect(roleCanPerform('ACCOUNTING', 'transport.trip.transition')).toBe(true);
-      expect(roleCanPerform('ACCOUNTING', 'transport.vehicle.manage')).toBe(true);
+      expect(presetIncludes('ACCOUNTING', 'transport.trip.create')).toBe(true);
+      expect(presetIncludes('ACCOUNTING', 'transport.trip.assign')).toBe(true);
+      expect(presetIncludes('ACCOUNTING', 'transport.trip.transition')).toBe(true);
+      expect(presetIncludes('ACCOUNTING', 'transport.vehicle.manage')).toBe(true);
     });
 
     /**
@@ -268,11 +273,11 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
      * mot nguoi van hanh dung no se ghi duoc khoan chi duoi ten ho so lai xe cua chinh ho.
      */
     it('#168: doc duoc bao cao quyet toan, va khong mang pham vi tu phuc vu cua lai xe', () => {
-      expect(roleCanPerform('ACCOUNTING', 'transport.settlement.report.read')).toBe(true);
-      expect(roleCanPerform('ACCOUNTING', 'transport.settlement.document.read')).toBe(true);
-      expect(roleCanPerform('ADMIN', 'transport.settlement.report.read')).toBe(true);
-      expect(roleCanPerform('ACCOUNTING', 'transport.driver.self.expense.record')).toBe(false);
-      expect(roleCanPerform('ADMIN', 'transport.driver.self.expense.record')).toBe(false);
+      expect(presetIncludes('ACCOUNTING', 'transport.settlement.report.read')).toBe(true);
+      expect(presetIncludes('ACCOUNTING', 'transport.settlement.document.read')).toBe(true);
+      expect(presetIncludes('ADMIN', 'transport.settlement.report.read')).toBe(true);
+      expect(presetIncludes('ACCOUNTING', 'transport.driver.self.expense.record')).toBe(false);
+      expect(presetIncludes('ADMIN', 'transport.driver.self.expense.record')).toBe(false);
     });
 
     it('#292: co quyen doi soat khach va ghi/phan bo thanh toan, khong mo cho lai xe', () => {
@@ -286,15 +291,15 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
       ] as const;
 
       for (const action of laneQActions) {
-        expect(roleCanPerform('ACCOUNTING', action), action).toBe(true);
-        expect(roleCanPerform('ADMIN', action), action).toBe(true);
-        expect(roleCanPerform('SALE', action), action).toBe(false);
-        expect(roleCanPerform('MANAGER', action), action).toBe(false);
+        expect(presetIncludes('ACCOUNTING', action), action).toBe(true);
+        expect(presetIncludes('ADMIN', action), action).toBe(true);
+        expect(presetIncludes('SALE', action), action).toBe(false);
+        expect(presetIncludes('MANAGER', action), action).toBe(false);
       }
     });
 
     it('KHONG huy duoc chuyen — nguon noi ro "khong xoa du lieu"', () => {
-      expect(roleCanPerform('ACCOUNTING', 'transport.trip.cancel')).toBe(false);
+      expect(presetIncludes('ACCOUNTING', 'transport.trip.cancel')).toBe(false);
     });
 
     /**
@@ -310,13 +315,13 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
      * Ca hai deu la "sua cau hoi thay vi tra loi no".
      */
     it('doc duoc chung cu va hang rao, nhung KHONG rut chung cu va KHONG doi hang rao', () => {
-      expect(roleCanPerform('ACCOUNTING', 'transport.proof.read')).toBe(true);
-      expect(roleCanPerform('ACCOUNTING', 'transport.geofence.read')).toBe(true);
+      expect(presetIncludes('ACCOUNTING', 'transport.proof.read')).toBe(true);
+      expect(presetIncludes('ACCOUNTING', 'transport.geofence.read')).toBe(true);
 
-      expect(roleCanPerform('ACCOUNTING', 'transport.proof.withdraw')).toBe(false);
-      expect(roleCanPerform('ACCOUNTING', 'transport.geofence.manage')).toBe(false);
-      expect(roleCanPerform('ADMIN', 'transport.proof.withdraw')).toBe(true);
-      expect(roleCanPerform('ADMIN', 'transport.geofence.manage')).toBe(true);
+      expect(presetIncludes('ACCOUNTING', 'transport.proof.withdraw')).toBe(false);
+      expect(presetIncludes('ACCOUNTING', 'transport.geofence.manage')).toBe(false);
+      expect(presetIncludes('ADMIN', 'transport.proof.withdraw')).toBe(true);
+      expect(presetIncludes('ADMIN', 'transport.geofence.manage')).toBe(true);
     });
 
     /**
@@ -332,12 +337,12 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
      * HAI cho cung mot su that.
      */
     it('#279: Ke toan doc duoc phien cho nhung KHONG dong duoc', () => {
-      expect(roleCanPerform('ACCOUNTING', 'transport.waiting.read')).toBe(true);
-      expect(roleCanPerform('ACCOUNTING', 'transport.waiting.close')).toBe(false);
-      expect(roleCanPerform('ADMIN', 'transport.waiting.close')).toBe(true);
-      expect(roleCanPerform('SALE', 'transport.waiting.close')).toBe(false);
-      expect(roleCanPerform('SALE', 'transport.waiting.read')).toBe(false);
-      expect(roleCanPerform('SALE', 'transport.driver.self.waiting.start')).toBe(true);
+      expect(presetIncludes('ACCOUNTING', 'transport.waiting.read')).toBe(true);
+      expect(presetIncludes('ACCOUNTING', 'transport.waiting.close')).toBe(false);
+      expect(presetIncludes('ADMIN', 'transport.waiting.close')).toBe(true);
+      expect(presetIncludes('SALE', 'transport.waiting.close')).toBe(false);
+      expect(presetIncludes('SALE', 'transport.waiting.read')).toBe(false);
+      expect(presetIncludes('SALE', 'transport.driver.self.waiting.start')).toBe(true);
     });
 
     /**
@@ -352,12 +357,16 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
      * *"immutable boundary prevents driver deletion once evidence is authoritative"*.
      */
     it('#279: Ke toan doc duoc chung tu nhung KHONG bia mo duoc', () => {
-      expect(roleCanPerform('ACCOUNTING', 'transport.operational_document.read')).toBe(true);
-      expect(roleCanPerform('ACCOUNTING', 'transport.operational_document.record')).toBe(true);
-      expect(roleCanPerform('ACCOUNTING', 'transport.operational_document.withdraw')).toBe(false);
-      expect(roleCanPerform('ADMIN', 'transport.operational_document.withdraw')).toBe(true);
-      expect(roleCanPerform('SALE', 'transport.operational_document.withdraw')).toBe(false);
-      expect(roleCanPerform('SALE', 'transport.driver.self.document.record')).toBe(true);
+      expect(presetIncludes('ACCOUNTING', 'transport.operational_document.read')).toBe(true);
+      // `#395`: ghi BU chung tu nay nam trong `ACCOUNTING_DENIED`. Truoc do bang vai noi `true`
+      // nhung route chi mo cho `ADMIN` (`@Roles`) — nay bang vai la noi DUY NHAT noi dieu do, va
+      // `transport-behaviour-preservation.spec.ts` chung minh hanh vi that khong doi.
+      expect(presetIncludes('ACCOUNTING', 'transport.operational_document.record')).toBe(false);
+      expect(presetIncludes('ADMIN', 'transport.operational_document.record')).toBe(true);
+      expect(presetIncludes('ACCOUNTING', 'transport.operational_document.withdraw')).toBe(false);
+      expect(presetIncludes('ADMIN', 'transport.operational_document.withdraw')).toBe(true);
+      expect(presetIncludes('SALE', 'transport.operational_document.withdraw')).toBe(false);
+      expect(presetIncludes('SALE', 'transport.driver.self.document.record')).toBe(true);
     });
 
     /**
@@ -368,17 +377,17 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
      * duong tu phuc vu, va hai ma van la hai).
      */
     it('#279: ghi `da ve van phong` va bam `Da ket thuc` la HAI ma khac nhau', () => {
-      expect(roleCanPerform('ACCOUNTING', 'transport.receipt_handover.record')).toBe(true);
-      expect(roleCanPerform('ACCOUNTING', 'transport.commercial_acceptance.decide')).toBe(true);
-      expect(roleCanPerform('SALE', 'transport.receipt_handover.record')).toBe(false);
-      expect(roleCanPerform('SALE', 'transport.commercial_acceptance.decide')).toBe(false);
-      expect(roleCanPerform('SALE', 'transport.driver.self.receipt_handover.record')).toBe(true);
+      expect(presetIncludes('ACCOUNTING', 'transport.receipt_handover.record')).toBe(true);
+      expect(presetIncludes('ACCOUNTING', 'transport.commercial_acceptance.decide')).toBe(true);
+      expect(presetIncludes('SALE', 'transport.receipt_handover.record')).toBe(false);
+      expect(presetIncludes('SALE', 'transport.commercial_acceptance.decide')).toBe(false);
+      expect(presetIncludes('SALE', 'transport.driver.self.receipt_handover.record')).toBe(true);
     });
 
     /** Lai xe khong rut duoc chung cu cua CHINH MINH — xoa duoc bang chung thi no het la bang chung. */
     it('lai xe (SALE) khong co duong rut chung cu nao', () => {
-      expect(roleCanPerform('SALE', 'transport.proof.withdraw')).toBe(false);
-      expect(roleCanPerform('SALE', 'transport.proof.read')).toBe(false);
+      expect(presetIncludes('SALE', 'transport.proof.withdraw')).toBe(false);
+      expect(presetIncludes('SALE', 'transport.proof.read')).toBe(false);
     });
 
     /**
@@ -390,13 +399,13 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
      * giua "dong so" va "viet lai so da chot".
      */
     it('ung tien va dong ky duoc, nhung KHONG mo lai ky da dong (GD-11)', () => {
-      expect(roleCanPerform('ACCOUNTING', 'transport.costing.driver_fund.advance')).toBe(true);
-      expect(roleCanPerform('ACCOUNTING', 'transport.costing.expense.record')).toBe(true);
-      expect(roleCanPerform('ACCOUNTING', 'transport.costing.reversal.post')).toBe(true);
-      expect(roleCanPerform('ACCOUNTING', 'transport.costing.period.manage')).toBe(true);
+      expect(presetIncludes('ACCOUNTING', 'transport.costing.driver_fund.advance')).toBe(true);
+      expect(presetIncludes('ACCOUNTING', 'transport.costing.expense.record')).toBe(true);
+      expect(presetIncludes('ACCOUNTING', 'transport.costing.reversal.post')).toBe(true);
+      expect(presetIncludes('ACCOUNTING', 'transport.costing.period.manage')).toBe(true);
 
-      expect(roleCanPerform('ACCOUNTING', 'transport.costing.period.reopen')).toBe(false);
-      expect(roleCanPerform('ADMIN', 'transport.costing.period.reopen')).toBe(true);
+      expect(presetIncludes('ACCOUNTING', 'transport.costing.period.reopen')).toBe(false);
+      expect(presetIncludes('ADMIN', 'transport.costing.period.reopen')).toBe(true);
     });
 
     /**
@@ -407,26 +416,72 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
      * no la mot quyet dinh khac han ve muc do — `GD-11` doi mot quyen rieng, giong het T3.
      */
     it('doi soat bang ke: dong duoc ky, nhung KHONG mo lai ky da dong (GD-11)', () => {
-      expect(roleCanPerform('ACCOUNTING', 'transport.fuel.statement.import')).toBe(true);
-      expect(roleCanPerform('ACCOUNTING', 'transport.fuel.reconciliation.match')).toBe(true);
-      expect(roleCanPerform('ACCOUNTING', 'transport.fuel.reconciliation.resolve')).toBe(true);
-      expect(roleCanPerform('ACCOUNTING', 'transport.fuel.reconciliation.close')).toBe(true);
-      expect(roleCanPerform('ACCOUNTING', 'transport.fuel.entry.verify')).toBe(true);
+      expect(presetIncludes('ACCOUNTING', 'transport.fuel.statement.import')).toBe(true);
+      expect(presetIncludes('ACCOUNTING', 'transport.fuel.reconciliation.match')).toBe(true);
+      expect(presetIncludes('ACCOUNTING', 'transport.fuel.reconciliation.resolve')).toBe(true);
+      expect(presetIncludes('ACCOUNTING', 'transport.fuel.reconciliation.close')).toBe(true);
+      expect(presetIncludes('ACCOUNTING', 'transport.fuel.entry.verify')).toBe(true);
 
-      expect(roleCanPerform('ACCOUNTING', 'transport.fuel.reconciliation.reopen')).toBe(false);
-      expect(roleCanPerform('ADMIN', 'transport.fuel.reconciliation.reopen')).toBe(true);
+      expect(presetIncludes('ACCOUNTING', 'transport.fuel.reconciliation.reopen')).toBe(false);
+      expect(presetIncludes('ADMIN', 'transport.fuel.reconciliation.reopen')).toBe(true);
     });
 
     /** `#364` — phan bo gia thanh phieu Run-first la viec cua ke toan (va Giam doc). */
     it('phan bo gia thanh nhien lieu Run-first: ke toan va Giam doc', () => {
-      expect(roleCanPerform('ACCOUNTING', 'transport.fuel.cost_attribution.record')).toBe(true);
-      expect(roleCanPerform('ADMIN', 'transport.fuel.cost_attribution.record')).toBe(true);
+      expect(presetIncludes('ACCOUNTING', 'transport.fuel.cost_attribution.record')).toBe(true);
+      expect(presetIncludes('ADMIN', 'transport.fuel.cost_attribution.record')).toBe(true);
     });
 
     it('la tap con cua Giam doc, khong phai mot nhanh loai tru', () => {
       for (const action of actionsForRole('ACCOUNTING')) {
-        expect(roleCanPerform('ADMIN', action), action).toBe(true);
+        expect(presetIncludes('ADMIN', action), action).toBe(true);
       }
+    });
+  });
+
+  /**
+   * CHI GIAM DOC (`#395`) — bon ma KHONG cap duoc cho vai nao khac.
+   *
+   * Hai ma dau da nam trong `ACCOUNTING_DENIED` tu truoc; hai ma sau truoc day chi song trong
+   * `@Roles(ADMIN)` cua route, nen bang vai noi Ke toan lam duoc con may chu tra 403 — va man hinh
+   * (doc bang vai) hien nut cho Ke toan. Bai nay khoa ca danh sach lan hau qua cua no.
+   */
+  describe('DIRECTOR_ONLY — chi Giam doc (#395)', () => {
+    it('dung bon ma, dung thu tu', () => {
+      expect([...DIRECTOR_ONLY_ACTIONS]).toEqual([
+        'transport.costing.period.reopen',
+        'transport.fuel.reconciliation.reopen',
+        'transport.driver_settlement.reverse',
+        'transport.account_link.manage',
+      ]);
+    });
+
+    it.each(DIRECTOR_ONLY_ACTIONS)(
+      '%s: Giam doc CO, Ke toan / Quan ly / Lai xe KHONG',
+      (action) => {
+        expect(presetIncludes('ADMIN', action)).toBe(true);
+        expect(presetIncludes('ACCOUNTING', action)).toBe(false);
+        expect(presetIncludes('MANAGER', action)).toBe(false);
+        expect(presetIncludes('SALE', action)).toBe(false);
+      },
+    );
+
+    it('Ke toan = moi viec van hanh TRU hai danh sach cam', () => {
+      const expected = TRANSPORT_ACTIONS.filter(
+        (action) =>
+          !action.startsWith('transport.driver.self.') &&
+          !isStakeholderScopeAction(action) &&
+          !ACCOUNTING_DENIED.includes(action) &&
+          !DIRECTOR_ONLY_ACTIONS.includes(action),
+      );
+      expect([...actionsForRole('ACCOUNTING')]).toEqual(expected);
+    });
+
+    it('noi tai khoan tach khoi quan ly so huu: Ke toan van quan ly so dang ky', () => {
+      expect(presetIncludes('ACCOUNTING', 'transport.asset_ownership.manage')).toBe(true);
+      expect(presetIncludes('ACCOUNTING', 'transport.account_link.manage')).toBe(false);
+      expect(presetIncludes('ACCOUNTING', 'transport.driver_settlement.cashout')).toBe(true);
+      expect(presetIncludes('ACCOUNTING', 'transport.driver_settlement.reverse')).toBe(false);
     });
   });
 
@@ -463,9 +518,9 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
      * doc duoc luong dong nghiep va tu tra tien cho chinh minh.
      */
     it('KHONG cham duoc mot ma quyet toan van hanh nao', () => {
-      expect(roleCanPerform('SALE', 'transport.driver_settlement.read')).toBe(false);
-      expect(roleCanPerform('SALE', 'transport.driver_settlement.cashout')).toBe(false);
-      expect(roleCanPerform('SALE', 'transport.driver_settlement.reverse')).toBe(false);
+      expect(presetIncludes('SALE', 'transport.driver_settlement.read')).toBe(false);
+      expect(presetIncludes('SALE', 'transport.driver_settlement.cashout')).toBe(false);
+      expect(presetIncludes('SALE', 'transport.driver_settlement.reverse')).toBe(false);
     });
 
     /**
@@ -476,10 +531,10 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
      * lai xe nao, ke ca bang tien cua nguoi khac.
      */
     it('#168 B3: ghi duoc khoan chi cua CHINH MINH, nhung khong cham duong van hanh', () => {
-      expect(roleCanPerform('SALE', 'transport.driver.self.expense.record')).toBe(true);
-      expect(roleCanPerform('SALE', 'transport.costing.expense.record')).toBe(false);
-      expect(roleCanPerform('SALE', 'transport.costing.expense.read')).toBe(false);
-      expect(roleCanPerform('SALE', 'transport.costing.reversal.post')).toBe(false);
+      expect(presetIncludes('SALE', 'transport.driver.self.expense.record')).toBe(true);
+      expect(presetIncludes('SALE', 'transport.costing.expense.record')).toBe(false);
+      expect(presetIncludes('SALE', 'transport.costing.expense.read')).toBe(false);
+      expect(presetIncludes('SALE', 'transport.costing.reversal.post')).toBe(false);
     });
     /**
      * `#168 B8` — pham vi tu phuc vu KHONG duoc keo theo quyen van hanh tuong ung.
@@ -492,13 +547,13 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
      * nguoi tu duyet hay tu chi tra phieu cua chinh minh la dung cai ma kiem soat noi bo chan.
      */
     it('#168 B8: doc duoc phieu luong CUA CHINH MINH, nhung khong cham duong van hanh', () => {
-      expect(roleCanPerform('SALE', 'transport.driver.self.payslip.read')).toBe(true);
-      expect(roleCanPerform('SALE', 'transport.payroll.period.read')).toBe(false);
-      expect(roleCanPerform('SALE', 'transport.payroll.period.manage')).toBe(false);
-      expect(roleCanPerform('SALE', 'transport.payroll.run')).toBe(false);
-      expect(roleCanPerform('SALE', 'transport.payslip.approve')).toBe(false);
-      expect(roleCanPerform('SALE', 'transport.payslip.pay')).toBe(false);
-      expect(roleCanPerform('SALE', 'transport.payslip.correct')).toBe(false);
+      expect(presetIncludes('SALE', 'transport.driver.self.payslip.read')).toBe(true);
+      expect(presetIncludes('SALE', 'transport.payroll.period.read')).toBe(false);
+      expect(presetIncludes('SALE', 'transport.payroll.period.manage')).toBe(false);
+      expect(presetIncludes('SALE', 'transport.payroll.run')).toBe(false);
+      expect(presetIncludes('SALE', 'transport.payslip.approve')).toBe(false);
+      expect(presetIncludes('SALE', 'transport.payslip.pay')).toBe(false);
+      expect(presetIncludes('SALE', 'transport.payslip.correct')).toBe(false);
     });
 
     /**
@@ -508,13 +563,13 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
      * mot co hoi de ai do "tien tay" cap cho vai chua ai quyet dinh nghiep vu (VT-080).
      */
     it('#168 B8: MANAGER khong doc duoc phieu luong cua ai, ke ca cua chinh minh', () => {
-      expect(roleCanPerform('MANAGER', 'transport.driver.self.payslip.read')).toBe(false);
-      expect(roleCanPerform('MANAGER', 'transport.payroll.period.read')).toBe(false);
+      expect(presetIncludes('MANAGER', 'transport.driver.self.payslip.read')).toBe(false);
+      expect(presetIncludes('MANAGER', 'transport.payroll.period.read')).toBe(false);
     });
 
     it('#168 B1: lai xe KHONG doc duoc mot bao cao quyet toan nao', () => {
-      expect(roleCanPerform('SALE', 'transport.settlement.report.read')).toBe(false);
-      expect(roleCanPerform('SALE', 'transport.settlement.document.read')).toBe(false);
+      expect(presetIncludes('SALE', 'transport.settlement.report.read')).toBe(false);
+      expect(presetIncludes('SALE', 'transport.settlement.document.read')).toBe(false);
     });
 
     /**
@@ -522,10 +577,10 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
      * lai xe. Vai lai xe hom nay la `SALE` (cau bridge `GD-22`), nen phep do phai o dung day.
      */
     it('`R8`: van hanh doc duoc chi so, lai xe thi khong', () => {
-      expect(roleCanPerform('ADMIN', 'transport.analytics.read')).toBe(true);
-      expect(roleCanPerform('ACCOUNTING', 'transport.analytics.read')).toBe(true);
-      expect(roleCanPerform('SALE', 'transport.analytics.read')).toBe(false);
-      expect(roleCanPerform('MANAGER', 'transport.analytics.read')).toBe(false);
+      expect(presetIncludes('ADMIN', 'transport.analytics.read')).toBe(true);
+      expect(presetIncludes('ACCOUNTING', 'transport.analytics.read')).toBe(true);
+      expect(presetIncludes('SALE', 'transport.analytics.read')).toBe(false);
+      expect(presetIncludes('MANAGER', 'transport.analytics.read')).toBe(false);
     });
 
     /**
@@ -536,16 +591,16 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
      * nam o `TransportActionGuard`, va bai nay khoa dung cai bang ma guard doc.
      */
     it('bang dieu hanh: van hanh doc duoc ca doi xe, lai xe thi khong', () => {
-      expect(roleCanPerform('ADMIN', 'transport.control_tower.read')).toBe(true);
-      expect(roleCanPerform('ACCOUNTING', 'transport.control_tower.read')).toBe(true);
-      expect(roleCanPerform('SALE', 'transport.control_tower.read')).toBe(false);
-      expect(roleCanPerform('MANAGER', 'transport.control_tower.read')).toBe(false);
+      expect(presetIncludes('ADMIN', 'transport.control_tower.read')).toBe(true);
+      expect(presetIncludes('ACCOUNTING', 'transport.control_tower.read')).toBe(true);
+      expect(presetIncludes('SALE', 'transport.control_tower.read')).toBe(false);
+      expect(presetIncludes('MANAGER', 'transport.control_tower.read')).toBe(false);
     });
 
     it('KHONG doc duoc danh sach chuyen chung — day la cho ro ri de nhat', () => {
-      expect(roleCanPerform('SALE', 'transport.trip.read')).toBe(false);
-      expect(roleCanPerform('SALE', 'transport.trip.create')).toBe(false);
-      expect(roleCanPerform('SALE', 'transport.vehicle.read')).toBe(false);
+      expect(presetIncludes('SALE', 'transport.trip.read')).toBe(false);
+      expect(presetIncludes('SALE', 'transport.trip.create')).toBe(false);
+      expect(presetIncludes('SALE', 'transport.vehicle.read')).toBe(false);
     });
 
     /**
@@ -556,11 +611,11 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
      * that ke toan, khong phai mot lua chon cua nguoi tieu tien.
      */
     it('doc duoc so quy cua chinh minh, nhung khong ghi va khong doc so quy chung', () => {
-      expect(roleCanPerform('SALE', 'transport.driver.self.fund.read')).toBe(true);
-      expect(roleCanPerform('SALE', 'transport.costing.driver_fund.read')).toBe(false);
-      expect(roleCanPerform('SALE', 'transport.costing.driver_fund.advance')).toBe(false);
-      expect(roleCanPerform('SALE', 'transport.costing.expense.record')).toBe(false);
-      expect(roleCanPerform('SALE', 'transport.costing.expense.read')).toBe(false);
+      expect(presetIncludes('SALE', 'transport.driver.self.fund.read')).toBe(true);
+      expect(presetIncludes('SALE', 'transport.costing.driver_fund.read')).toBe(false);
+      expect(presetIncludes('SALE', 'transport.costing.driver_fund.advance')).toBe(false);
+      expect(presetIncludes('SALE', 'transport.costing.expense.record')).toBe(false);
+      expect(presetIncludes('SALE', 'transport.costing.expense.read')).toBe(false);
     });
 
     /**
@@ -572,17 +627,17 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
      * chung, va khong cham duoc mot buoc nao cua doi soat bang ke.
      */
     it('nop duoc phieu dau cua chinh minh, nhung khong duyet va khong doi soat', () => {
-      expect(roleCanPerform('SALE', 'transport.driver.self.fuel.submit')).toBe(true);
-      expect(roleCanPerform('SALE', 'transport.driver.self.fuel.read')).toBe(true);
+      expect(presetIncludes('SALE', 'transport.driver.self.fuel.submit')).toBe(true);
+      expect(presetIncludes('SALE', 'transport.driver.self.fuel.read')).toBe(true);
 
-      expect(roleCanPerform('SALE', 'transport.fuel.entry.verify')).toBe(false);
-      expect(roleCanPerform('SALE', 'transport.fuel.entry.read')).toBe(false);
-      expect(roleCanPerform('SALE', 'transport.fuel.entry.submit_for_driver')).toBe(false);
-      expect(roleCanPerform('SALE', 'transport.fuel.statement.import')).toBe(false);
-      expect(roleCanPerform('SALE', 'transport.fuel.reconciliation.read')).toBe(false);
-      expect(roleCanPerform('SALE', 'transport.fuel.reconciliation.close')).toBe(false);
+      expect(presetIncludes('SALE', 'transport.fuel.entry.verify')).toBe(false);
+      expect(presetIncludes('SALE', 'transport.fuel.entry.read')).toBe(false);
+      expect(presetIncludes('SALE', 'transport.fuel.entry.submit_for_driver')).toBe(false);
+      expect(presetIncludes('SALE', 'transport.fuel.statement.import')).toBe(false);
+      expect(presetIncludes('SALE', 'transport.fuel.reconciliation.read')).toBe(false);
+      expect(presetIncludes('SALE', 'transport.fuel.reconciliation.close')).toBe(false);
       // `#364` — lai xe khong bao gio quyet (hay thay) phan bo gia thanh.
-      expect(roleCanPerform('SALE', 'transport.fuel.cost_attribution.record')).toBe(false);
+      expect(presetIncludes('SALE', 'transport.fuel.cost_attribution.record')).toBe(false);
     });
   });
 
@@ -590,7 +645,7 @@ describe('Hanh dong mien van tai + cau bridge vai tro (GD-22)', () => {
     it('khong co hanh dong van tai nao', () => {
       expect([...actionsForRole('MANAGER')]).toEqual([]);
       for (const action of TRANSPORT_ACTIONS) {
-        expect(roleCanPerform('MANAGER', action), action).toBe(false);
+        expect(presetIncludes('MANAGER', action), action).toBe(false);
       }
     });
   });

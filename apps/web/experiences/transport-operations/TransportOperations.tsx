@@ -1,7 +1,8 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import { useCallback, useEffect, useState } from 'react';
-import { ErrorState } from './components/SectionState';
+import { ErrorState, LoadingState } from './components/SectionState';
 import { DriverShell, roleLabelOf, TransportShell } from './components/TransportShell';
 import { DriverSurface } from './driver/DriverSurface';
 import { useNavigationInput } from './hooks/useTransportWorkspace';
@@ -47,6 +48,21 @@ import { FinanceView } from './views/FinanceView';
 import { OverviewView } from './views/OverviewView';
 import { TripsView } from './views/TripsView';
 
+/*
+ * HAI MAN QUAN TRI TAI THEO YEU CAU (`#395`). Chi Giam doc mo chung, va chung nang (~6 nghin dong
+ * cung CSS rieng): nhap tinh thi MOI nguoi dung — lai xe tren dien thoai, ke toan — tai them
+ * chung o moi lan mo trang, va moi lan tai lai trang (bam mot lien ket muc) cham han. Nhap dong
+ * dua chung ra mot goi rieng, chi tai khi mo dung muc.
+ */
+const AccountsAdminView = dynamic(
+  () => import('./admin/AccountsAdminView').then((module) => module.AccountsAdminView),
+  { loading: () => <LoadingState label="Đang mở Tài khoản & quyền…" /> },
+);
+const PlacesAdminView = dynamic(
+  () => import('./admin/PlacesAdminView').then((module) => module.PlacesAdminView),
+  { loading: () => <LoadingState label="Đang mở Địa điểm vận hành…" /> },
+);
+
 /**
  * Be mat VAN HANH VAN TAI — `GD-23`.
  *
@@ -79,20 +95,13 @@ export function TransportOperations() {
   // Vai den SAU lan ve dau tien: `AuthGate` con dang doi `/auth/me`. Nen phai giai quyet lai dia
   // chi khi danh tinh doi — khong lam vay thi mot deep link toi muc chi Giam doc thay duoc se roi
   // ve mac dinh vinh vien du nguoi dung dung la Giam doc.
+  //
+  // Giai quyet lai TU DIA CHI, khong tu trang thai da giai quyet: moi lan doi muc/chon/loc deu ghi
+  // dia chi truoc, nen dia chi = trang thai — TRU mot deep link vua bi roi ve mac dinh vi quyen chua
+  // toi. `#395`: pham vi ben gop von den SAU `/auth/me` (mot lan hoi may chu), nen
+  // `?section=my-vehicles` phai con song toi luc cau tra loi ve.
   useEffect(() => {
-    setState((current) =>
-      resolveNavigation(
-        {
-          surface: current.surface === 'driver' ? 'driver' : null,
-          section: current.section,
-          screen: current.screen,
-          selection: current.selection,
-          tripFilter: current.tripFilter,
-        },
-        null,
-        navigation,
-      ),
-    );
+    setState(readNavigation(navigation));
   }, [navigation]);
 
   // Back/forward: doc lai tu chinh dia chi, khong doan tu trang thai truoc do.
@@ -201,7 +210,7 @@ export function TransportOperations() {
         activeScreen={state.screen}
         onNavigate={openDriverScreen}
         onLeave={
-          hasOperationsScope(navigation.role)
+          hasOperationsScope(navigation)
             ? () => goTo({ surface: 'operations', section: 'overview' })
             : null
         }
@@ -224,7 +233,7 @@ export function TransportOperations() {
       driverScreens={driverScreens}
       onNavigate={(section) => goTo({ section })}
     >
-      {groups.length === 0 && !hasDriverScope(navigation.role) ? (
+      {groups.length === 0 && !hasDriverScope(navigation) ? (
         /*
          * `TX-08` (#242 E3) — MOT VAI KHONG CO PHAM VI VAN HANH VAN CO THE LA CO DONG.
          *
@@ -239,7 +248,7 @@ export function TransportOperations() {
         <StakeholderVehiclesView />
       ) : groups.length === 0 ? (
         <ErrorState
-          message={operationsEmptyMessage(navigation.role)}
+          message={operationsEmptyMessage(navigation)}
           // Cau chu noi "Hãy dùng đường 'Mở màn hình lái xe'" — nen duong do phai o NGAY DAY.
           // Trong thanh ben thi o 1440px no co that, con o 390px thanh ben da gap lai, va 390px
           // moi la thiet bi cua lai xe.
@@ -316,6 +325,10 @@ function SectionBody({
     // duoc xem ho so xe khong nhat thiet duoc xem ai la chu chiec xe do.
     case 'asset-ownership':
       return <AssetOwnershipView />;
+    // `#395` — ben gop von CO THEM viec van hanh: CUNG man voi ben gop von thuan tuy (ho thay no
+    // hien thang khi danh muc rong), nay co mot dong tren thanh ben.
+    case 'my-vehicles':
+      return <StakeholderVehiclesView />;
     case 'driver-fund':
       return <DriverFundView />;
     case 'expense-claims':
@@ -344,5 +357,12 @@ function SectionBody({
     // RIENG: xem duoc bang luong khong nhat thiet xem duoc lich su chi tien mat.
     case 'driver-settlement':
       return <DriverSettlementView />;
+    // `#395` — QUAN TRI. Tai khoan nhan `selection` la TEN DANG NHAP (dinh danh nguoi ta doc duoc,
+    // dung quy uoc `SELECTION_QUERY_PARAM`); dia diem giu lua chon trong man (ma dia diem la `id`
+    // ky thuat, khong len dia chi).
+    case 'admin-accounts':
+      return <AccountsAdminView selection={selection} onSelect={onSelect} />;
+    case 'admin-places':
+      return <PlacesAdminView />;
   }
 }

@@ -132,6 +132,12 @@ span.tx-pin {
   background: var(--tx-done);
 }
 
+/* `#395` — diem DANG DAT o man "Địa điểm vận hành": coc mau thuong hieu, chu "Đây". */
+.tx-pin--place .tx-pin__tag,
+.tx-pin--place .tx-pin__stem {
+  background: var(--tx-accent);
+}
+
 /* Dia diem da biet: HINH DANG noi loai — bai xe vuong, nha may/kho thoi, kho khach tron nho. */
 .tx-pin--known,
 .tx-pin--result {

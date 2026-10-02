@@ -301,6 +301,18 @@
   flex: 1 1 auto;
 }
 
+/* `#395` §2.3 — ten bai xe khoa: nen giay, khong vien nhap, kem mot dong noi vi sao. */
+.tx-ticket__name input[readonly] {
+  background: var(--tx-canvas);
+  border-style: dashed;
+  color: var(--tx-ink-soft);
+}
+
+.tx-ticket__lock {
+  font-size: 0.74rem;
+  color: var(--tx-ink-faint);
+}
+
 .tx-ticket__name input[aria-invalid='true'] {
   border-color: var(--tx-stop);
 }

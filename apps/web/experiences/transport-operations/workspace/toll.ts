@@ -1,4 +1,3 @@
-import type { AuthRole } from '../../../lib/auth';
 import {
   TOLL_API_STATUS_LABEL,
   TOLL_LINK_PROVENANCE_LABEL,
@@ -18,7 +17,7 @@ import {
   tollReviewStateTone,
   type StatusTone,
 } from '../customer-view';
-import { canPerform } from '../transport-actions';
+import { canPerform, type TransportViewerInput } from '../transport-actions';
 import type {
   TollAccount,
   TollAccountLinkCount,
@@ -399,7 +398,7 @@ export interface TollQueueModel {
 
 export const toTollQueueModel = (
   page: TollCandidatePage,
-  role: AuthRole | null,
+  viewer: TransportViewerInput,
 ): TollQueueModel => {
   const rows = page.items.map(toTollCandidateRow);
   return {
@@ -410,8 +409,8 @@ export const toTollQueueModel = (
     pendingCountLabel: formatCount(
       page.items.filter((candidate) => candidate.reviewState !== 'CONFIRMED').length,
     ),
-    canRead: canPerform(role, 'transport.toll.review.read'),
-    canResolve: canPerform(role, 'transport.toll.review.resolve'),
+    canRead: canPerform(viewer, 'transport.toll.review.read'),
+    canResolve: canPerform(viewer, 'transport.toll.review.resolve'),
     emptyNotice:
       page.total === 0
         ? 'Chưa có dòng nào trong hàng chờ. Nạp một bảng kê để bắt đầu đối soát.'
@@ -438,10 +437,10 @@ export interface TollCapabilities {
  * bi mot lane khac sua VA bi khoa theo THU TU boi hai spec, nen them mot ma o day se thanh mot va
  * cham bon tep.
  */
-export const tollCapabilities = (role: AuthRole | null): TollCapabilities => ({
-  canReadAccounts: canPerform(role, 'transport.toll.account.read'),
-  canManageAccounts: canPerform(role, 'transport.toll.account.manage'),
-  canImport: canPerform(role, 'transport.toll.import'),
-  canReadReview: canPerform(role, 'transport.toll.review.read'),
-  canResolveReview: canPerform(role, 'transport.toll.review.resolve'),
+export const tollCapabilities = (viewer: TransportViewerInput): TollCapabilities => ({
+  canReadAccounts: canPerform(viewer, 'transport.toll.account.read'),
+  canManageAccounts: canPerform(viewer, 'transport.toll.account.manage'),
+  canImport: canPerform(viewer, 'transport.toll.import'),
+  canReadReview: canPerform(viewer, 'transport.toll.review.read'),
+  canResolveReview: canPerform(viewer, 'transport.toll.review.resolve'),
 });

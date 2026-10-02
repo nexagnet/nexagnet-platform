@@ -1,4 +1,3 @@
-import type { AuthRole } from '../../../lib/auth';
 import {
   actorLabel,
   EXPENSE_FUNDING_LABEL,
@@ -13,7 +12,7 @@ import {
   fundPeriodStatusTone,
   type StatusTone,
 } from '../customer-view';
-import { canPerform, type TransportAction } from '../transport-actions';
+import { canPerform, type TransportAction, type TransportViewerInput } from '../transport-actions';
 import type {
   DriverFundEntry,
   DriverFundPeriod,
@@ -90,10 +89,10 @@ const reversedIds = (entries: readonly DriverFundEntry[]): ReadonlySet<string> =
 
 export const toFundLedgerRows = (
   entries: readonly DriverFundEntry[],
-  role: AuthRole | null,
+  viewer: TransportViewerInput,
 ): readonly FundLedgerRow[] => {
   const reversed = reversedIds(entries);
-  const mayReverse = canPerform(role, 'transport.costing.reversal.post');
+  const mayReverse = canPerform(viewer, 'transport.costing.reversal.post');
   return entries.map((entry) => {
     const isReversal = entry.reversalOfId !== null;
     const isReversed = reversed.has(entry.id);
@@ -173,10 +172,10 @@ const CLOSEABLE: readonly FundPeriodStatus[] = ['OPEN', 'CLOSING', 'REOPENED'];
  */
 export const toFundPeriodRows = (
   periods: readonly DriverFundPeriod[],
-  role: AuthRole | null,
+  viewer: TransportViewerInput,
 ): readonly FundPeriodRow[] => {
-  const mayManage = canPerform(role, 'transport.costing.period.manage');
-  const mayReopen = canPerform(role, 'transport.costing.period.reopen');
+  const mayManage = canPerform(viewer, 'transport.costing.period.manage');
+  const mayReopen = canPerform(viewer, 'transport.costing.period.reopen');
   return periods.map((period) => ({
     id: period.id,
     rangeLabel: formatBusinessDateRange(period.startDate, period.endDate),
@@ -202,7 +201,7 @@ export interface FundActionOffer {
   readonly hint: string | null;
 }
 
-export const fundActionOffers = (role: AuthRole | null): readonly FundActionOffer[] =>
+export const fundActionOffers = (viewer: TransportViewerInput): readonly FundActionOffer[] =>
   (
     [
       {
@@ -230,7 +229,7 @@ export const fundActionOffers = (role: AuthRole | null): readonly FundActionOffe
         hint: null,
       },
     ] as const satisfies readonly FundActionOffer[]
-  ).filter((offer) => canPerform(role, offer.requiredAction));
+  ).filter((offer) => canPerform(viewer, offer.requiredAction));
 
 /* ------------------------------------------------------------------ *
  * Gia thanh chuyen — SO RIENG, khong cong voi so du quy
@@ -270,13 +269,13 @@ export interface TripCostModel {
  */
 export const toTripCost = (
   breakdown: TripCostBreakdown | null,
-  role: AuthRole | null,
+  viewer: TransportViewerInput,
 ): TripCostModel => {
   if (breakdown === null) {
     return { directCostLabel: formatMoney(null), rows: [], isEmpty: true };
   }
   const reversed = reversedExpenseIds(breakdown.expenses);
-  const mayReverse = canPerform(role, 'transport.costing.reversal.post');
+  const mayReverse = canPerform(viewer, 'transport.costing.reversal.post');
   return {
     directCostLabel: formatMoney(breakdown.directCost),
     isEmpty: breakdown.expenses.length === 0,

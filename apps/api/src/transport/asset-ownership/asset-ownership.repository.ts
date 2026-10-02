@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto';
+import type { TransactionTrail } from '../../audit/audit-trail.js';
+import type { UniqueIndexRef } from '../storage-conflict.js';
 import type { PartyStatus } from '../transport.types.js';
 import type {
   AssetStakeholder,
@@ -36,6 +38,17 @@ export interface CloseInterestInput {
 }
 
 /**
+ * `TransportAssetStakeholder.authUserId @unique` (migration `20260909140000`) — hai lan noi CUNG
+ * mot tai khoan vao hai ho so cung luc thi lan thu hai chet o day. Dich vu doi no thanh
+ * `ASSET_STAKEHOLDER_ACCOUNT_TAKEN`, khong phai mot `500` (`#395`).
+ */
+export const ASSET_STAKEHOLDER_ACCOUNT_UNIQUE: UniqueIndexRef = {
+  indexName: 'TransportAssetStakeholder_authUserId_key',
+  model: 'TransportAssetStakeholder',
+  column: 'authUserId',
+};
+
+/**
  * Kho cua mien so huu tai san (`TX-08`).
  *
  * TACH KHOI `FleetRepository` theo dung quy uoc thu muc ma T1 §4.1 luat 4
@@ -64,13 +77,23 @@ export abstract class AssetOwnershipRepository {
    * su ton tai cua hang la du de cap quyen se lam mot tai khoan bi thu hoi van doc duoc du lieu.
    */
   abstract findStakeholderByAuthUser(authUserId: string): Promise<AssetStakeholder | null>;
-  /** `authUserId = null` la GO cau noi. Tra ve `null` neu khong co ho so do. */
+  /**
+   * `authUserId = null` la GO cau noi. Tra ve `null` neu khong co ho so do. `trail` (`#395`): dau
+   * vet cua lan noi / go — kho Prisma goi no TRONG cung giao dich; kho bo nho khong goi.
+   */
   abstract setStakeholderAccount(
     id: string,
     authUserId: string | null,
+    trail?: TransactionTrail<AssetStakeholder>,
   ): Promise<AssetStakeholder | null>;
   /** Ho so DANG giu tai khoan nay, neu co — de phan biet "noi trung" voi "chua noi". */
   abstract findStakeholderIdHoldingAccount(authUserId: string): Promise<string | null>;
+  /**
+   * Tai khoan DANG noi voi ho so nay (`null` = chua noi / khong co ho so) — CHI cho dong kiem toan
+   * cua lan noi / go (`#395`): noi tai khoan la cap quyen cho mot con nguoi, nen so kiem toan phai
+   * noi ai MAT va ai DUOC. Khung nhin `AssetStakeholder` van chi mang `hasAccount`.
+   */
+  abstract linkedAccountOf(stakeholderId: string): Promise<string | null>;
 
   abstract openInterest(input: OpenInterestInput): Promise<VehicleOwnershipInterest>;
   /** Tra ve `null` neu khong co quyen loi do; ban DA DONG tra ve nguyen trang, khong ghi de. */
@@ -113,6 +136,18 @@ export const sortClosedInterests = (
       b.effectiveFrom.localeCompare(a.effectiveFrom) ||
       a.id.localeCompare(b.id),
   );
+
+/** Va cham unique gia lap, de duong trong-bo-nho hong GIONG duong Postgres. */
+class InMemoryUniqueViolation extends Error {
+  readonly code = 'P2002';
+  readonly meta: { modelName: string; target: string[] };
+
+  constructor(index: UniqueIndexRef) {
+    super(`Unique constraint failed on the fields: (\`${index.column}\`)`);
+    this.name = 'InMemoryUniqueViolation';
+    this.meta = { modelName: index.model, target: [index.column] };
+  }
+}
 
 /**
  * Ban trong bo nho — duong chay cua `PERSISTENCE=memory` (demo/CI khong can CSDL).
@@ -179,12 +214,24 @@ export class InMemoryAssetOwnershipRepository extends AssetOwnershipRepository {
     return this.accounts.get(authUserId) ?? null;
   }
 
+  async linkedAccountOf(stakeholderId: string): Promise<string | null> {
+    for (const [user, holder] of this.accounts.entries()) {
+      if (holder === stakeholderId) return user;
+    }
+    return null;
+  }
+
   async setStakeholderAccount(
     id: string,
     authUserId: string | null,
   ): Promise<AssetStakeholder | null> {
     const current = this.stakeholders.get(id);
     if (!current) return null;
+    // Cung unique voi Postgres: KHONG lang le cuop tai khoan dang thuoc ho so khac.
+    const taken = authUserId === null ? undefined : this.accounts.get(authUserId);
+    if (taken !== undefined && taken !== id) {
+      throw new InMemoryUniqueViolation(ASSET_STAKEHOLDER_ACCOUNT_UNIQUE);
+    }
     for (const [user, holder] of [...this.accounts.entries()]) {
       if (holder === id) this.accounts.delete(user);
     }

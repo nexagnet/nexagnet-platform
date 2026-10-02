@@ -597,10 +597,15 @@ describe('PlanningService — vong chay do he thong quan (#276 Lane L)', () => {
     expect(projection.freeFrom).not.toBeNull();
   });
 
-  it('chinh sach doc duoc qua be mat chan doan', () => {
-    expect(planning.describePolicy()).toEqual({
+  it('chinh sach doc duoc qua be mat chan doan', async () => {
+    expect(await planning.describePolicy()).toEqual({
       grouping: 'ONE_ORDER_PER_RUN',
-      depot: { kind: 'RESOLVED', depot: { code: 'DEPOT-HN', label: DEPOT_LABEL } },
+      depot: {
+        kind: 'RESOLVED',
+        depot: { code: 'DEPOT-HN', label: DEPOT_LABEL },
+        // Khong co danh ba nao duoc tiem: bai xe doc tu cau hinh — dung nhu truoc #395.
+        source: 'TENANT_CONFIG',
+      },
       closure: { idleHours: null },
     });
   });
@@ -635,7 +640,7 @@ describe('PlanningService — vong chay do he thong quan (#276 Lane L)', () => {
       ACTOR,
     );
     expect(legs).toHaveLength(1);
-    expect(planning.describePolicy().depot.kind).toBe('AMBIGUOUS');
+    expect((await planning.describePolicy()).depot.kind).toBe('AMBIGUOUS');
   });
 
   it('nguong nghi: xa bai va qua gio thi he thong dong', async () => {

@@ -95,3 +95,21 @@ test('agent tu van nhan du bien de chay tren container', () => {
     );
   }
 });
+
+/**
+ * `#395`: nguoi van hanh luc trien khai (`PILOT_OPERATOR_USERNAME`) phai duoc API biet la TAI KHOAN
+ * HE THONG (`PROTECTED_ACCOUNT_USERNAMES`). Neu man hinh quan tri khoa / ha vai / dat lai mat khau
+ * duoc tai khoan nay, lan deploy sau chet o buoc bootstrap (`bootstrap-auth-user.mjs` doi no la ADMIN
+ * dang hoat dong) va moi smoke dang nhap bang no deu do.
+ */
+test('service api biet nguoi van hanh luc trien khai la tai khoan he thong', () => {
+  const start = baseCompose.indexOf('\n  api:');
+  const apiService = baseCompose.slice(start, baseCompose.indexOf('\n  web:', start));
+  assert.match(
+    apiService,
+    /^\s+PROTECTED_ACCOUNT_USERNAMES: \$\{PILOT_OPERATOR_USERNAME:-\}\s*$/m,
+    'service api thieu PROTECTED_ACCOUNT_USERNAMES tu PILOT_OPERATOR_USERNAME — man hinh quan tri ' +
+      'se khoa duoc nguoi van hanh va lan deploy sau chet o buoc bootstrap',
+  );
+  assert.match(renderSecrets, /^PILOT_OPERATOR_USERNAME=/m);
+});

@@ -16,8 +16,13 @@ import {
   transportErrorToHttp,
 } from '../transport-action.guard.js';
 import { transportActorOf } from '../transport-actor.js';
+import { TransportDomainError } from '../transport.errors.js';
+import {
+  COUNTERPARTY_MANAGE_REQUIRED_MESSAGE,
+  canManageCounterpartiesOf,
+} from '../places/admin/place-write-caller.js';
 import { firstIssue } from '../transport.schemas.js';
-import { toCircle, type Geofence } from './geofence.repository.js';
+import { toCircle, type Geofence, type GeofenceSubjectKind } from './geofence.repository.js';
 import { GeofenceService } from './geofence.service.js';
 import { OperationalProofService } from './operational-proof.service.js';
 import type { OperationalProofView } from './operational-proof.types.js';
@@ -119,8 +124,9 @@ export class ProofReviewController {
 
     // Toa do, khoang ban kinh va hinh dang chu the deu duoc kiem trong `GeofenceService`: chung la
     // LUAT NGHIEP VU, va nguong cua chung den tu chinh sach cua khach.
-    return this.guard(() =>
-      this.geofences.register({
+    return this.guard(async () => {
+      requireSiteManageIfOwnedByOthers(request, input.subjectKind);
+      return this.geofences.register({
         label: input.label,
         subjectKind: input.subjectKind,
         subjectId: input.subjectId ?? null,
@@ -129,8 +135,8 @@ export class ProofReviewController {
         radiusMetres: input.radiusMetres,
         note: input.note ?? null,
         recordedBy: transportActorOf(request),
-      }),
-    );
+      });
+    });
   }
 
   private async guard<T>(run: () => Promise<T>): Promise<T> {
@@ -140,4 +146,27 @@ export class ProofReviewController {
       return transportErrorToHttp(error);
     }
   }
+}
+
+/** Chu the la dia diem cua MOT DON VI KHAC (khach hang, doi tac) — khong phai cua chinh cong ty. */
+const OWNED_BY_OTHERS: ReadonlySet<GeofenceSubjectKind> = new Set([
+  'COUNTERPARTY_SITE',
+  'CUSTOMER',
+]);
+
+/**
+ * Route cu KHONG duoc la cua sau cua man "Dia diem van hanh" (`#395`): khai hang rao len dia diem
+ * cua mot don vi khac doi quyen THU HAI `transport.counterparty.manage`, dung luat
+ * `PlaceAdminService` ap cho cung ket qua. Bai xe, cay xang, diem tam cua chinh cong ty van chi can
+ * `transport.geofence.manage` nhu truoc.
+ */
+function requireSiteManageIfOwnedByOthers(
+  request: AuthenticatedRequest,
+  kind: GeofenceSubjectKind,
+): void {
+  if (!OWNED_BY_OTHERS.has(kind) || canManageCounterpartiesOf(request)) return;
+  throw TransportDomainError.denied(
+    'PLACE_SITE_REQUIRES_COUNTERPARTY_MANAGE',
+    COUNTERPARTY_MANAGE_REQUIRED_MESSAGE,
+  );
 }

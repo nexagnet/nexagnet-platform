@@ -20,6 +20,7 @@ import { customerReconciliationFingerprint } from '../customer-ar/customer-ar-do
 import { calculatePayslip, payrollPolicyVersion } from '../workforce/payroll-calculator.js';
 import { loadDemoMonthDataset } from './demo-dataset.js';
 import { assertDemoResetAllowed, assertTransportDemoTenant } from './demo-guard.js';
+import { DEMO_STAFF_PERSONAS, demoDriverLogins } from './demo-logins.js';
 import { type DemoPlan, buildDemoPlan } from './demo-plan.js';
 
 /**
@@ -55,23 +56,8 @@ export const DEMO_SEED_ACTOR = 'demo-seed';
 /** Mat khau nhan vat mau den tu MOI TRUONG, khong bao gio tu kho ma nguon. */
 export const DEMO_DRIVER_PASSWORD_ENV = 'TRANSPORT_DEMO_DRIVER_PASSWORD';
 
-/**
- * NHAN VAT VAN PHONG cua ban demo — khong phai lai xe, nen khong co ho so `TransportDriver`.
- *
- * VI SAO VAI NAM TRONG MA NGUON CHU KHONG TRONG GOI KHACH:
- * mot goi khach khai duoc vai o tang xac thuc thi mot goi khach cung PHONG duoc quyen cua chinh
- * no — `role: 'ADMIN'` trong mot tep JSON la mot duong leo thang dac quyen. Nen goi khach quyet
- * dinh DU LIEU, con ma nguon quyet dinh QUYEN.
- *
- * VI SAO CAN MOT KE TOAN THAT: `ACCOUNTING` khong phai `ADMIN` bi cat bot cho vui — no bi tu choi
- * DUNG BA hanh dong (`transport-actions.ts`): huy chuyen (`GD-02`: huy thay xoa), mo lai ky chi phi
- * va mo lai ky doi soat bang ke (ca hai deu `GD-11`). Khong co mot tai khoan `ACCOUNTING` that thi
- * ba duong tu choi do khong bao gio duoc DO tren ban dang chay — chi duoc do trong bo nho.
- */
-export const DEMO_STAFF_PERSONAS = [
-  { login: 'ke-toan', name: 'Kế toán mẫu', role: 'ACCOUNTING' },
-  { login: 'giam-doc', name: 'Giám đốc mẫu', role: 'ADMIN' },
-] as const;
+/** Nhan vat van phong — hang so nam o `demo-logins.ts` (tep nhe, mien phan quyen doc duoc). */
+export { DEMO_STAFF_PERSONAS } from './demo-logins.js';
 
 export interface DemoSeedOptions {
   /** Ngay nghiep vu lam moc. Mac dinh: hom nay theo mui gio cua goi khach. */
@@ -351,26 +337,6 @@ export async function resetTransportDemoData(
 ): Promise<Readonly<Record<string, number>>> {
   assertDemoResetAllowed(env);
 
-  /**
-   * THU TAI KHOAN DANG NHAP CUA LAI XE TRUOC KHI XOA HO SO — thu tu nay bat buoc.
-   *
-   * `TransportDriver.authUserId` la SOI DAY DUY NHAT noi mot hang `User` voi du lieu mau. Xoa ho
-   * so lai xe truoc roi moi di tim tai khoan la cat day roi hoi no dan toi dau: cac hang `User`
-   * do tro thanh MO COI, va lan gieo lai ke tiep chet o `User.username @unique` — mot lenh "xoa va
-   * gieo lai" chi chay duoc DUNG MOT LAN.
-   *
-   * Chi nhung tai khoan CO MOT HO SO LAI XE TRO TOI moi bi xoa. Tai khoan van hanh do
-   * `bootstrap-auth-user.mjs` tao khong co soi day nao nhu vay nen khong bao gio nam trong danh
-   * sach — do la ly do o day khong loc theo ten dang nhap.
-   */
-  const linkedDrivers = await prisma.transportDriver.findMany({
-    where: { authUserId: { not: null } },
-    select: { authUserId: true },
-  });
-  const driverUserIds = linkedDrivers
-    .map((driver) => driver.authUserId)
-    .filter((id): id is string => id !== null);
-
   const deleted: Record<string, number> = {};
 
   const allocations = await wipeFrozenCashoutAllocations(prisma);
@@ -387,37 +353,67 @@ export async function resetTransportDemoData(
     if (result.count > 0) deleted[table] = result.count;
   }
 
-  if (driverUserIds.length > 0) {
-    const users = await prisma.user.deleteMany({ where: { id: { in: driverUserIds } } });
-    if (users.count > 0) deleted['user'] = users.count;
-  }
-
   /**
-   * NHAN VAT VAN PHONG PHAI XOA THEO TEN DANG NHAP, va o day dieu do la DUNG chu khong phai mot
-   * ngoai le luom thuom cua quy tac ngay tren.
+   * TAI KHOAN CUA NHAN VAT MAU — xoa THEO TEN DANG NHAP, va CHI ten cua nhan vat mau (`#395`).
    *
-   * Quy tac "khong loc theo ten dang nhap" o tren ton tai de bao ve tai khoan van hanh do
-   * `bootstrap-auth-user.mjs` tao: no khong duoc dinh vao du lieu mau, nen soi day `authUserId` la
-   * cach dung de nhan ra ai thuoc ban demo. Nhung mot ke toan mau KHONG CO soi day nao ca — khong
-   * ho so lai xe, khong khoa ngoai. Neu khong xoa no o day, no thanh hang MO COI va lan "xoa roi
-   * gieo lai" ke tiep chet o `User.username @unique`, tuc lenh reset lai chi chay duoc DUNG MOT
-   * LAN — chinh cai bay ma khoi chu thich tren duoc viet ra de canh bao.
+   * Truoc `#395` lenh nay xoa MOI tai khoan co ho so lai xe tro toi, voi ly le "chi may gieo moi
+   * dat `TransportDriver.authUserId`". Ly le do het dung khi Giam doc noi duoc tai khoan tao tren man
+   * hinh quan tri vao ho so lai xe (`PUT /transport/drivers/:driverId/account`): lenh reset ke tiep
+   * se XOA CUNG mot tai khoan nguoi that, keo theo quyen rieng (`ON DELETE CASCADE`) va de lai lich
+   * su kiem toan tro vao mot nguoi khong con ton tai.
    *
-   * An toan vi danh sach la mot HANG SO CUA MA NGUON: goi khach khong dat ten vao day duoc, nen
-   * khong goi khach nao khien lenh reset xoa mot tai khoan ma no khong tao ra.
+   * Nen tap bi xoa bay gio la mot tap TEN co nguon ro rang: ten dang nhap lai xe cua BO DU LIEU MAU
+   * (`loadDemoMonthDataset().drivers[].login` — chinh ten ma lan gieo tao ra) va
+   * `DEMO_STAFF_PERSONAS` (hang so cua ma nguon). Mot tai khoan khac dang noi voi mot lai xe mau
+   * chi MAT ho so lai xe (bang van tai bi xoa sach o tren), khong mat tai khoan.
+   *
+   * Xoa theo ten, khong theo soi day `authUserId`: mot nhan vat mau da bi go noi (Giam doc go tren
+   * man hinh) van phai bi xoa, neu khong lan gieo lai chet o `User.username @unique` — lenh "xoa va
+   * gieo lai" chi chay duoc dung mot lan. Tai khoan van hanh do `bootstrap-auth-user.mjs` tao khong
+   * mang ten nao trong tap nay.
    */
-  const staffLogins = DEMO_STAFF_PERSONAS.map((persona) => persona.login);
-  const staff = await prisma.user.deleteMany({ where: { username: { in: staffLogins } } });
-  if (staff.count > 0) deleted['user'] = (deleted['user'] ?? 0) + staff.count;
+  const personaLogins = [
+    ...demoDriverLogins(),
+    ...DEMO_STAFF_PERSONAS.map((persona) => persona.login),
+  ];
+  const users = await prisma.user.deleteMany({ where: { username: { in: personaLogins } } });
+  if (users.count > 0) deleted['user'] = users.count;
 
   return deleted;
 }
 
 /**
- * GIEO thang van hanh mau. Bo qua trong im lang neu DB da co chuyen nao — giong het
- * `seed-tenant-knowledge.mjs`: goi khach la HAT GIONG, khong phai nguon su that luc chay, nen mot
- * lan deploy lai khong duoc ghi de len thu nguoi ta da sua tren man hinh.
+ * Vi sao lan tao bu KHONG noi mot lai xe mau voi tai khoan cua no (`#395`). Moi ma la mot quyet
+ * dinh cua NGUOI (Giam doc) hoac mot trang thai ma may gieo khong duoc phep ghi de:
+ *
+ *   · `DRIVER_UNLINKED_BY_DIRECTOR`  — ho so co dong `transport.driver.account_unlink`: Giam doc da
+ *                                      go noi co chu y, lan khoi dong sau khong duoc noi lai;
+ *   · `LOGIN_ROLE_NOT_DRIVER`        — tai khoan cung ten khong con vai Lai xe (`SALE`);
+ *   · `LOGIN_DISABLED`               — tai khoan cung ten dang bi khoa;
+ *   · `LOGIN_LINKED_TO_OTHER_DRIVER` — tai khoan cung ten da noi voi ho so lai xe KHAC (Giam doc
+ *                                      chuyen noi) — noi them se chet o `authUserId @unique`.
  */
+export const DEMO_LOGIN_SKIP_REASONS = [
+  'DRIVER_UNLINKED_BY_DIRECTOR',
+  'LOGIN_ROLE_NOT_DRIVER',
+  'LOGIN_DISABLED',
+  'LOGIN_LINKED_TO_OTHER_DRIVER',
+] as const;
+export type DemoLoginSkipReason = (typeof DEMO_LOGIN_SKIP_REASONS)[number];
+
+export interface DemoPersonaLoginSkip {
+  readonly driverId: string;
+  readonly login: string;
+  readonly reason: DemoLoginSkipReason;
+}
+
+export interface DemoPersonaLoginReport {
+  /** So tai khoan da tao + so lai xe da noi. */
+  readonly created: number;
+  /** Lai xe mau KHONG duoc noi, kem ly do. */
+  readonly skipped: readonly DemoPersonaLoginSkip[];
+}
+
 /**
  * TAO BU TAI KHOAN DANG NHAP cho cac NHAN VAT MAU chua co tai khoan — lai xe VA nhan vat van phong.
  *
@@ -440,16 +436,27 @@ export async function resetTransportDemoData(
  * Duong nay con phai chay duoc cho mot ban DA GIEO DAY DU lai xe: `DEMO_STAFF_PERSONAS` duoc them
  * SAU khi stack xem truoc da co ca thang du lieu, nen "khong lai xe nao thieu tai khoan" khong
  * duoc phep co nghia la "khong con gi de tao".
+ *
+ * ---------------------------------------------------------------------------
+ * `#395` — MAY GIEO KHONG DUOC LA DUONG NOI TAI KHOAN THU HAI.
+ *
+ * Buoc nay chay o MOI lan khoi dong stack xem truoc. Truoc `#395` no noi moi lai xe dang trong voi
+ * tai khoan cung ten ma khong kiem gi: Giam doc go noi tren man hinh, lan khoi dong sau no noi lai;
+ * tai khoan da bi doi sang vai Ke toan hay da bi khoa van duoc noi. Bay gio no chi noi khi luat cua
+ * `DriverAccountLinkService` cung cho phep, va noi ro vi sao khi khong noi
+ * (`DemoPersonaLoginReport.skipped`). Moi lan noi de lai mot dong `transport.driver.account_link`.
  */
-export async function backfillDemoPersonaLogins(
+export async function backfillDemoPersonaLoginsReport(
   prisma: PrismaClient,
   options: Pick<DemoSeedOptions, 'driverPassword' | 'hashPassword'> = {},
-): Promise<number> {
+): Promise<DemoPersonaLoginReport> {
   assertTransportDemoTenant('tao tai khoan dang nhap cho nhan vat mau');
 
   const password = options.driverPassword ?? process.env[DEMO_DRIVER_PASSWORD_ENV];
   const hashPassword = options.hashPassword;
-  if (password === undefined || password === '' || hashPassword === undefined) return 0;
+  if (password === undefined || password === '' || hashPassword === undefined) {
+    return { created: 0, skipped: [] };
+  }
 
   let created = 0;
 
@@ -472,21 +479,58 @@ export async function backfillDemoPersonaLogins(
     created += 1;
   }
 
+  const drivers = await backfillDemoDriverLogins(prisma, password, hashPassword);
+  return { created: created + drivers.created, skipped: drivers.skipped };
+}
+
+/**
+ * Ban chi tra CON SO tai khoan da tao — hop dong cu, giu cho cac bai kiem va cong cu doc so.
+ * `seed-transport-demo.mjs` dung `backfillDemoPersonaLoginsReport` de in ca ly do bo qua.
+ */
+export async function backfillDemoPersonaLogins(
+  prisma: PrismaClient,
+  options: Pick<DemoSeedOptions, 'driverPassword' | 'hashPassword'> = {},
+): Promise<number> {
+  return (await backfillDemoPersonaLoginsReport(prisma, options)).created;
+}
+
+async function backfillDemoDriverLogins(
+  prisma: PrismaClient,
+  password: string,
+  hashPassword: (plain: string) => Promise<string>,
+): Promise<DemoPersonaLoginReport> {
   const pending = await prisma.transportDriver.findMany({
     where: { authUserId: null },
     select: { id: true, fullName: true, phone: true },
   });
-  if (pending.length === 0) return created;
+  if (pending.length === 0) return { created: 0, skipped: [] };
 
   /** Khop theo SO DIEN THOAI: ten co dau va co the trung, so dien thoai thi khong. */
   const loginByPhone = new Map(
     loadDemoMonthDataset().drivers.map((driver) => [driver.phone, driver.login]),
   );
+  const unlinkedByDirector = await driversUnlinkedByDirector(
+    prisma,
+    pending.map((driver) => driver.id),
+  );
 
+  let created = 0;
+  const skipped: DemoPersonaLoginSkip[] = [];
   for (const driver of pending) {
     const login = loginByPhone.get(driver.phone);
     if (login === undefined) continue;
+
+    if (unlinkedByDirector.has(driver.id)) {
+      skipped.push({ driverId: driver.id, login, reason: 'DRIVER_UNLINKED_BY_DIRECTOR' });
+      continue;
+    }
     const existing = await prisma.user.findUnique({ where: { username: login } });
+    const refusal = existing ? await refuseExistingLogin(prisma, existing, driver.id) : null;
+    if (refusal !== null) {
+      skipped.push({ driverId: driver.id, login, reason: refusal });
+      continue;
+    }
+
     const user =
       existing ??
       (await prisma.user.create({
@@ -503,11 +547,60 @@ export async function backfillDemoPersonaLogins(
       where: { id: driver.id },
       data: { authUserId: user.id },
     });
+    await prisma.auditLog.create({
+      data: {
+        actor: DEMO_SEED_ACTOR,
+        action: 'transport.driver.account_link',
+        entityType: 'TransportDriver',
+        entityId: driver.id,
+        before: { authUserId: null },
+        after: { authUserId: user.id },
+      },
+    });
     created += 1;
   }
-  return created;
+  return { created, skipped };
 }
 
+/** Ho so lai xe nao da tung bi GO NOI tren man hinh quan tri — MOT truy van cho ca lo. */
+async function driversUnlinkedByDirector(
+  prisma: PrismaClient,
+  driverIds: readonly string[],
+): Promise<ReadonlySet<string>> {
+  const rows = await prisma.auditLog.findMany({
+    where: {
+      action: 'transport.driver.account_unlink',
+      entityType: 'TransportDriver',
+      entityId: { in: [...driverIds] },
+    },
+    select: { entityId: true },
+  });
+  return new Set(rows.map((row) => row.entityId).filter((id): id is string => id !== null));
+}
+
+/**
+ * Cung luat voi `DriverAccountLinkService` cho mot tai khoan DA CO: vai Lai xe, dang hoat dong,
+ * chua noi ho so lai xe khac.
+ */
+async function refuseExistingLogin(
+  prisma: PrismaClient,
+  user: { readonly id: string; readonly role: string; readonly disabledAt: Date | null },
+  driverId: string,
+): Promise<DemoLoginSkipReason | null> {
+  if (user.role !== 'SALE') return 'LOGIN_ROLE_NOT_DRIVER';
+  if (user.disabledAt !== null) return 'LOGIN_DISABLED';
+  const holder = await prisma.transportDriver.findUnique({
+    where: { authUserId: user.id },
+    select: { id: true },
+  });
+  return holder && holder.id !== driverId ? 'LOGIN_LINKED_TO_OTHER_DRIVER' : null;
+}
+
+/**
+ * GIEO thang van hanh mau. Bo qua trong im lang neu DB da co chuyen nao — giong het
+ * `seed-tenant-knowledge.mjs`: goi khach la HAT GIONG, khong phai nguon su that luc chay, nen mot
+ * lan deploy lai khong duoc ghi de len thu nguoi ta da sua tren man hinh.
+ */
 export async function seedTransportDemoMonth(
   prisma: PrismaClient,
   options: DemoSeedOptions = {},

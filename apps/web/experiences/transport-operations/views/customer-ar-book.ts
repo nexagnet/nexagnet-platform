@@ -7,6 +7,7 @@ import {
   useNavigationInput,
   useTransportOrders,
 } from '../hooks/useTransportWorkspace';
+import { canPerform } from '../transport-actions';
 import { transportApi } from '../transport-api';
 import { toCustomerArWorkspace } from '../workspace/customer-ar';
 
@@ -55,17 +56,25 @@ export function useCustomerArBook(scope: CustomerArScope) {
   const customers = useCustomers(navigation);
   const orders = useTransportOrders(navigation);
 
+  /*
+   * Ba duong doc cua so deu doi `transport.customer_reconciliation.read` (`#395`). Truoc day ba
+   * query KHONG co cong: nguoi mo man bang mot ma khac nhan `403` o ca ba, va so rong doc ra nhu
+   * "khong ai no". Muc `Phải thu khách hàng` gio doi chinh ma nay; cong o day chan phan con lai.
+   */
   const pending = useQuery({
     queryKey: [...CUSTOMER_AR_QUERY_ROOT, 'pending', scope.customerId],
     queryFn: () => transportApi.customerAr.pending(scope.customerId),
+    enabled: canPerform(navigation, 'transport.customer_reconciliation.read'),
   });
   const batches = useQuery({
     queryKey: [...CUSTOMER_AR_QUERY_ROOT, 'batches', scope.customerId],
     queryFn: () => transportApi.customerAr.batches(scope.customerId),
+    enabled: canPerform(navigation, 'transport.customer_reconciliation.read'),
   });
   const summary = useQuery({
     queryKey: [...CUSTOMER_AR_QUERY_ROOT, 'summary', scope.asOf, scope.customerId],
     queryFn: () => transportApi.customerAr.summary(scope.asOf, scope.customerId),
+    enabled: canPerform(navigation, 'transport.customer_reconciliation.read'),
   });
 
   const model = useMemo(
@@ -77,11 +86,13 @@ export function useCustomerArBook(scope: CustomerArScope) {
             pending: pending.data?.orders ?? [],
             batches: batches.data?.batches ?? [],
             summary: summary.data,
-            customers: (customers.data ?? []).map((customer) => ({
+            // CHUA doc duoc danh ba (chua cap quyen, dang doc) → `undefined`: nhan noi "chưa đọc
+            // được tên", KHONG noi "không còn trong danh mục" (`#395`).
+            customers: customers.data?.map((customer) => ({
               id: customer.id,
               name: customer.name,
             })),
-            orders: (orders.data ?? []).map((order) => ({ id: order.id, code: order.code })),
+            orders: orders.data?.map((order) => ({ id: order.id, code: order.code })),
           }),
     [scope.asOf, batches.data, customers.data, orders.data, pending.data, summary.data],
   );

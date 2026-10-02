@@ -299,10 +299,12 @@ và nó là cách duy nhất được phép tắt mà màn hình vẫn tạo đ�
   này không ghi gì. Toạ độ nhà cung cấp đi qua `parseGeoPoint`, kết quả hỏng bị bỏ. Ghi nguồn
   `© OpenStreetMap contributors` (ODbL) đi kèm mọi kết quả thành công.
 - **Địa điểm đã biết = hàng rào**, không phải một kho địa điểm thứ hai.
-  `GET /transport/places/known` đọc `TransportGeofence` đang hoạt động qua cổng tuỳ chọn
-  `KnownPlacesFacts` (adapter thuộc `transport-proof`): `DEPOT`, `COUNTERPARTY_SITE` (tên địa điểm
-  + tên pháp nhân), `CUSTOMER`; bỏ `FUEL_SUPPLIER` và `AD_HOC`. Khách không bật `transport-proof`
-  nhận `{ available: false }` — khác với "có sổ, chưa khai địa điểm nào".
+  `GET /transport/places/known` đọc `TransportGeofence` **còn hiệu lực thật** (từ `#395`, §7.2) qua
+  cổng tuỳ chọn `KnownPlacesFacts` (adapter thuộc `transport-proof`): `DEPOT`, `COUNTERPARTY_SITE`
+  (tên địa điểm + tên pháp nhân), `CUSTOMER` (+ tên khách); bỏ `FUEL_SUPPLIER` và `AD_HOC`. Từ
+  `#395` mỗi địa điểm mang thêm `kindLabel` (cùng nhãn với màn "Địa điểm vận hành", bảng ở §7.2)
+  và `address`. Khách không bật `transport-proof` nhận `{ available: false }` — khác với "có sổ,
+  chưa khai địa điểm nào".
 - **Telemetry**: bước `place.search` / `place.reverse`, quyết định `place.lookup` (từ vựng
   `places/place-decisions.ts`). `detail` chỉ có `operation`, `providerId`, `queryLength`,
   `resultCount`, `reason` — **không** chuỗi tìm, **không** toạ độ.
@@ -316,9 +318,104 @@ và nó là cách duy nhất được phép tắt mà màn hình vẫn tạo đ�
   thì lần sau không tạo bản sao); trùng nhãn chuẩn hoá với một hàng rào **đang hoạt động** thì bỏ qua
   (`LABEL_TAKEN_BY_ACTIVE_GEOFENCE`) thay vì tạo nhãn mơ hồ; **không** tạo liên kết khách; mỗi điểm
   chạy trong giao dịch `Serializable`, xung đột (P2034/P2002) thử lại đúng một lần; lỗi còn lại chỉ
-  ghi log, không chặn api khởi động.
+  ghi log, không chặn api khởi động. Từ `#395`: bãi xe mẫu bỏ qua khi đã có **bất kỳ** hàng rào
+  `DEPOT` nào, mọi trạng thái (`DEPOT_ALREADY_MANAGED`); dấu vết "đã gieo" của một địa điểm mẫu là
+  pháp nhân mẫu **đã có một địa điểm mang hàng rào của máy gieo** (mọi trạng thái), không còn là nhãn
+  — Giám đốc đổi tên ở màn "Địa điểm vận hành" thì lần khởi động sau không tạo lại bản mang tên cũ.
 
 Biến môi trường và vận hành: [`ban-do-nen.md` §9](../phat-trien/van-hanh/ban-do-nen.md#9-tìm-địa-điểm-phía-máy-chủ-379--biến-môi-trường-của-api).
+
+### 7.2. Địa điểm vận hành — một sổ, và sổ đó là sổ hàng rào (#395)
+
+*As-built 25/09/2026, chưa có bằng chứng runtime.* Giám đốc khai bãi xe, kho của khách, nhà máy của
+đối tác trên màn **"Địa điểm vận hành"** (nhóm QUẢN TRỊ, capability `transport-proof`). Không có
+bảng địa điểm thứ hai: một địa điểm vận hành **là** một `TransportGeofence` — cùng sổ mà Tạo đơn,
+điều xe, lập kế hoạch và chấm chứng cứ đã đọc. Hợp đồng HTTP: [api-http.md](api-http.md) §3.11.
+
+**Loại và nhãn.** Màn này chỉ **tạo** hai loại hàng rào; hàng rào `CUSTOMER` cũ vẫn xem, sửa, tắt,
+bật được nhưng không tạo mới; cây xăng (`FUEL_SUPPLIER`) và điểm tạm (`AD_HOC`) không quản lý ở đây.
+
+| Hàng rào | Nhãn hiển thị | Chủ |
+|---|---|---|
+| `DEPOT` | **Bãi xe** | Chính công ty — không chọn chủ. Mã `DEPOT-<CHỮ-KHÔNG-DẤU>` do máy chủ sinh |
+| `COUNTERPARTY_SITE`, pháp nhân chủ có liên kết khách hàng (`TransportCounterpartyLink` loại `CUSTOMER`) | **Địa điểm khách hàng** | Pháp nhân của khách |
+| `COUNTERPARTY_SITE`, pháp nhân không liên kết khách | **Nhà máy / kho đối tác** | Pháp nhân đó |
+| `CUSTOMER` (trước `#395`) | **Điểm khách hàng (kiểu cũ)** | Khách hàng |
+
+Kho của một khách là một địa điểm của **pháp nhân** khách đó, đúng như dữ liệu mẫu đã gieo. Tạo một
+địa điểm của đơn vị khác thì chọn chủ bằng **một** trong bốn cách: một khách hàng (dùng pháp nhân đã
+nối; chưa có thì pháp nhân cùng mã số thuế; không có nữa thì tạo pháp nhân + liên kết `CUSTOMER`),
+một pháp nhân có sẵn, một pháp nhân mới (tên, mã số thuế tuỳ chọn), hoặc gắn vị trí vào một địa
+điểm pháp nhân có sẵn chưa có hàng rào (`siteId`). Pháp nhân, liên kết, địa điểm và hàng rào được ghi
+trong **cùng một giao dịch**; mọi luật được kiểm trước lần ghi đầu tiên. Tên địa điểm pháp nhân **đi
+theo** tên hàng rào (đổi tên là đổi cả hai, cùng giao dịch).
+
+**Còn hiệu lực thật** (`isEffectivelyActive`, MỘT vị từ ở `geofence.repository.ts`): hàng rào
+`ACTIVE`; với `COUNTERPARTY_SITE` thêm địa điểm **và** pháp nhân `ACTIVE`; với `CUSTOMER` thêm khách
+`ACTIVE`; loại khác chỉ xét chính hàng rào. Dùng cho: địa điểm đã biết của Tạo đơn, sổ tra địa điểm
+của điều xe, và luật trùng tên. Nhờ vậy tắt một pháp nhân / địa điểm / khách qua đường cũ **không**
+cần lan sang hàng rào mà nơi đặt hàng rào vẫn biến mất ngay khỏi Tạo đơn và điều xe; màn quản trị
+hiện nó là `OWNER_INACTIVE`. **Phán quyết chứng cứ không dùng vị từ này** — vẫn chấm theo trạng thái
+thô của hàng rào, như trước `#395`.
+
+**Luật trùng tên.** Một tên mới phải khác — sau `normalizePlaceLabel` (bỏ dấu, `đ`→`d`, chữ hoa, mọi
+cụm ký tự không phải chữ-số thành một khoảng trắng; cùng hàm điều xe dùng để giải nhãn) — **mọi**
+nhãn hàng rào còn hiệu lực thật của **mọi** loại và mọi tên địa điểm pháp nhân của chúng. Trùng →
+`PLACE_NAME_TAKEN` (`detail: { conflictName, conflictKindLabel, ownerName? }`). Chỉ kiểm khi **tạo**,
+**đổi tên** và **bật lại**: một lần sửa không đụng tới tên vẫn qua dù dữ liệu cũ đã có va chạm (màn
+hình hiện va chạm đó trong `conflicts`). Lý do: hai hàng rào cùng khoá chuẩn hoá làm điều xe trả
+`PICKUP_LABEL_AMBIGUOUS` cho cả hai.
+
+**Tắt / bật, không xoá.** Không có đường xoá. Tắt một địa điểm pháp nhân tắt địa điểm **và mọi**
+hàng rào của nó; bật lại bật địa điểm và hàng rào này sau khi kiểm lại tên, chủ còn hoạt động, và
+(với bãi xe) không có bãi nào khác đang bật. Sửa vị trí, bán kính, hay tắt một địa điểm đổi phán
+quyết chứng cứ của **cả những lần giao đã xong** (hàng rào chấm lúc đọc) — vì thế
+`transport.geofence.manage` nằm trong `ACCOUNTING_DENIED` và là quyền leo thang
+([transport-domain-contract.md](transport-domain-contract.md) §11.5). Địa điểm của đơn vị khác đòi thêm
+`transport.counterparty.manage`.
+
+**Bãi xe — hai bất biến sống ở DB** (di trú `20260925100100_transport_place_admin`, SQL thô, không
+khai được trong `schema.prisma`):
+
+```sql
+CREATE UNIQUE INDEX "TransportGeofence_one_active_depot" ON "TransportGeofence" ((1))
+  WHERE "subjectKind" = 'DEPOT' AND "status" = 'ACTIVE';          -- tối đa MỘT bãi đang bật
+CREATE UNIQUE INDEX "TransportGeofence_depot_code_key" ON "TransportGeofence" ("subjectId")
+  WHERE "subjectKind" = 'DEPOT';                                   -- mã bãi không trùng, kể cả bãi đã tắt
+```
+
+Di trú kiểm dữ liệu trước và dừng bằng một câu nói rõ cách sửa nếu đã có hơn một bãi đang bật hoặc
+mã bãi trùng. Lần deploy hỏng đó để lại một dòng di trú hỏng trong `_prisma_migrations`: sửa dữ liệu
+xong, **trước khi** deploy lại phải chạy
+`prisma migrate resolve --rolled-back 20260925100100_transport_place_admin` — thiếu bước này
+`migrate deploy` từ chối với `P3009` (câu báo lỗi của di trú và `README-rollback.sql` đều nói bước
+này). `P2002` của hai chỉ mục được dịch thành `DEPOT_ALREADY_ACTIVE` / `DEPOT_CODE_TAKEN`. Bãi
+mới tạo khi đã có bãi đang bật thì được tạo **tắt** (bãi dự phòng); đổi bãi chính
+(`make-primary-depot`) là **một** giao dịch — tắt bãi cũ rồi bật bãi mới, không có khoảnh khắc nào
+không bãi hay hai bãi. Bãi xe này là bãi của khâu lập kế hoạch
+([transport-run-planning.md](transport-run-planning.md) §2.2).
+
+**Cột `address`.** `TransportGeofence.address TEXT NULL` + `CHECK` không chuỗi trắng — chỉ để người
+đọc; **không** phép so khớp nào dùng nó (vị trí là toạ độ + bán kính). Hàng rào cũ giữ `NULL`. Sổ
+kiểm toán không bao giờ ghi địa chỉ thô (khoá `address` bị che) — chỉ ghi `addressChanged`.
+
+**Đường ghi duy nhất.** Mọi lần ghi địa điểm — màn "Địa điểm vận hành" **và** route cũ
+`POST /transport/geofences` cho mọi loại hàng rào — đi qua `PlaceWriteStore`
+(`proof/place-write.store.ts`): Prisma chạy **một** `$transaction` `READ COMMITTED` mà câu lệnh đầu
+tiên là `SELECT pg_advisory_xact_lock(39500030001)`, nên mọi phép đọc sau khoá thấy bản ghi người
+trước vừa commit (điều `SERIALIZABLE` không cho — ảnh chụp của nó chụp trước khi chờ khoá); bản trong
+bộ nhớ xếp hàng bằng một chuỗi promise. Khoá giữ luật trùng tên (đọc-rồi-ghi trên nhiều bảng); hai
+chỉ mục của bãi xe chặn cả người ghi không đi qua khoá (máy gieo, script, psql). Route sửa địa điểm
+pháp nhân cũ đổi **tên / trạng thái** của một địa điểm đã có hàng rào (mọi trạng thái) →
+`409 COUNTERPARTY_SITE_MANAGED_AS_PLACE`.
+
+**Kiểm toán và quan sát.** `transport.place.*` (`create`, `update`, `deactivate`, `activate`,
+`make_primary_depot`), `entityType = TransportGeofence`, khoá `label`, `kind`, `code` (bãi xe), `point`,
+`radiusMetres`, `status`, `addressChanged`, `owner`, `standby`, `acknowledgedOpenWork`, `reason`; địa
+điểm pháp nhân giữ `transport.counterparty_site.*`, pháp nhân / liên kết mới ghi
+`transport.counterparty.create` / `transport.counterparty.link`. Bước `place.write`, điểm quyết định
+`place.write` — từ vựng `places/place-admin-decisions.ts`, chủ `transport-places-admin`, tách khỏi
+`place.lookup` của §7.1. `detail` không mang toạ độ hay địa chỉ.
 
 ---
 

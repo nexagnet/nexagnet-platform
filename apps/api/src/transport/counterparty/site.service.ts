@@ -1,6 +1,7 @@
 import { Injectable, Optional } from '@nestjs/common';
 import { AuditLogService } from '../../audit/audit-log.service.js';
 import { TransportDomainError } from '../transport.errors.js';
+import { CounterpartySitePlaceGuardHub } from './counterparty-site-place-guard.js';
 import { CounterpartyRepository } from './counterparty.repository.js';
 import { CounterpartySiteRepository, type UpdateCounterpartySiteInput } from './site.repository.js';
 import type { CounterpartySite, CounterpartySiteView } from './site.types.js';
@@ -40,6 +41,11 @@ export class CounterpartySiteService {
     private readonly sites: CounterpartySiteRepository,
     private readonly counterparties: CounterpartyRepository,
     @Optional() private readonly audit?: AuditLogService,
+    /*
+     * `#395` — cong chan sua TEN/TRANG THAI mot dia diem dang la DIA DIEM VAN HANH (co hang rao).
+     * Cuoi va tuy chon: spec dung dich vu theo vi tri; vang mat = khong chan, dung nhu truoc #395.
+     */
+    @Optional() private readonly placeGuard?: CounterpartySitePlaceGuardHub,
   ) {}
 
   async list(counterpartyId: string): Promise<readonly CounterpartySite[]> {
@@ -133,6 +139,7 @@ export class CounterpartySiteService {
     actor: string,
   ): Promise<CounterpartySite> {
     const before = await this.requireSite(id);
+    await this.requireNotManagedAsPlace(before, patch);
     if (patch.name !== undefined && patch.name !== before.name) {
       const clash = await this.sites.findByName(before.counterpartyId, patch.name);
       if (clash && clash.id !== id) {
@@ -160,6 +167,30 @@ export class CounterpartySiteService {
       after,
     });
     return after;
+  }
+
+  /**
+   * Dia diem co hang rao (moi trang thai) la mot DIA DIEM VAN HANH: ten va trang thai cua no di
+   * CUNG hang rao, trong mot giao dich duoi khoa cua man "Dia diem van hanh". Duong nay khong biet
+   * hang rao — doi ten o day se de ten kho va nhan hang rao lech nhau, tat o day se de hang rao con
+   * bat. Dia chi va ghi chu thi sua tu do.
+   */
+  private async requireNotManagedAsPlace(
+    before: CounterpartySite,
+    patch: UpdateCounterpartySiteInput,
+  ): Promise<void> {
+    if (!this.placeGuard) return;
+    const verdict = await this.placeGuard.checkLegacySiteChange({
+      siteId: before.id,
+      changesName: patch.name !== undefined && patch.name !== before.name,
+      changesStatus: patch.status !== undefined && patch.status !== before.status,
+    });
+    if (!verdict.allowed) {
+      throw TransportDomainError.conflict(
+        verdict.reason,
+        'Điểm này đang được quản lý ở Địa điểm vận hành — sửa tên hoặc bật/tắt ở đó.',
+      );
+    }
   }
 
   private async requireSite(id: string): Promise<CounterpartySite> {

@@ -12,6 +12,7 @@ import {
   useVehicleRuns,
 } from '../hooks/useTransportWorkspace';
 import { buildSectionUrl } from '../navigation';
+import { canPerform } from '../transport-actions';
 import { loadedVsEmptyOption, type ChartPalette } from '../visual/chart-options';
 import { TransportChart } from '../visual/TransportChart';
 import { boundsOf, toJourney, toJourneyMap, type JourneyLegRow } from '../workspace/journey';
@@ -167,7 +168,9 @@ export function JourneyView({
 
           <section className="tx-panel" aria-label="Bản đồ vòng chạy">
             <h2>Bản đồ</h2>
-            {mapQuery.isBlocked || mapQuery.errorMessage !== null ? (
+            {/* `#395`: hoi THANG quyen cua ban do (phan phu cua muc), khong doan tu `isBlocked`. */}
+            {!canPerform(input, 'transport.location.history.read') ||
+            mapQuery.errorMessage !== null ? (
               <p className="tx-note tx-note--warn">
                 Tài khoản của bạn không được xem lịch sử vị trí, nên phần bản đồ bị ẩn. Báo cáo bên
                 dưới vẫn đầy đủ.

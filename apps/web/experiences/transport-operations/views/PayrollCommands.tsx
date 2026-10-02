@@ -2,9 +2,8 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import type { AuthRole } from '../../../lib/auth';
 import { ConfirmAction, ErrorState } from '../components/SectionState';
-import { canPerform } from '../transport-actions';
+import { canPerform, type TransportViewerInput } from '../transport-actions';
 import { transportApi } from '../transport-api';
 import type { PayrollPeriod } from '../transport-types';
 
@@ -32,11 +31,11 @@ import type { PayrollPeriod } from '../transport-types';
  */
 export function PayrollPeriodCommands({
   periods,
-  role,
+  viewer,
   onChanged,
 }: {
   readonly periods: readonly PayrollPeriod[];
-  readonly role: AuthRole | null;
+  readonly viewer: TransportViewerInput;
   readonly onChanged: () => void;
 }) {
   const queryClient = useQueryClient();
@@ -71,7 +70,7 @@ export function PayrollPeriodCommands({
     onError: (error: Error) => setFailure(error.message),
   });
 
-  if (!canPerform(role, 'transport.payroll.period.manage')) return null;
+  if (!canPerform(viewer, 'transport.payroll.period.manage')) return null;
 
   const ready = label.trim() !== '' && startDate !== '' && endDate !== '';
   const openPeriods = periods.filter((row) => row.status === 'OPEN');
@@ -149,12 +148,12 @@ export function PayrollPeriodCommands({
 export function PayrollRunCommand({
   periodId,
   periodStatus,
-  role,
+  viewer,
   onChanged,
 }: {
   readonly periodId: string;
   readonly periodStatus: PayrollPeriod['status'];
-  readonly role: AuthRole | null;
+  readonly viewer: TransportViewerInput;
   readonly onChanged: () => void;
 }) {
   const queryClient = useQueryClient();
@@ -172,7 +171,7 @@ export function PayrollRunCommand({
     onError: (error: Error) => setFailure(error.message),
   });
 
-  if (!canPerform(role, 'transport.payroll.run')) return null;
+  if (!canPerform(viewer, 'transport.payroll.run')) return null;
 
   return (
     <>
@@ -212,7 +211,7 @@ export function PayrollRunCommand({
 export function PayslipCorrection({
   payslipId,
   canCorrect,
-  role,
+  viewer,
   onChanged,
 }: {
   readonly payslipId: string;
@@ -221,7 +220,7 @@ export function PayslipCorrection({
    * lam lai o day. Mot phieu con `DRAFT` thi sua bang cach chay lai, khong phat phieu bu.
    */
   readonly canCorrect: boolean;
-  readonly role: AuthRole | null;
+  readonly viewer: TransportViewerInput;
   readonly onChanged: () => void;
 }) {
   const queryClient = useQueryClient();
@@ -246,7 +245,7 @@ export function PayslipCorrection({
     onError: (error: Error) => setFailure(error.message),
   });
 
-  if (!canPerform(role, 'transport.payroll.run')) return null;
+  if (!canPerform(viewer, 'transport.payroll.run')) return null;
   if (!canCorrect) return null;
 
   return (

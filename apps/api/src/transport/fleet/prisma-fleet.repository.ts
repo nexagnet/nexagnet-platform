@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import type { TransactionTrail } from '../../audit/audit-trail.js';
 import type { PrismaService } from '../../config/prisma.service.js';
 import { ACTIVE_VEHICLE_ASSIGNMENT, isActiveAssignmentConflict } from '../storage-conflict.js';
 import { TransportDomainError } from '../transport.errors.js';
@@ -215,8 +216,26 @@ export class PrismaFleetRepository extends FleetRepository {
     );
   }
 
-  async updateDriver(id: string, patch: UpdateDriverInput): Promise<Driver | null> {
-    const row = await model(this.prisma, 'transportDriver').update({
+  async updateDriver(
+    id: string,
+    patch: UpdateDriverInput,
+    trail?: TransactionTrail<Driver>,
+  ): Promise<Driver | null> {
+    if (!trail) return this.writeDriver(this.prisma, id, patch);
+    // Dau vet trong CUNG giao dich: hong thi lan noi / go tai khoan lui theo.
+    return this.prisma.$transaction(async (tx) => {
+      const driver = await this.writeDriver(tx as unknown as PrismaService, id, patch);
+      if (driver) await trail(driver, tx);
+      return driver;
+    });
+  }
+
+  private async writeDriver(
+    client: PrismaService,
+    id: string,
+    patch: UpdateDriverInput,
+  ): Promise<Driver | null> {
+    const row = await model(client, 'transportDriver').update({
       where: { id },
       data: prune(patch),
     });

@@ -42,6 +42,21 @@ export class AuditLogService {
     };
   }
 
+  /**
+   * So kiem toan TREN giao dich dang mo `client` (`#395`, `audit-trail.ts`) — dong dau vet hong thi
+   * giao dich lui ca thay doi. `null` khi kho cua dich vu nay khong nhap duoc vao giao dich do (kho
+   * bo nho): nguoi goi ghi bang `append()` sau commit.
+   */
+  within(client: unknown): { append(command: AppendAuditLogCommand): Promise<void> } | null {
+    const scoped = this.repository.onTransaction(client);
+    if (!scoped) return null;
+    return {
+      append: async (command) => {
+        await scoped.append(this.entryFor(command));
+      },
+    };
+  }
+
   async append(command: AppendAuditLogCommand): Promise<AuditLog> {
     const entry = await this.repository.append(this.entryFor(command));
     return auditLogSchema.parse(entry);

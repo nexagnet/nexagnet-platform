@@ -1,4 +1,3 @@
-import type { AuthRole } from '../../../lib/auth';
 import {
   FUEL_DISCREPANCY_KIND_LABEL,
   FUEL_DISCREPANCY_RESOLUTION_LABEL,
@@ -21,7 +20,7 @@ import {
   rejectReasonLabel,
   type StatusTone,
 } from '../customer-view';
-import { canPerform } from '../transport-actions';
+import { canPerform, type TransportViewerInput } from '../transport-actions';
 import type { DeclaredFuelFacts } from './fuel-extraction';
 import { REVISABLE_FUEL_RESOLUTIONS, type RevisableFuelResolution } from '../transport-types';
 import type {
@@ -112,10 +111,10 @@ const amendBlockedReason = (entry: FuelEntry): string | null => {
 export const toFuelEntryRow = (
   entry: FuelEntry,
   suppliers: ReadonlyMap<string, string>,
-  role: AuthRole | null,
+  viewer: TransportViewerInput,
 ): FuelEntryRow => {
   const blocked = amendBlockedReason(entry);
-  const mayVerify = canPerform(role, 'transport.fuel.entry.verify');
+  const mayVerify = canPerform(viewer, 'transport.fuel.entry.verify');
   return {
     id: entry.id,
     businessDateLabel: formatBusinessDate(entry.businessDate),
@@ -151,10 +150,10 @@ export const toFuelEntryRow = (
 export const toFuelEntryRows = (
   entries: readonly FuelEntry[],
   suppliers: readonly FuelSupplier[],
-  role: AuthRole | null,
+  viewer: TransportViewerInput,
 ): readonly FuelEntryRow[] => {
   const index = new Map(suppliers.map((row) => [row.id, row.name]));
-  return entries.map((entry) => toFuelEntryRow(entry, index, role));
+  return entries.map((entry) => toFuelEntryRow(entry, index, viewer));
 };
 
 /* ------------------------------------------------------------------ *
@@ -261,9 +260,9 @@ export const fuelContextLabel = (context: {
  */
 export const toFuelInboxRow = (
   row: FuelEntryInboxRow,
-  role: AuthRole | null,
+  viewer: TransportViewerInput,
 ): FuelInboxRowModel => {
-  const mayVerify = canPerform(role, 'transport.fuel.entry.verify');
+  const mayVerify = canPerform(viewer, 'transport.fuel.entry.verify');
   return {
     id: row.id,
     vehicleId: row.vehicleId,
@@ -326,12 +325,12 @@ export interface FuelInboxModel {
  */
 export const toFuelInboxModel = (
   page: FuelEntryInboxPage,
-  role: AuthRole | null,
+  viewer: TransportViewerInput,
 ): FuelInboxModel => {
   const first = page.total === 0 ? 0 : page.offset + 1;
   const last = Math.min(page.offset + page.rows.length, page.total);
   return {
-    rows: page.rows.map((row) => toFuelInboxRow(row, role)),
+    rows: page.rows.map((row) => toFuelInboxRow(row, viewer)),
     pendingLabel:
       page.pendingVerificationCount === 0
         ? 'Không còn phiếu nào chờ xác thực'
@@ -506,11 +505,11 @@ export interface DiscrepancyRow {
 
 export const toDiscrepancyRows = (
   discrepancies: readonly FuelDiscrepancy[],
-  role: AuthRole | null,
+  viewer: TransportViewerInput,
   isFrozen: boolean,
   supersededIds: readonly string[],
 ): readonly DiscrepancyRow[] => {
-  const mayResolve = canPerform(role, 'transport.fuel.reconciliation.resolve');
+  const mayResolve = canPerform(viewer, 'transport.fuel.reconciliation.resolve');
   const superseded = new Set(supersededIds);
   return discrepancies.map((row) => {
     const isSuperseded = superseded.has(row.id);
@@ -586,7 +585,7 @@ export interface ReconciliationWorkspaceModel {
  */
 export const toReconciliationWorkspace = (
   workspace: FuelReconciliationWorkspace,
-  role: AuthRole | null,
+  viewer: TransportViewerInput,
 ): ReconciliationWorkspaceModel => {
   const isFrozen = workspace.reconciliation.state === 'CLOSED';
   const pending = workspace.pendingDiscrepancyCount;
@@ -603,16 +602,17 @@ export const toReconciliationWorkspace = (
     lineRows: toStatementLineRows(workspace.lines),
     discrepancyRows: toDiscrepancyRows(
       workspace.discrepancies,
-      role,
+      viewer,
       isFrozen,
       workspace.supersededDiscrepancyIds,
     ),
     matchedCountLabel: formatCount(workspace.matches.length),
     pendingCountLabel: formatCount(pending),
     isFrozen,
-    canRunMatching: canPerform(role, 'transport.fuel.reconciliation.match') && !isFrozen,
-    canClose: canPerform(role, 'transport.fuel.reconciliation.close') && !isFrozen && pending === 0,
-    canReopen: canPerform(role, 'transport.fuel.reconciliation.reopen') && isFrozen,
+    canRunMatching: canPerform(viewer, 'transport.fuel.reconciliation.match') && !isFrozen,
+    canClose:
+      canPerform(viewer, 'transport.fuel.reconciliation.close') && !isFrozen && pending === 0,
+    canReopen: canPerform(viewer, 'transport.fuel.reconciliation.reopen') && isFrozen,
     closeBlockedReason:
       pending > 0
         ? `Còn ${formatCount(pending)} chênh lệch chưa có quyết định. Đóng kỳ chỉ được khi mọi chênh lệch đã xử lý.`

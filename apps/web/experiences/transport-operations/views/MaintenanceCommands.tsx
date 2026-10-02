@@ -2,10 +2,9 @@
 
 import { useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import type { AuthRole } from '../../../lib/auth';
 import { ConfirmAction, ErrorState } from '../components/SectionState';
 import { COMPLIANCE_DOCUMENT_TYPE_LABEL, COMPLIANCE_SUBJECT_LABEL } from '../customer-view';
-import { canPerform } from '../transport-actions';
+import { canPerform, type TransportViewerInput } from '../transport-actions';
 import { transportApi } from '../transport-api';
 import {
   COMPLIANCE_DOCUMENT_TYPES,
@@ -63,11 +62,11 @@ const invalidateAssets = (queryClient: QueryClient): void => {
 
 export function WorkOrderCommands({
   vehicles,
-  role,
+  viewer,
   onChanged,
 }: {
   readonly vehicles: readonly Vehicle[];
-  readonly role: AuthRole | null;
+  readonly viewer: TransportViewerInput;
   readonly onChanged: () => void;
 }) {
   const queryClient = useQueryClient();
@@ -96,7 +95,7 @@ export function WorkOrderCommands({
     onError: (error: Error) => setFailure(error.message),
   });
 
-  if (!canPerform(role, 'transport.maintenance.work_order.open')) return null;
+  if (!canPerform(viewer, 'transport.maintenance.work_order.open')) return null;
 
   const ready =
     vehicleId !== '' && description.trim() !== '' && openedDate !== '' && openedOdoKm !== '';
@@ -155,7 +154,7 @@ export function WorkOrderCommands({
 export function WorkOrderRowActions({
   workOrder,
   vehicleLabel,
-  role,
+  viewer,
   onChanged,
 }: {
   readonly workOrder: MaintenanceWorkOrder;
@@ -166,7 +165,7 @@ export function WorkOrderRowActions({
    * khong co gi tren man hinh ngan ho lai.
    */
   readonly vehicleLabel: string;
-  readonly role: AuthRole | null;
+  readonly viewer: TransportViewerInput;
   readonly onChanged: () => void;
 }) {
   const queryClient = useQueryClient();
@@ -203,7 +202,7 @@ export function WorkOrderRowActions({
     onError: (error: Error) => setFailure(error.message),
   });
 
-  if (!canPerform(role, 'transport.maintenance.work_order.close')) return null;
+  if (!canPerform(viewer, 'transport.maintenance.work_order.close')) return null;
   if (workOrder.status !== 'OPEN') return null;
 
   return (
@@ -287,12 +286,12 @@ export function WorkOrderRowActions({
 export function ComplianceDocumentForm({
   vehicles,
   drivers,
-  role,
+  viewer,
   onChanged,
 }: {
   readonly vehicles: readonly Vehicle[];
   readonly drivers: readonly Driver[];
-  readonly role: AuthRole | null;
+  readonly viewer: TransportViewerInput;
   readonly onChanged: () => void;
 }) {
   const queryClient = useQueryClient();
@@ -323,7 +322,7 @@ export function ComplianceDocumentForm({
     onError: (error: Error) => setFailure(error.message),
   });
 
-  if (!canPerform(role, 'transport.compliance.document.manage')) return null;
+  if (!canPerform(viewer, 'transport.compliance.document.manage')) return null;
 
   const ready = validFrom !== '' && validTo !== '';
 

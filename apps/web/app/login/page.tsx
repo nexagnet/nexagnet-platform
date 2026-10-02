@@ -62,6 +62,12 @@ export default function LoginPage() {
         <span className="login-card__mark">{branding.shortName.slice(0, 2).toUpperCase()}</span>
         <p className="login-kicker">XÁC NHẬN DANH TÍNH</p>
         <h2>Vào ca làm việc</h2>
+        {/* `#395` — phien vua bi ket thuc tu phia may chu: noi VI SAO, khong de nguoi dung doan. */}
+        {auth.notice === null ? null : (
+          <p className="login-notice" role="status">
+            {auth.notice}
+          </p>
+        )}
         <form onSubmit={handleSubmit}>
           <label htmlFor="username">Tên đăng nhập</label>
           <input id="username" name="username" autoComplete="username" required minLength={3} />

@@ -32,6 +32,8 @@ Tài liệu cũng nói hai đường tiền của nhiên liệu, biên trực ti
 
 Có bốn vai trên nền tảng. Bảng dưới đối chiếu với mã nguồn ngày 24/09/2026. **Máy chủ cưỡng chế lại lần nữa**, nên ẩn một nút trên màn hình không phải là cách cấp quyền.
 
+Từ đợt quản trị tài khoản (25/09/2026), bảng này là **vai khởi điểm** của mỗi người. Giám đốc bật thêm hoặc tắt bớt từng nhóm việc cho người Điều hành và Kế toán, xem mục [Giám đốc quản trị tài khoản, quyền và địa điểm vận hành](#giám-đốc-quản-trị-tài-khoản-quyền-và-địa-điểm-vận-hành) ngay dưới.
+
 |                                                                                                                    | Giám đốc | Kế toán | Lái xe | Quản lý |
 | ------------------------------------------------------------------------------------------------------------------ | -------- | ------- | ------ | ------- |
 | Xem toàn bộ màn hình vận hành                                                                                      | ✅       | ✅      | ❌     | ❌      |
@@ -52,22 +54,71 @@ Có bốn vai trên nền tảng. Bảng dưới đối chiếu với mã nguồ
 | Khoản chi dọc đường **của chính mình**. Hiện chỉ ghi được trên chuyến theo cách cũ, **chưa ghi được trên vòng xe** | —        | —       | ✅     | ❌      |
 | Số dư quỹ và phiếu lương **của chính mình**, chỉ phiếu đã công bố                                                  | —        | —       | ✅     | ❌      |
 
-**Kế toán bị máy chủ từ chối mười việc** mà giám đốc làm được:
+**Kế toán bị máy chủ từ chối mười hai việc** mà giám đốc làm được:
 
 - huỷ chuyến;
 - mở lại kỳ chi phí;
 - mở lại kỳ đối soát nhiên liệu;
+- đảo một lần chi quyết toán cho lái xe;
 - xem lịch sử vị trí;
 - ghi mốc hiện trường;
 - đóng phiên chờ;
+- ghi bù giấy tờ vận hành thay lái xe;
 - rút giấy tờ vận hành;
 - rút bằng chứng;
 - nhập vị trí từ thiết bị trên xe;
-- quản lý vùng địa điểm.
+- quản lý địa điểm vận hành (bãi xe, kho, nhà máy).
 
 Nhiều việc trong số này hiện chưa có nút trên màn hình cho cả hai vai. Kế toán **được** tạo đơn và điều xe: phía điều xe gần như chưa tách vai.
 
-**Vai Quản lý chưa được cấp quyền vận tải nào.** Đây là một khoảng trống **chưa ai quyết**, không phải một lỗi: tài liệu nghiệp vụ của khách chỉ mô tả ba mẫu vai. Người đăng nhập bằng vai này nhận được một câu nói thẳng điều đó, kèm chỉ dẫn liên hệ quản trị viên. Xem [`chuyen-sang-du-lieu-that.md`](chuyen-sang-du-lieu-that.md); đây là một trong các mục cần khách chốt trước khi chạy thật.
+**Vai Quản lý (trên màn hình: _Điều hành / Quản lý_) bắt đầu trống.** Tài liệu nghiệp vụ của khách chỉ mô tả ba mẫu vai, nên vai này không có quyền vận tải nào cho tới khi Giám đốc chọn nhóm việc cho từng người. Người đăng nhập bằng vai này mà chưa được cấp nhóm nào nhận được một câu nói thẳng điều đó, kèm chỉ dẫn liên hệ quản trị viên.
+
+## Giám đốc quản trị tài khoản, quyền và địa điểm vận hành
+
+> **Trạng thái:** mã nguồn đã xong, **chưa triển khai lên bản demo**, chưa có bằng chứng chạy thật.
+
+Nhóm **QUẢN TRỊ** ở cuối thanh điều hướng có hai màn: **Tài khoản & quyền** (chỉ Giám đốc thấy) và **Địa điểm vận hành**.
+
+### Tài khoản & quyền
+
+Tạo tài khoản bắt đầu bằng câu hỏi **"Người này là ai?"**:
+
+| Chọn                     | Làm được gì                                                                  | Chỉnh thêm được không                                                             |
+| ------------------------ | ---------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| **Giám đốc**             | Toàn quyền vận hành, duyệt tiền và quản trị tài khoản                        | Không cần. Cấp vai này phải gõ lại câu xác nhận "Tôi hiểu Giám đốc có toàn quyền" |
+| **Điều hành / Quản lý**  | Bắt đầu trống                                                                | Giám đốc bật từng nhóm việc cần dùng                                              |
+| **Kế toán**              | Như cột Kế toán ở bảng trên                                                  | Bật thêm hoặc tắt bớt từng việc                                                   |
+| **Lái xe**               | Chỉ việc của chính mình, **sau khi** tài khoản được nối với một hồ sơ lái xe | Không. Phạm vi của lái xe đến từ hồ sơ lái xe, không từ ô đánh dấu                |
+| **Chủ xe / bên góp vốn** | Chỉ xem các xe mình có cổ phần, sau khi nối với hồ sơ bên góp vốn            | Không. Đây là vai Điều hành không nhóm việc nào, cộng với hồ sơ bên góp vốn       |
+
+Có 11 nhóm việc để chọn: điều hành đơn, vòng xe, chặng · hiện trường và bằng chứng · đội xe và lái xe · khách hàng, đối tác · kế toán và công nợ · nhiên liệu · quỹ lái xe, lương · bảo dưỡng, giấy tờ · bản đồ, vị trí và địa điểm · phí đường bộ (ETC) · báo cáo. Nhóm thứ 12, quản trị, chỉ Giám đốc có. Mỗi lần bật tắt, màn hình hiện lại câu **"Người này làm được gì?"** do máy chủ viết, trước khi lưu.
+
+Một số nhóm cần **xem** dữ liệu của nhóm khác thì màn hình mới dùng được — ví dụ lịch bảo dưỡng cần danh sách xe để hiện biển số, quỹ lái xe cần hồ sơ lái xe để chọn người. Bật nhóm đó thì màn hình **bật kèm** các quyền xem này và ghi rõ **"Kèm theo để dùng được …"**; Giám đốc vẫn tắt được từng dòng. Khi bộ quyền đang chọn vi phạm quy tắc (ví dụ tách nhiệm bên dưới), nút **Lưu quyền** tạm khoá và nói lý do cho tới khi sửa xong.
+
+Ba điều máy chủ không cho, dù Giám đốc bấm gì:
+
+- **Việc chỉ Giám đốc làm** không cấp được cho ai: mở lại kỳ chi phí, mở lại kỳ đối soát nhiên liệu, đảo một lần chi quyết toán, nối tài khoản với hồ sơ lái xe hay bên góp vốn, và quản trị tài khoản.
+- **Người duyệt tiền không sửa được căn cứ của khoản tiền đó.** Một người không thể vừa duyệt nghiệm thu, duyệt phụ cấp chờ hay xác nhận đối soát, vừa ghi mốc hiện trường, đóng phiên chờ, ghi hay rút giấy tờ, rút bằng chứng, nhập vị trí thiết bị, hay sửa địa điểm vận hành.
+- **Việc nhạy cảm phải xác nhận.** Chín việc Kế toán mặc định không làm (danh sách trên, trừ ba việc chỉ Giám đốc) vẫn cấp riêng được, nhưng Giám đốc phải xác nhận, và lần cấp được ghi riêng vào lịch sử.
+
+Những điều cần biết khi vận hành:
+
+- Đổi quyền **có hiệu lực ngay lần bấm kế tiếp** của người đó, không cần đăng nhập lại. **Khoá tài khoản** hoặc **đặt lại mật khẩu** thì người đó bị đăng xuất ngay.
+- Tài khoản mới, hoặc vừa được đặt lại mật khẩu, nhận một **mật khẩu tạm** 16 ký tự, hạn 72 giờ, hiện **một lần** trên màn hình để Giám đốc chuyển cho người đó. Lần đăng nhập đầu phải đổi mật khẩu rồi mới làm được việc khác. Quá hạn thì nhờ Giám đốc cấp mật khẩu mới.
+- **Không xoá tài khoản**, chỉ **Khoá** / **Mở khoá**. Mở khoá không đổi mật khẩu. Giám đốc không tự khoá hay tự đổi quyền của chính mình, và không khoá hay hạ vai được Giám đốc đang hoạt động cuối cùng.
+- **Nối hồ sơ lái xe:** chỉ tài khoản vai Lái xe; mỗi tài khoản một hồ sơ. Tài khoản đang nối hồ sơ lái xe không đổi được sang vai văn phòng. Muốn đổi thì gỡ nối trước.
+- Mỗi thay đổi ghi vào **Lịch sử thay đổi** của tài khoản: ai làm, lúc nào, trước và sau.
+
+### Địa điểm vận hành
+
+Một danh sách duy nhất trên bản đồ cho **bãi xe**, **kho của khách hàng**, **nhà máy, kho của đối tác**. Đây cũng chính là danh sách _Địa điểm đã biết_ khi tạo đơn. Trước đây danh sách này do đội triển khai nhập, chưa có màn hình.
+
+- Thêm địa điểm bắt đầu bằng câu hỏi **"Địa điểm này của ai?"**: bãi xe của công ty mình · kho, cửa hàng của một khách hàng · nhà máy, kho của đơn vị khác. Đặt điểm bằng cách bấm trên bản đồ, kéo ghim, dùng vị trí hiện tại, hoặc dán toạ độ hay liên kết Google Maps; chọn bán kính.
+- **Tên không được trùng** với một địa điểm đang dùng, so không phân biệt dấu và hoa thường, để khi điều xe không nhầm hai nơi.
+- **Không xoá, chỉ tắt và bật.** Tắt một kho của đơn vị khác là tắt cả kho đó.
+- **Bãi xe:** chỉ **một** bãi đang dùng. Đó là nơi mọi vòng xe mới xuất phát (chặng rỗng) và nơi vòng xe tự đóng khi xe về. Thêm bãi khi đã có bãi đang dùng thì bãi mới là bãi dự phòng; **"Đặt làm bãi chính"** đổi trong một bước. Đổi tên hay tắt bãi đang dùng khi còn vòng xe, đơn đang mở: hệ thống liệt kê chúng và hỏi xác nhận trước.
+- **Sửa vị trí, bán kính, hay tắt một địa điểm** làm các bằng chứng hiện trường tại điểm đó được chấm lại theo vị trí mới, kể cả những lần giao đã xong. Vì vậy Kế toán mặc định không có việc này.
+- Thêm, đổi tên, tắt hoặc bật kho, nhà máy của đơn vị khác cần thêm quyền quản lý khách hàng, đối tác.
 
 ## Cách ly dữ liệu lái xe: điều đáng nói với khách
 

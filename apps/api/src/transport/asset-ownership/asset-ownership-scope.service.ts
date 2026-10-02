@@ -134,7 +134,7 @@ export class AssetOwnershipScopeService {
     this.decide('denied', reason, detail);
     return TransportDomainError.denied(
       'ASSET_STAKEHOLDER_NOT_FOUND',
-      'Tai khoan nay khong co quyen xem xe da yeu cau',
+      'Tài khoản này không có quyền xem xe đã yêu cầu.',
     );
   }
 

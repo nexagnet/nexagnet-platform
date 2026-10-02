@@ -6,7 +6,9 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { loadFoundationEnv } from '../config/foundation-env.js';
+import { accountError } from './account-errors.js';
 import { AuthService } from './auth.service.js';
+import { ALLOW_DURING_PASSWORD_CHANGE_KEY } from './password-change.decorator.js';
 import { IS_PUBLIC_KEY } from './public.decorator.js';
 import type { AuthenticatedRequest } from './session.types.js';
 import { isInternalServiceRequest } from './internal-service.guard.js';
@@ -37,8 +39,25 @@ export class SessionAuthGuard implements CanActivate {
       await destroySession(request);
       throw new UnauthorizedException('Phiên đăng nhập đã hết hiệu lực');
     }
+    /*
+     * CONG MAT KHAU TAM (`#395`). Day la cho DUY NHAT dat `request.authUser`, nen moi duong doc phien
+     * — REST, SSE `/events`, tai tep `/files` — deu qua cong nay: mot tai khoan chua doi mat khau tam
+     * khong lam duoc gi ngoai ba route mang `@AllowDuringPasswordChange()`.
+     */
+    if (user.mustChangePassword === true && !this.allowsDuringPasswordChange(context)) {
+      throw accountError('PASSWORD_CHANGE_REQUIRED');
+    }
     request.authUser = user;
     return true;
+  }
+
+  private allowsDuringPasswordChange(context: ExecutionContext): boolean {
+    return (
+      this.reflector.getAllAndOverride<boolean>(ALLOW_DURING_PASSWORD_CHANGE_KEY, [
+        context.getHandler(),
+        context.getClass(),
+      ]) === true
+    );
   }
 }
 

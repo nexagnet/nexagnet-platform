@@ -117,8 +117,17 @@ const dayLabel = (businessDate: string): string => {
 /** KHONG bao gio roi ve chinh `customerId`: mot `cuid` tren man hinh la mot nhan vo nghia. */
 const UNKNOWN_CUSTOMER = 'Khách không còn trong danh mục';
 
+/**
+ * Danh ba khach CHUA co trong tay (chua duoc cap quyen xem, hoac dang doc) — khac han "khong con
+ * trong danh muc": khong duoc noi mot dieu ve danh muc ma man hinh chua doc (`#395`).
+ */
+const UNREAD_CUSTOMER = 'Khách hàng chưa đọc được tên';
+
 /** Chung tu phai thu chua gan duoc ve mot don — van chon duoc, nhung noi that la khong co ma don. */
 const UNLINKED_ORDER = 'Chứng từ chưa gắn đơn';
+
+/** Danh sach don CHUA co trong tay — ma don chua doc duoc, khong phai "chua gan don". */
+const UNREAD_ORDER = 'Đơn chưa đọc được mã';
 
 const RECEIVABLE_STATUS_LABELS = {
   NOT_YET_DUE: 'chưa đến hạn',
@@ -176,11 +185,15 @@ export function toCustomerArWorkspace(input: {
   readonly orders?: readonly OrderCodeRef[];
 }) {
   const customerNameOf = (customerId: string): string =>
-    input.customers?.find((customer) => customer.id === customerId)?.name ?? UNKNOWN_CUSTOMER;
+    input.customers === undefined
+      ? UNREAD_CUSTOMER
+      : (input.customers.find((customer) => customer.id === customerId)?.name ?? UNKNOWN_CUSTOMER);
   const orderCodeOf = (orderId: string | null): string =>
     orderId === null
       ? UNLINKED_ORDER
-      : (input.orders?.find((order) => order.id === orderId)?.code ?? UNLINKED_ORDER);
+      : input.orders === undefined
+        ? UNREAD_ORDER
+        : (input.orders.find((order) => order.id === orderId)?.code ?? UNLINKED_ORDER);
   const currencies = new Map<
     string,
     {

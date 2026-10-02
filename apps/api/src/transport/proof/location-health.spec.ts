@@ -6,7 +6,7 @@ import {
   type LocationHealthInput,
   type LocationHealthSample,
 } from './location-health.js';
-import { roleCanPerform } from '../transport-actions.js';
+import { presetIncludes } from '../transport-actions.js';
 import {
   DEFAULT_HEALTHY_SILENCE_SECONDS,
   DEFAULT_LOST_SILENCE_SECONDS,
@@ -464,18 +464,18 @@ describe('T10.16 — che toa do theo quyen', () => {
 
 describe('T10.14-T10.15 — hai ma quyen, hai cau hoi khac nhau', () => {
   it('ke toan doc duoc TOM TAT nhung KHONG doc duoc duong di tho', () => {
-    expect(roleCanPerform('ACCOUNTING', 'transport.tracking.read')).toBe(true);
-    expect(roleCanPerform('ACCOUNTING', 'transport.location.history.read')).toBe(false);
+    expect(presetIncludes('ACCOUNTING', 'transport.tracking.read')).toBe(true);
+    expect(presetIncludes('ACCOUNTING', 'transport.location.history.read')).toBe(false);
   });
 
   it('quan tri doc duoc ca hai', () => {
-    expect(roleCanPerform('ADMIN', 'transport.tracking.read')).toBe(true);
-    expect(roleCanPerform('ADMIN', 'transport.location.history.read')).toBe(true);
+    expect(presetIncludes('ADMIN', 'transport.tracking.read')).toBe(true);
+    expect(presetIncludes('ADMIN', 'transport.location.history.read')).toBe(true);
   });
 
   it('vai cua lai xe khong doc duoc be mat van hanh nao', () => {
     // `SALE` la vai cua lai xe — ho chi co cac ma pham vi CHINH MINH.
-    expect(roleCanPerform('SALE', 'transport.tracking.read')).toBe(false);
-    expect(roleCanPerform('SALE', 'transport.location.history.read')).toBe(false);
+    expect(presetIncludes('SALE', 'transport.tracking.read')).toBe(false);
+    expect(presetIncludes('SALE', 'transport.location.history.read')).toBe(false);
   });
 });

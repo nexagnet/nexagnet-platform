@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { useTenantRuntime } from '../../../lib/tenant-runtime-context';
+import { PermissionGate, PermissionNote } from '../components/PermissionGate';
 import {
   DataTable,
   MetricCard,
@@ -22,6 +23,7 @@ import {
   usePartnerPosition,
   usePartners,
 } from '../hooks/useTransportWorkspace';
+import { canPerform } from '../transport-actions';
 import { SETTLEMENT_FLOWS, type SettlementFlow } from '../transport-types';
 import {
   filterMarginRows,
@@ -110,6 +112,13 @@ export function SettlementView() {
 
   const model = toArAging(aging.data ?? null, directory);
   const arBook = book.model;
+  /**
+   * `#395` — BANG TUOI NO la bao cao quyet toan (`transport.settlement.report.read`), PHAN PHU cua
+   * man nay: nguoi duoc cap nhom Ke toan nhung chua duoc xem bao cao van lam viec voi so doi soat
+   * ben duoi. Thieu quyen thi hai the dau, cau tom tat va bang tuoi no nhuong cho mot cau noi ro —
+   * KHONG con "Không có chứng từ nào còn nợ tính đến —." (cau sai do chay that bat duoc).
+   */
+  const canReadAging = canPerform(navigation, 'transport.settlement.report.read');
   /** Chi khi co DUNG MOT so tien te thi cac con so dau trang moi cong chung duoc (`GD-15`). */
   const singleLedger =
     arBook !== null && arBook.combinedTotalsAllowed ? (arBook.currencyGroups[0] ?? null) : null;
@@ -174,6 +183,11 @@ export function SettlementView() {
         </div>
       </form>
 
+      <PermissionNote
+        viewer={navigation}
+        actions={['transport.customer.read', 'transport.partner.read', 'transport.order.read']}
+      />
+
       {aging.errorMessage === null ? null : (
         <ErrorState message={aging.errorMessage} onRetry={aging.refetch} />
       )}
@@ -187,8 +201,12 @@ export function SettlementView() {
         nao chua thanh cong no, va tien nao da ve ma chua tru vao dau.
       */}
       <section className="tx-cards tx-cards--lead" aria-label="Tiền khách đang nợ">
-        <MetricCard label="Tổng còn nợ" value={model.outstandingLabel} />
-        <MetricCard label="Trong đó quá hạn" value={model.overdueLabel} tone="stop" />
+        {canReadAging ? (
+          <>
+            <MetricCard label="Tổng còn nợ" value={model.outstandingLabel} />
+            <MetricCard label="Trong đó quá hạn" value={model.overdueLabel} tone="stop" />
+          </>
+        ) : null}
         <MetricCard
           label="Chờ đối soát"
           value={arBook?.pendingAmountLabel ?? EMPTY_VALUE}
@@ -203,45 +221,51 @@ export function SettlementView() {
         />
       </section>
 
-      <p className="tx-note" role="status">
-        {model.headline}
-      </p>
+      {canReadAging ? (
+        <>
+          <p className="tx-note" role="status">
+            {model.headline}
+          </p>
 
-      <section className="tx-cards tx-cards--quiet" aria-label="Chia theo tuổi nợ">
-        {model.buckets.map((bucket) => (
-          <MetricCard key={bucket.bucket} label={bucket.label} value={bucket.amountLabel} />
-        ))}
-      </section>
+          <section className="tx-cards tx-cards--quiet" aria-label="Chia theo tuổi nợ">
+            {model.buckets.map((bucket) => (
+              <MetricCard key={bucket.bucket} label={bucket.label} value={bucket.amountLabel} />
+            ))}
+          </section>
 
-      {model.rows.length === 0 && !aging.isLoading ? (
-        <EmptyState title={`Không có chứng từ nào còn nợ tính đến ${model.asOfLabel}.`} />
+          {model.rows.length === 0 && !aging.isLoading ? (
+            <EmptyState title={`Không có chứng từ nào còn nợ tính đến ${model.asOfLabel}.`} />
+          ) : (
+            <DataTable
+              caption={`Chứng từ còn nợ tính đến ${model.asOfLabel}`}
+              rows={model.rows}
+              rowKey={(row) => row.documentId}
+              columns={[
+                {
+                  key: 'customer',
+                  header: 'Khách hàng',
+                  isRowHeader: true,
+                  render: (row) => row.counterpartyLabel,
+                },
+                { key: 'date', header: 'Ngày chứng từ', render: (row) => row.businessDateLabel },
+                { key: 'due', header: 'Hạn thanh toán', render: (row) => row.dueDateLabel },
+                {
+                  key: 'amount',
+                  header: 'Còn nợ',
+                  isNumeric: true,
+                  render: (row) => row.outstandingLabel,
+                },
+                {
+                  key: 'bucket',
+                  header: 'Tuổi nợ',
+                  render: (row) => <StatusBadge label={row.bucketLabel} tone={row.tone} />,
+                },
+              ]}
+            />
+          )}
+        </>
       ) : (
-        <DataTable
-          caption={`Chứng từ còn nợ tính đến ${model.asOfLabel}`}
-          rows={model.rows}
-          rowKey={(row) => row.documentId}
-          columns={[
-            {
-              key: 'customer',
-              header: 'Khách hàng',
-              isRowHeader: true,
-              render: (row) => row.counterpartyLabel,
-            },
-            { key: 'date', header: 'Ngày chứng từ', render: (row) => row.businessDateLabel },
-            { key: 'due', header: 'Hạn thanh toán', render: (row) => row.dueDateLabel },
-            {
-              key: 'amount',
-              header: 'Còn nợ',
-              isNumeric: true,
-              render: (row) => row.outstandingLabel,
-            },
-            {
-              key: 'bucket',
-              header: 'Tuổi nợ',
-              render: (row) => <StatusBadge label={row.bucketLabel} tone={row.tone} />,
-            },
-          ]}
-        />
+        <PermissionGate viewer={navigation} action="transport.settlement.report.read" />
       )}
 
       {/*
@@ -394,6 +418,7 @@ function PartnerPositionPanel() {
 }
 
 export function ArApView() {
+  const navigation = useNavigationInput();
   return (
     <>
       <PageHeader
@@ -412,6 +437,11 @@ export function ArApView() {
             <a href={buildSectionUrl('settlement')}>{findSection('settlement')?.label}</a>.
           </p>
         }
+      />
+      {/* `#395` — ten doi tac, khach la danh ba RIENG: thieu quyen thi noi ra, khong in `id`. */}
+      <PermissionNote
+        viewer={navigation}
+        actions={['transport.partner.read', 'transport.customer.read']}
       />
       <PartnerPositionPanel />
       {SETTLEMENT_FLOWS.filter((flow) => flow !== 'CUSTOMER_FREIGHT').map((flow) => (

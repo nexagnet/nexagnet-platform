@@ -194,16 +194,21 @@ export function MapLegend(): React.ReactElement {
         Bãi xe
       </li>
       <li>
+        {/*
+          Hinh ghim theo LOAI HANG RAO, khong theo nhan: kho cua khach hang va nha may doi tac cung
+          la dia diem cua mot phap nhan (`COUNTERPARTY_SITE`) nen cung mot hinh (`#395` §2.1);
+          danh sach ben trai moi tach "Địa điểm khách hàng" / "Nhà máy / kho đối tác".
+        */}
         <span className="tx-pin tx-pin--known tx-pin--site" aria-hidden="true">
           <span className="tx-pin__mark" />
         </span>
-        Nhà máy / kho
+        Kho, nhà máy của khách hàng hoặc đối tác
       </li>
       <li>
         <span className="tx-pin tx-pin--known tx-pin--customer" aria-hidden="true">
           <span className="tx-pin__mark" />
         </span>
-        Kho khách hàng
+        Điểm khách hàng (kiểu cũ)
       </li>
       <li>
         <span className="tx-pin tx-pin--result" aria-hidden="true">

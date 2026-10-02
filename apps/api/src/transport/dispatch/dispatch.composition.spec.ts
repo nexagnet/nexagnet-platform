@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildAppComposition } from '../../app-composition.js';
-import { roleCanPerform } from '../transport-actions.js';
+import { presetIncludes } from '../transport-actions.js';
 import { selectRoutingProvider } from './routing/routing-provider.factory.js';
 
 const controllerNames = (capabilities: Parameters<typeof buildAppComposition>[0]): string[] =>
@@ -70,12 +70,12 @@ describe('phan quyen cua be mat dieu xe', () => {
    * mot dong cau hinh phai nho.
    */
   it('lai xe KHONG doc duoc bang de nghi cua ca doi xe', () => {
-    expect(roleCanPerform('SALE', 'transport.dispatch.suggest.read')).toBe(false);
+    expect(presetIncludes('SALE', 'transport.dispatch.suggest.read')).toBe(false);
   });
 
   it('Giam doc va Ke toan doc duoc bang de nghi', () => {
-    expect(roleCanPerform('ADMIN', 'transport.dispatch.suggest.read')).toBe(true);
-    expect(roleCanPerform('ACCOUNTING', 'transport.dispatch.suggest.read')).toBe(true);
+    expect(presetIncludes('ADMIN', 'transport.dispatch.suggest.read')).toBe(true);
+    expect(presetIncludes('ACCOUNTING', 'transport.dispatch.suggest.read')).toBe(true);
   });
 
   /**
@@ -85,8 +85,8 @@ describe('phan quyen cua be mat dieu xe', () => {
    * bai kiem che toa do trong `dispatch.service.spec.ts`.
    */
   it('Ke toan KHONG co quyen doc duong di, nen khong thay toa do xe', () => {
-    expect(roleCanPerform('ACCOUNTING', 'transport.location.history.read')).toBe(false);
-    expect(roleCanPerform('ADMIN', 'transport.location.history.read')).toBe(true);
+    expect(presetIncludes('ACCOUNTING', 'transport.location.history.read')).toBe(false);
+    expect(presetIncludes('ADMIN', 'transport.location.history.read')).toBe(true);
   });
 
   /**
@@ -96,8 +96,8 @@ describe('phan quyen cua be mat dieu xe', () => {
    * vong chay THU HAI voi mot bang phan quyen khac, va hai bang do se lech nhau.
    */
   it('duong ghi khong che them mot ma quyen nao', () => {
-    expect(roleCanPerform('ADMIN', 'transport.run.manage')).toBe(true);
-    expect(roleCanPerform('SALE', 'transport.run.manage')).toBe(false);
+    expect(presetIncludes('ADMIN', 'transport.run.manage')).toBe(true);
+    expect(presetIncludes('SALE', 'transport.run.manage')).toBe(false);
   });
 });
 

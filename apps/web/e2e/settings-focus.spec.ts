@@ -40,7 +40,10 @@ test.describe('Mỗi mục có đúng một việc đang làm', () => {
       // Nut chinh la LOI HUA "bam cai nay truoc". Hai nut chinh cung hien mot luc nghia la nguoi
       // dung lai phai tu doan thu tu — dung cai #146 phai xoa bo.
       const primaries = page.locator('.settings-panel .settings-button--primary:visible');
-      expect(await primaries.count(), `mục ${section} có nhiều hơn một nút chính`).toBeLessThanOrEqual(1);
+      expect(
+        await primaries.count(),
+        `mục ${section} có nhiều hơn một nút chính`,
+      ).toBeLessThanOrEqual(1);
     });
   }
 });
@@ -106,9 +109,7 @@ test.describe('Hành động phá huỷ không bao giờ ngang hàng với việ
     await expect(work.locator('.settings-focus-actions__main')).not.toContainText(
       'Đăng xuất an toàn',
     );
-    await expect(work.locator('.settings-focus-actions__aside')).toContainText(
-      'Đăng xuất an toàn',
-    );
+    await expect(work.locator('.settings-focus-actions__aside')).toContainText('Đăng xuất an toàn');
   });
 
   test('automation: đổi công tắc an toàn phải đi qua hộp thoại giữ tiêu điểm', async ({ page }) => {
@@ -131,9 +132,7 @@ test.describe('Tiêu điểm đi theo việc, không theo lần nạp lại', ()
   }) => {
     await openSettings(page, 'dealers-groups');
 
-    await page
-      .getByRole('combobox', { name: /Đại lý phụ trách nhóm/ })
-      .selectOption('dealer-1');
+    await page.getByRole('combobox', { name: /Đại lý phụ trách nhóm/ }).selectOption('dealer-1');
 
     await expect(page.getByText('Đã map nhóm vào đại lý')).toBeVisible();
   });
@@ -215,4 +214,55 @@ test.describe('Không mục nào tràn ngang', () => {
       }
     });
   }
+});
+
+/**
+ * `#395` — MAN `/settings` CU VAN CHAY VOI MAY CHU MOI: mat khau ban dau TUY CHON (may chu tao mat
+ * khau tam va tra MOT lan), the mat khau tam la viec dang lam, tai khoan da khoa mo lai duoc.
+ */
+test.describe('#395 — tài khoản: mật khẩu tạm và mở khoá', () => {
+  test('tạo tài khoản không nhập mật khẩu: thẻ mật khẩu tạm là việc đang làm', async ({ page }) => {
+    await openSettings(page, 'users');
+
+    await page.getByRole('button', { name: 'Thêm người dùng' }).click();
+    await page.getByLabel('Họ tên').fill('Nguoi Moi');
+    await page.getByLabel('Tên đăng nhập').fill('moi');
+    const created = page.waitForRequest(
+      (request) =>
+        request.method() === 'POST' && new URL(request.url()).pathname === '/settings/users',
+    );
+    await page.getByRole('button', { name: 'Tạo tài khoản' }).click();
+    // Mat khau rong KHONG duoc gui: may chu doc chuoi rong la mot mat khau qua ngan.
+    expect(Object.keys((await created).postDataJSON() as object)).not.toContain('password');
+
+    const work = page.locator('[data-settings-work]');
+    await expect(work).toHaveCount(1);
+    await expect(work.getByTestId('temporary-password')).toHaveText('abcd-efgh-jkmn-pqrs');
+    await expect(work.locator('.settings-button--primary')).toHaveCount(1);
+    await work.getByRole('button', { name: 'Đã gửi xong, đóng thẻ' }).click();
+    await expect(page.getByTestId('temporary-password')).toHaveCount(0);
+  });
+
+  test('tài khoản đã vô hiệu hóa có nút Mở khoá, và tự đặt lại mật khẩu bị ẩn', async ({
+    page,
+  }) => {
+    await openSettings(page, 'users');
+
+    await page.getByText('Tài khoản đã vô hiệu hóa').click();
+    const enabled = page.waitForRequest((request) =>
+      new URL(request.url()).pathname.endsWith('/settings/users/u-old/enable'),
+    );
+    await page.getByRole('button', { name: 'Mở khoá' }).click();
+    expect((await enabled).postDataJSON()).toEqual({ confirmed: true });
+    await expect(page.getByText(/Đã mở khoá Ke Toan Cu/)).toBeVisible();
+
+    // Chinh minh (`u-admin`): khong co nut dat lai mat khau — tu khoa minh ra ngoai la `SELF_LOCKOUT`.
+    await page
+      .locator('.settings-focus-queue li')
+      .filter({ hasText: 'Quan Tri Vien' })
+      .getByRole('button', { name: 'Quản lý' })
+      .click();
+    const work = page.locator('[data-settings-work]');
+    await expect(work.getByRole('button', { name: 'Đặt lại mật khẩu' })).toHaveCount(0);
+  });
 });

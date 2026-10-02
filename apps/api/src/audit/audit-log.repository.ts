@@ -18,6 +18,15 @@ export interface AppendAuditLogInput {
 export abstract class AuditLogRepository {
   abstract append(input: AppendAuditLogInput): Promise<AuditLog>;
   abstract list(filter?: AuditLogFilter): Promise<AuditLog[]>;
+
+  /**
+   * CHINH kho nay, nhung ghi tren mot GIAO DICH dang mo (`client` = client giao dich Prisma) — de
+   * dong dau vet nam trong cung don vi cong viec voi thay doi no ke (`#395`, `audit-trail.ts`).
+   * `null` = kho khong nhap duoc vao giao dich do (bo nho): nguoi goi ghi dau vet sau commit.
+   */
+  onTransaction(_client: unknown): AuditLogRepository | null {
+    return null;
+  }
 }
 
 function cloneLog(log: AuditLog): AuditLog {

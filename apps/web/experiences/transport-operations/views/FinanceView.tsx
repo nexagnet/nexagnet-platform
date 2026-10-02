@@ -30,11 +30,11 @@ export function FinanceView() {
   const navigation = useNavigationInput();
   const summary = toSectionQuery(useFinanceSummary(navigation));
 
-  if (!hasOperationsScope(navigation.role)) {
+  if (!hasOperationsScope(navigation)) {
     return (
       <>
         <PageHeader title="Tổng hợp tài chính" />
-        <ErrorState message={operationsEmptyMessage(navigation.role)} />
+        <ErrorState message={operationsEmptyMessage(navigation)} />
       </>
     );
   }

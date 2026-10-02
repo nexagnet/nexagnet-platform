@@ -6,8 +6,7 @@ import { CommandPanel, DataTable } from '../components/primitives';
 import { ErrorState } from '../components/SectionState';
 import { formatBusinessDate, formatLiters, formatMoney, rejectReasonLabel } from '../customer-view';
 import { readUploadAsBase64 } from '../file-base64';
-import type { AuthRole } from '../../../lib/auth';
-import { canPerform } from '../transport-actions';
+import { canPerform, type TransportViewerInput } from '../transport-actions';
 import { transportApi, type ImportStatementInput } from '../transport-api';
 import {
   FUEL_STATEMENT_FORMATS,
@@ -38,11 +37,11 @@ import {
  */
 export function StatementImport({
   suppliers,
-  role,
+  viewer,
   onImported,
 }: {
   readonly suppliers: readonly FuelSupplier[];
-  readonly role: AuthRole | null;
+  readonly viewer: TransportViewerInput;
   readonly onImported: () => void;
 }) {
   const [supplierId, setSupplierId] = useState('');
@@ -89,7 +88,7 @@ export function StatementImport({
     onError: (error: Error) => setFailure(error.message),
   });
 
-  if (!canPerform(role, 'transport.fuel.statement.import')) return null;
+  if (!canPerform(viewer, 'transport.fuel.statement.import')) return null;
 
   const ready = supplierId !== '' && periodStart !== '' && periodEnd !== '' && file !== null;
 

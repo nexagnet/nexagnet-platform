@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { EnvValidationError, loadEnv } from '../env.js';
+import { EnvValidationError, loadEnv, parseUsernameList } from '../env.js';
 
 /**
  * Tu 18/08/2026 `PARSER_MODE` khong con gia tri gia (`mock`) va mac dinh la `deepseek`, von
@@ -33,7 +33,9 @@ describe('loadEnv', () => {
   });
 
   it('nem EnvValidationError kem ten bien khi gia tri sai', () => {
-    expect(() => loadEnv({ ...PARSER, DATABASE_URL: 'khong-phai-url' })).toThrowError(EnvValidationError);
+    expect(() => loadEnv({ ...PARSER, DATABASE_URL: 'khong-phai-url' })).toThrowError(
+      EnvValidationError,
+    );
     try {
       loadEnv({ ...PARSER, DATABASE_URL: 'khong-phai-url', PORT: '-1' });
     } catch (error) {
@@ -52,9 +54,10 @@ describe('loadEnv', () => {
 
   it('nhan duong dan report golden eval do tenant mount ma khong hardcode default', () => {
     expect(loadEnv({ ...PARSER }).GOLDEN_EVAL_REPORT_PATH).toBeUndefined();
-    expect(loadEnv({ ...PARSER, GOLDEN_EVAL_REPORT_PATH: '/run/tenant/golden-eval.json' }).GOLDEN_EVAL_REPORT_PATH).toBe(
-      '/run/tenant/golden-eval.json',
-    );
+    expect(
+      loadEnv({ ...PARSER, GOLDEN_EVAL_REPORT_PATH: '/run/tenant/golden-eval.json' })
+        .GOLDEN_EVAL_REPORT_PATH,
+    ).toBe('/run/tenant/golden-eval.json');
   });
 
   it('mac dinh parser=deepseek (KHONG con `mock`), bot=off', () => {
@@ -73,7 +76,8 @@ describe('loadEnv', () => {
   });
 
   it('nhan cau hinh Flowise day du va ep timeout sang so', () => {
-    const env = loadEnv({ ...PARSER,
+    const env = loadEnv({
+      ...PARSER,
       PARSER_MODE: 'flowise',
       FLOWISE_BASE_URL: 'http://flowise:3000',
       FLOWISE_FLOW_ID: 'zalo-order-parser-v1',
@@ -205,11 +209,12 @@ describe('loadEnv', () => {
     } as const;
 
     expect(() => loadEnv(base)).toThrowError(EnvValidationError);
-    expect(() => loadEnv({ ...PARSER, ...base, ZALO_OPERATOR_ORIGIN: 'http://operator.example.com' })).toThrowError(
-      EnvValidationError,
-    );
+    expect(() =>
+      loadEnv({ ...PARSER, ...base, ZALO_OPERATOR_ORIGIN: 'http://operator.example.com' }),
+    ).toThrowError(EnvValidationError);
     expect(
-      loadEnv({ ...PARSER, ...base, ZALO_OPERATOR_ORIGIN: 'https://operator.example.com' }).ZALO_OPERATOR_ORIGIN,
+      loadEnv({ ...PARSER, ...base, ZALO_OPERATOR_ORIGIN: 'https://operator.example.com' })
+        .ZALO_OPERATOR_ORIGIN,
     ).toBe('https://operator.example.com');
   });
 
@@ -237,7 +242,8 @@ describe('loadEnv', () => {
 
     expect(() => loadEnv(base)).toThrowError(EnvValidationError);
     expect(() =>
-      loadEnv({ ...PARSER,
+      loadEnv({
+        ...PARSER,
         ...base,
         ADMIN_PASSWORD: 'mot-mat-khau-du-dai-va-khac-default',
         ADMIN_COOKIE_SECRET: 'c'.repeat(48),
@@ -278,13 +284,27 @@ describe('loadEnv', () => {
       loadEnv({ ...PARSER, AUTH_MODE: 'session', SESSION_SECRET: 's'.repeat(48) }).AUTH_MODE,
     ).toBe('session');
     expect(() =>
-      loadEnv({ ...PARSER,
+      loadEnv({
+        ...PARSER,
         NODE_ENV: 'production',
         AUTH_MODE: 'session',
         SESSION_SECRET: 's'.repeat(48),
         PERSISTENCE: 'memory',
       }),
     ).toThrowError(EnvValidationError);
+  });
+
+  /**
+   * `#395`: tai khoan van hanh luc trien khai (`PILOT_OPERATOR_USERNAME`) khong duoc khoa / ha vai
+   * tu man hinh quan tri — neu khong lan deploy sau chet o buoc bootstrap.
+   */
+  it('PROTECTED_ACCOUNT_USERNAMES: mac dinh rong; CSV duoc chuan hoa, bo rong, bo trung', () => {
+    expect(loadEnv({ ...PARSER }).PROTECTED_ACCOUNT_USERNAMES).toEqual([]);
+    expect(
+      loadEnv({ ...PARSER, PROTECTED_ACCOUNT_USERNAMES: ' Operator , ,ops.bot,operator' })
+        .PROTECTED_ACCOUNT_USERNAMES,
+    ).toEqual(['operator', 'ops.bot']);
+    expect(parseUsernameList('')).toEqual([]);
   });
 
   it('customer readiness accepts cookie sessions and still forbids none', () => {
@@ -298,7 +318,9 @@ describe('loadEnv', () => {
     } as const;
 
     expect(loadEnv(customer).AUTH_MODE).toBe('session');
-    expect(() => loadEnv({ ...PARSER, ...customer, AUTH_MODE: 'none' })).toThrowError(EnvValidationError);
+    expect(() => loadEnv({ ...PARSER, ...customer, AUTH_MODE: 'none' })).toThrowError(
+      EnvValidationError,
+    );
   });
 
   // --- DATA_CLASSIFICATION: gate du lieu khach that ---
@@ -311,14 +333,19 @@ describe('loadEnv', () => {
       API_KEY: 'x'.repeat(32),
     } as const;
 
-    expect(() => loadEnv({ ...PARSER, ...base, PARSER_MODE: 'mock' })).toThrowError(EnvValidationError);
-    expect(() => loadEnv({ ...PARSER, ...base, PARSER_MODE: 'deepseek', DEEPSEEK_API_KEY: 'deepseek-key' })).toThrowError(
+    expect(() => loadEnv({ ...PARSER, ...base, PARSER_MODE: 'mock' })).toThrowError(
       EnvValidationError,
     );
-    expect(() => loadEnv({ ...PARSER, ...base, PARSER_MODE: 'claude' })).toThrowError(EnvValidationError);
-    expect(loadEnv({ ...PARSER, ...base, PARSER_MODE: 'claude', ANTHROPIC_API_KEY: 'anthropic-key' }).PARSER_MODE).toBe(
-      'claude',
+    expect(() =>
+      loadEnv({ ...PARSER, ...base, PARSER_MODE: 'deepseek', DEEPSEEK_API_KEY: 'deepseek-key' }),
+    ).toThrowError(EnvValidationError);
+    expect(() => loadEnv({ ...PARSER, ...base, PARSER_MODE: 'claude' })).toThrowError(
+      EnvValidationError,
     );
+    expect(
+      loadEnv({ ...PARSER, ...base, PARSER_MODE: 'claude', ANTHROPIC_API_KEY: 'anthropic-key' })
+        .PARSER_MODE,
+    ).toBe('claude');
   });
 
   it('du lieu khach that bat buoc persistence prisma va auth khong duoc none', () => {
@@ -329,13 +356,16 @@ describe('loadEnv', () => {
       API_KEY: 'x'.repeat(32),
     } as const;
 
-    expect(() => loadEnv({ ...PARSER, ...safe, PERSISTENCE: 'memory' })).toThrowError(EnvValidationError);
-    expect(() => loadEnv({ ...PARSER, ...safe, PERSISTENCE: 'prisma', AUTH_MODE: 'none' })).toThrowError(
+    expect(() => loadEnv({ ...PARSER, ...safe, PERSISTENCE: 'memory' })).toThrowError(
       EnvValidationError,
     );
-    expect(loadEnv({ ...PARSER, ...safe, PERSISTENCE: 'prisma', AUTH_MODE: 'api-key' }).DATA_CLASSIFICATION).toBe(
-      'customer',
-    );
+    expect(() =>
+      loadEnv({ ...PARSER, ...safe, PERSISTENCE: 'prisma', AUTH_MODE: 'none' }),
+    ).toThrowError(EnvValidationError);
+    expect(
+      loadEnv({ ...PARSER, ...safe, PERSISTENCE: 'prisma', AUTH_MODE: 'api-key' })
+        .DATA_CLASSIFICATION,
+    ).toBe('customer');
   });
 
   it('du lieu khach that + kenh Zalo that khong duoc MEDIA_STORE=none', () => {
@@ -348,11 +378,12 @@ describe('loadEnv', () => {
       API_KEY: 'x'.repeat(32),
     } as const;
 
-    expect(() => loadEnv({ ...PARSER, ...base, CHANNEL_MODE: 'bot', ZALO_BOT_TOKEN: 'bot-token-test' })).toThrowError(
-      EnvValidationError,
-    );
+    expect(() =>
+      loadEnv({ ...PARSER, ...base, CHANNEL_MODE: 'bot', ZALO_BOT_TOKEN: 'bot-token-test' }),
+    ).toThrowError(EnvValidationError);
     expect(
-      loadEnv({ ...PARSER,
+      loadEnv({
+        ...PARSER,
         ...base,
         CHANNEL_MODE: 'bot',
         ZALO_BOT_TOKEN: 'bot-token-test',

@@ -139,6 +139,15 @@ export class PrismaCounterpartyRepository extends CounterpartyRepository {
     return rows.map(toLink);
   }
 
+  async listLinksOf(counterpartyIds: readonly string[]): Promise<CounterpartyLink[]> {
+    if (counterpartyIds.length === 0) return [];
+    const rows: LinkRow[] = await model(this.prisma, 'transportCounterpartyLink').findMany({
+      where: { counterpartyId: { in: [...new Set(counterpartyIds)] } },
+      orderBy: [{ kind: 'asc' }, { subjectId: 'asc' }],
+    });
+    return rows.map(toLink);
+  }
+
   async link(input: LinkSubjectInput): Promise<CounterpartyLink> {
     return toLink(
       await model(this.prisma, 'transportCounterpartyLink').create({

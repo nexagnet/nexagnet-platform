@@ -129,7 +129,7 @@ export function FuelInbox({
   const patchQuery = (patch: Partial<FuelEntryInboxQuery>) =>
     setQuery((current) => ({ ...current, ...patch, offset: 0 }));
 
-  const model = inbox.data === undefined ? null : toFuelInboxModel(inbox.data, navigation.role);
+  const model = inbox.data === undefined ? null : toFuelInboxModel(inbox.data, navigation);
 
   return (
     <section aria-label="Phiếu nhiên liệu">
@@ -503,11 +503,11 @@ function FuelInboxDetail({
         entryId={row.id}
         evidence={row.evidence}
         declared={declared}
-        role={navigation.role}
+        viewer={navigation}
       />
 
       {/* `#364` — gia thanh la mot lop RIENG: chi doc khi ke toan mo khoi nay. */}
-      <FuelCostAttributionPanel entryId={row.id} role={navigation.role} />
+      <FuelCostAttributionPanel entryId={row.id} viewer={navigation} />
 
       <div className="tx-detail__actions">
         {onOpenConsumption === undefined ? null : (

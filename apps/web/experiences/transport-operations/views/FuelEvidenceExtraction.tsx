@@ -2,7 +2,6 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import type { AuthRole } from '../../../lib/auth';
 import { DataTable, StatusBadge } from '../components/primitives';
 import { ErrorState } from '../components/SectionState';
 import {
@@ -12,7 +11,7 @@ import {
   type StoredEvidenceExtraction,
   type StoredEvidenceRef,
 } from '../fuel-evidence-extraction';
-import { canPerform } from '../transport-actions';
+import { canPerform, type TransportViewerInput } from '../transport-actions';
 import { evidenceUrls } from '../transport-api';
 import {
   toExtractionReviewModel,
@@ -41,17 +40,17 @@ export function FuelEvidenceExtraction({
   entryId,
   evidence,
   declared,
-  role,
+  viewer,
 }: {
   readonly entryId: string;
   readonly evidence: readonly StoredEvidenceRef[];
   readonly declared: DeclaredFuelFacts | null;
-  readonly role: AuthRole | null;
+  readonly viewer: TransportViewerInput;
 }) {
   const queryClient = useQueryClient();
   const [results, setResults] = useState<Readonly<Record<string, StoredEvidenceExtraction>>>({});
   const [failures, setFailures] = useState<Readonly<Record<string, string>>>({});
-  const mayExtract = canPerform(role, 'transport.fuel.document.ingest');
+  const mayExtract = canPerform(viewer, 'transport.fuel.document.ingest');
 
   const extract = useMutation({
     mutationFn: (file: StoredEvidenceRef) =>

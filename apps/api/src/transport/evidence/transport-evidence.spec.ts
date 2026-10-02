@@ -8,7 +8,7 @@ import { buildAppComposition } from '../../app-composition.js';
 import { LocalMediaStore } from '../../media/local-media.store.js';
 import type { MediaObject } from '../../media/media-store.js';
 import { NoopMediaStore } from '../../media/noop-media.store.js';
-import { roleCanPerform } from '../transport-actions.js';
+import { presetIncludes } from '../transport-actions.js';
 import { TransportDomainError } from '../transport.errors.js';
 import { TRANSPORT_EVIDENCE_KEY_PREFIX } from './evidence-policy.js';
 import { TransportEvidenceService } from './transport-evidence.service.js';
@@ -277,13 +277,13 @@ describe('#169 — DriverFuelEvidenceController giu quyen so huu TRUOC khi ghi',
  */
 describe('#169 — quyen cua hai be mat bang chung', () => {
   it('lai xe tai len/xem duoc bang chinh quyen nop va xem phieu cua minh', () => {
-    expect(roleCanPerform('SALE', 'transport.driver.self.fuel.submit')).toBe(true);
-    expect(roleCanPerform('SALE', 'transport.driver.self.fuel.read')).toBe(true);
+    expect(presetIncludes('SALE', 'transport.driver.self.fuel.submit')).toBe(true);
+    expect(presetIncludes('SALE', 'transport.driver.self.fuel.read')).toBe(true);
   });
 
   it('lai xe KHONG cham duoc be mat van hanh cua bang chung', () => {
-    expect(roleCanPerform('SALE', 'transport.fuel.entry.read')).toBe(false);
-    expect(roleCanPerform('SALE', 'transport.fuel.entry.submit_for_driver')).toBe(false);
+    expect(presetIncludes('SALE', 'transport.fuel.entry.read')).toBe(false);
+    expect(presetIncludes('SALE', 'transport.fuel.entry.submit_for_driver')).toBe(false);
   });
 
   it('acceptance 7: vai KHONG duoc cap (MANAGER) bi tu choi ca hai be mat', () => {
@@ -293,15 +293,15 @@ describe('#169 — quyen cua hai be mat bang chung', () => {
       'transport.driver.self.fuel.read',
       'transport.driver.self.fuel.submit',
     ] as const) {
-      expect(roleCanPerform('MANAGER', action), action).toBe(false);
+      expect(presetIncludes('MANAGER', action), action).toBe(false);
     }
   });
 
   it('ke toan xem va nop ho duoc — doi soat bang ke la viec cua ho', () => {
-    expect(roleCanPerform('ACCOUNTING', 'transport.fuel.entry.read')).toBe(true);
-    expect(roleCanPerform('ACCOUNTING', 'transport.fuel.entry.submit_for_driver')).toBe(true);
+    expect(presetIncludes('ACCOUNTING', 'transport.fuel.entry.read')).toBe(true);
+    expect(presetIncludes('ACCOUNTING', 'transport.fuel.entry.submit_for_driver')).toBe(true);
     // ...nhung khong mang pham vi "cua chinh minh" cua lai xe.
-    expect(roleCanPerform('ACCOUNTING', 'transport.driver.self.fuel.submit')).toBe(false);
+    expect(presetIncludes('ACCOUNTING', 'transport.driver.self.fuel.submit')).toBe(false);
   });
 });
 

@@ -1,6 +1,15 @@
 import { Injectable, Optional } from '@nestjs/common';
-import { AuditLogService } from '../../audit/audit-log.service.js';
+import { AuditLogService, type AppendAuditLogCommand } from '../../audit/audit-log.service.js';
+import { traceWrite } from '../../audit/audit-trail.js';
+import { UserRepository } from '../../auth/user.repository.js';
 import { TelemetryService } from '../../observability/telemetry.service.js';
+import {
+  TRANSPORT_ACCOUNT_LINK_DECISIONS,
+  type AccountLinkErrorReason,
+  type AccountLinkReason,
+} from '../fleet/account-link-decisions.js';
+import { accountLinkError } from '../fleet/account-link-errors.js';
+import { isUniqueViolationOn } from '../storage-conflict.js';
 import { TransportDomainError } from '../transport.errors.js';
 import {
   TRANSPORT_ASSET_OWNERSHIP_DECISIONS,
@@ -9,6 +18,7 @@ import {
   type OwnershipRegisterReason,
 } from './asset-ownership-decisions.js';
 import {
+  ASSET_STAKEHOLDER_ACCOUNT_UNIQUE,
   AssetOwnershipRepository,
   sortActiveInterests,
   sortClosedInterests,
@@ -60,6 +70,12 @@ export class AssetOwnershipService {
     private readonly vehicles: VehicleOwnershipPort,
     private readonly audit: AuditLogService,
     @Optional() private readonly telemetry?: TelemetryService,
+    /**
+     * `#395` — kiem tai khoan dinh noi CO THAT va DANG HOAT DONG. Cuoi va tuy chon O TANG KIEU de
+     * cac spec dung lop theo vi tri khong phai doi; KHONG `@Optional()` o tang DI: `AuthModule`
+     * (`foundation`, `@Global`) luon co, va thieu no thi boot phai CHET chu khong am tham bo kiem.
+     */
+    private readonly users?: UserRepository,
   ) {}
 
   /* ------------------------------ Ben huu quan ------------------------------ */
@@ -92,7 +108,7 @@ export class AssetOwnershipService {
   ): Promise<AssetStakeholder> {
     const before = await this.requireStakeholder(id);
     const after = await this.repository.updateStakeholder(id, patch);
-    if (!after) throw this.stakeholderNotFound(id);
+    if (!after) throw this.stakeholderNotFound();
     await this.audit.append({
       actor,
       action: 'transport.asset_stakeholder.update',
@@ -119,29 +135,111 @@ export class AssetOwnershipService {
     authUserId: string | null,
     actor: string,
   ): Promise<AssetStakeholder> {
-    const before = await this.requireStakeholder(id);
-    if (authUserId) {
-      const holder = await this.repository.findStakeholderIdHoldingAccount(authUserId);
-      if (holder && holder !== id) {
-        throw TransportDomainError.conflict(
-          'ASSET_STAKEHOLDER_ACCOUNT_TAKEN',
-          'Tai khoan nay da noi voi mot ho so ben huu quan khac — go cau noi cu truoc',
-        );
+    const run = async (): Promise<AssetStakeholder> => {
+      const before = await this.requireStakeholder(id);
+      if (authUserId) await this.requireLinkableAccount(id, authUserId);
+      const previousAuthUserId = await this.repository.linkedAccountOf(id);
+      if (previousAuthUserId === authUserId) {
+        this.decideLink('allowed', 'ACCOUNT_LINK_UNCHANGED', {
+          stakeholderId: id,
+          linked: authUserId !== null,
+        });
+        return before;
+      }
+      // Khung nhin chi co `hasAccount`: noi X roi doi sang Y se ra truoc == sau. Noi tai khoan la
+      // cap quyen cho mot con nguoi (`#395`, chi Giam doc), nen dong kiem toan phai noi ai MAT
+      // pham vi "Xe toi co co phan" va ai DUOC no — ghi TRONG cung giao dich voi lan noi.
+      const after = await this.writeStakeholderAccount(id, authUserId, (written) => [
+        {
+          actor,
+          action: authUserId
+            ? 'transport.asset_stakeholder.account_link'
+            : 'transport.asset_stakeholder.account_unlink',
+          entityType: 'TransportAssetStakeholder',
+          entityId: id,
+          before: { ...before, authUserId: previousAuthUserId },
+          after: { ...written, authUserId },
+        },
+      ]);
+      this.decideLink('allowed', authUserId ? 'ACCOUNT_LINKED' : 'ACCOUNT_UNLINKED', {
+        stakeholderId: id,
+        authUserId,
+        previousAuthUserId,
+      });
+      return after;
+    };
+    return this.telemetry ? this.telemetry.step('stakeholder.account_link', run) : run();
+  }
+
+  /**
+   * Ghi qua kho; va cham unique cua DB (hai lan noi CUNG mot tai khoan vao hai ho so cung luc — ca
+   * hai deu qua phep kiem o tren) la `ASSET_STAKEHOLDER_ACCOUNT_TAKEN`, khong phai mot `500`.
+   */
+  private async writeStakeholderAccount(
+    id: string,
+    authUserId: string | null,
+    entries: (written: AssetStakeholder) => readonly AppendAuditLogCommand[],
+  ): Promise<AssetStakeholder> {
+    try {
+      const after = await traceWrite(
+        this.audit,
+        (trail) => this.repository.setStakeholderAccount(id, authUserId, trail),
+        (written) => written,
+        entries,
+      );
+      if (!after) throw this.stakeholderNotFound();
+      return after;
+    } catch (error) {
+      if (authUserId !== null && isUniqueViolationOn(error, ASSET_STAKEHOLDER_ACCOUNT_UNIQUE)) {
+        this.denyLink('ASSET_STAKEHOLDER_ACCOUNT_TAKEN', {
+          stakeholderId: id,
+          authUserId,
+          race: true,
+        });
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Tai khoan dinh noi: CO THAT o nen tang, DANG HOAT DONG (`#395`), va chua thuoc ho so ben gop
+   * von khac. Khong kiem vai: mot chu xe co the la bat ky ai — ke ca mot Ke toan co gop von.
+   */
+  private async requireLinkableAccount(stakeholderId: string, authUserId: string): Promise<void> {
+    if (this.users) {
+      const user = await this.users.findById(authUserId);
+      if (!user) this.denyLink('ACCOUNT_LINK_USER_NOT_FOUND', { stakeholderId, authUserId });
+      if (user.disabledAt !== null) {
+        this.denyLink('ACCOUNT_LINK_USER_DISABLED', { stakeholderId, authUserId });
       }
     }
-    const after = await this.repository.setStakeholderAccount(id, authUserId);
-    if (!after) throw this.stakeholderNotFound(id);
-    await this.audit.append({
-      actor,
-      action: authUserId
-        ? 'transport.asset_stakeholder.account_link'
-        : 'transport.asset_stakeholder.account_unlink',
-      entityType: 'TransportAssetStakeholder',
-      entityId: id,
-      before,
-      after,
+    const holder = await this.repository.findStakeholderIdHoldingAccount(authUserId);
+    if (holder && holder !== stakeholderId) {
+      this.denyLink('ASSET_STAKEHOLDER_ACCOUNT_TAKEN', {
+        stakeholderId,
+        authUserId,
+        holderStakeholderId: holder,
+      });
+    }
+  }
+
+  private denyLink(reason: AccountLinkErrorReason, detail: Record<string, unknown>): never {
+    this.decideLink('denied', reason, detail);
+    throw accountLinkError(reason);
+  }
+
+  private decideLink(
+    outcome: 'allowed' | 'denied',
+    reason: AccountLinkReason,
+    detail: Record<string, unknown>,
+  ): void {
+    this.telemetry?.decision({
+      vocabulary: TRANSPORT_ACCOUNT_LINK_DECISIONS,
+      point: 'stakeholder.account_link',
+      outcome,
+      reason,
+      detail,
     });
-    return after;
   }
 
   /* ------------------------------ So dang ky ------------------------------ */
@@ -171,7 +269,7 @@ export class AssetOwnershipService {
         vehicleId,
         stakeholderId: input.stakeholderId,
       });
-      throw this.stakeholderNotFound(input.stakeholderId);
+      throw this.stakeholderNotFound();
     }
     if (holder.status !== 'ACTIVE') {
       this.decide('ownership.interest.record', 'denied', 'STAKEHOLDER_INACTIVE', {
@@ -424,7 +522,7 @@ export class AssetOwnershipService {
 
   private async requireStakeholder(id: string): Promise<AssetStakeholder> {
     const row = await this.repository.findStakeholder(id);
-    if (!row) throw this.stakeholderNotFound(id);
+    if (!row) throw this.stakeholderNotFound();
     return row;
   }
 
@@ -440,10 +538,11 @@ export class AssetOwnershipService {
     return vehicle;
   }
 
-  private stakeholderNotFound(id: string): TransportDomainError {
+  /** Cau cho nguoi dung — co dau, KHONG lo ma ho so (ma nam o duong dan route va trace). */
+  private stakeholderNotFound(): TransportDomainError {
     return TransportDomainError.notFound(
       'ASSET_STAKEHOLDER_NOT_FOUND',
-      `Khong tim thay ho so ben huu quan ${id}`,
+      'Không tìm thấy hồ sơ bên góp vốn.',
     );
   }
 

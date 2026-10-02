@@ -3,9 +3,11 @@
 import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { useAuth } from '../../../components/auth/AuthGate';
+import { FORBIDDEN_IS_ANSWER_META } from '../../../components/auth/session-signals';
 import { useTenantRuntime } from '../../../lib/tenant-runtime-context';
 import type { FuelDocumentListQuery } from '../fuel-review-types';
-import type { NavigationInput } from '../navigation';
+import { shouldProbeStakeholderScope, type NavigationInput } from '../navigation';
+import { isActionNotPermitted, SECTION_ACCESS_REVOKED } from '../permission-notes';
 import type { TollSpendReportQuery } from '../toll-report-types';
 import { canPerform, type TransportAction } from '../transport-actions';
 import { transportApi } from '../transport-api';
@@ -30,18 +32,58 @@ import type {
  * o may chu.
  */
 
+/**
+ * Nguoi dang xem = vai + TAP QUYEN HIEU LUC tu `/auth/me` (`#395`). `permissions` di CUNG vai vao
+ * moi cong cua man hinh (`allowed`, `canPerform(navigation, ...)`): mot `MANAGER` duoc cap nhom
+ * "Đội xe & lái xe" phai THAY man do va du lieu cua no, dung nhu may chu dang cho phep.
+ *
+ * `AuthGate` giu tap quyen ON DINH danh tinh khi noi dung khong doi, nen memo o day khong bi pha
+ * moi lan lam tuoi `/auth/me`.
+ */
 export function useNavigationInput(): NavigationInput {
   const tenant = useTenantRuntime();
-  const { user } = useAuth();
+  const { user, permissions } = useAuth();
   const role = user?.role ?? null;
-  return useMemo(
+  const base = useMemo<NavigationInput>(
     () => ({
       capabilities: tenant.capabilities,
       role,
+      permissions,
       blockedCapabilityKeys: tenant.readiness.blockedCapabilities.map((entry) => entry.key),
     }),
-    [tenant.capabilities, tenant.readiness.blockedCapabilities, role],
+    [tenant.capabilities, tenant.readiness.blockedCapabilities, role, permissions],
   );
+  const stakeholderLinked = useStakeholderScopeProbe(base);
+  return useMemo(
+    () => (stakeholderLinked ? { ...base, stakeholderLinked: true } : base),
+    [base, stakeholderLinked],
+  );
+}
+
+/**
+ * "NGUOI NAY CO PHAI BEN GOP VON KHONG" — hoi CHINH may chu (`#395`).
+ *
+ * `/auth/me` khong mang pham vi nay (no den tu mot hang lien ket, khong tu vai hay quyen rieng), nen
+ * cau tra loi duy nhat la `GET /transport/me/vehicles`: du lieu = co, `403` = khong. CUNG khoa voi
+ * `useMyStakeholderVehicles` — man "Xe tôi có cổ phần" mo ra la co ngay danh sach tu lan hoi nay
+ * (roi tu lam moi theo luat cua chinh man do).
+ *
+ * Mot lan moi phien: `403` la cau tra loi binh thuong cua nguoi khong gop von, nen khong thu lai,
+ * khong hoi lai khi gan man moi hay quay lai tab, va khong lam `AuthGate` doc lai `/auth/me`.
+ */
+function useStakeholderScopeProbe(input: NavigationInput): boolean {
+  const probe = useQuery({
+    queryKey: TRANSPORT_QUERY_KEYS.myVehicles,
+    queryFn: () => transportApi.stakeholderSelf.myVehicles(),
+    enabled: shouldProbeStakeholderScope(input),
+    retry: false,
+    retryOnMount: false,
+    staleTime: Number.POSITIVE_INFINITY,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    meta: FORBIDDEN_IS_ANSWER_META,
+  });
+  return probe.isSuccess;
 }
 
 export const TRANSPORT_QUERY_KEYS = {
@@ -100,7 +142,7 @@ const allowed = (
   if (capability !== null && !(input.capabilities as readonly string[]).includes(capability)) {
     return false;
   }
-  return canPerform(input.role, action);
+  return canPerform(input, action);
 };
 
 export function useTrips(input: NavigationInput) {
@@ -289,6 +331,20 @@ export function useVehicleDriverHistory(input: NavigationInput, vehicleId: strin
   });
 }
 
+/**
+ * SUC KHOE VI TRI cua MOT xe (`#297`) — `transport.tracking.read`, route cua `transport-proof`.
+ *
+ * Truoc `#395` query nay nam THANG trong `FleetView` va KHONG co cong: nguoi chi duoc xem ho so xe
+ * bam mot xe la nhan `403` in giua trang. Chi goi khi da MO mot xe, giong `useVehicleDriverHistory`.
+ */
+export function useVehicleLocationHealth(input: NavigationInput, vehicleId: string | null) {
+  return useQuery({
+    queryKey: ['transport', 'vehicles', vehicleId, 'location-health'],
+    queryFn: () => transportApi.fleet.locationHealth(vehicleId ?? ''),
+    enabled: vehicleId !== null && allowed(input, 'transport-proof', 'transport.tracking.read'),
+  });
+}
+
 /* ------------------------------------------------------------------ *
  * `TX-08` SO HUU TAI SAN (#242 Lane E)
  * ------------------------------------------------------------------ */
@@ -378,8 +434,13 @@ export function useKnownPlaces(input: NavigationInput, isComposerOpen: boolean) 
     queryKey: TRANSPORT_QUERY_KEYS.knownPlaces,
     queryFn: () => transportApi.places.known(),
     enabled: isComposerOpen && allowed(input, 'transport-core', 'transport.order.manage'),
-    /* Hang rao doi theo tuan, khong theo phut: mo lai man tao don khong can doc lai ngay. */
-    staleTime: 5 * 60_000,
+    /*
+     * DOC LAI MOI LAN MO man tao don (`#395`). Truoc day hang rao "doi theo tuan" nen o nho giu 5
+     * phut; tu khi Giam doc them/tat dia diem o "Địa điểm vận hành", mot ke toan vua mo man tao don
+     * se khong thay dia diem moi toi 5 phut. Mot GET re moi lan mo la dung gia.
+     */
+    staleTime: 0,
+    refetchOnMount: 'always',
   });
 }
 
@@ -1136,6 +1197,15 @@ export const toSectionQuery = <T>(query: UseQueryResult<T>): SectionQuery<T> => 
   // `isPending` + `fetchStatus === 'idle'` la dau hieu query bi `enabled: false` chan lai.
   isLoading: query.isPending && query.fetchStatus !== 'idle',
   isBlocked: query.isPending && query.fetchStatus === 'idle',
-  errorMessage: query.error === null ? null : query.error.message,
+  errorMessage: errorMessageOf(query.error),
   refetch: () => void query.refetch(),
 });
+
+/**
+ * `403 ACTION_NOT_PERMITTED` cua cong hanh dong (`#395`) noi mot cau NGHIEP VU, khong phai "Bạn
+ * không có quyền thực hiện thao tác này." (cau cua mot THAO TAC) va khong bao gio la "chua co du
+ * lieu". Moi query da gac bang dung ma cua route, nen dieu nay chi xay ra khi quyen vua bi doi —
+ * `AuthGate` doc lai `/auth/me` ngay sau mot `403` va danh muc tu cap nhat.
+ */
+const errorMessageOf = (error: Error | null): string | null =>
+  error === null ? null : isActionNotPermitted(error) ? SECTION_ACCESS_REVOKED : error.message;

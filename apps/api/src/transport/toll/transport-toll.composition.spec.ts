@@ -3,7 +3,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { buildAppComposition } from '../../app-composition.js';
-import { actionsForRole, roleCanPerform } from '../transport-actions.js';
+import { actionsForRole, presetIncludes } from '../transport-actions.js';
 
 const controllerNames = (capabilities: Parameters<typeof buildAppComposition>[0]): string[] =>
   buildAppComposition(capabilities).controllers.map((controller) => controller.name);
@@ -237,11 +237,11 @@ describe('moi duong HTTP cua ETC deu co cong quyen', () => {
 
   it('lai xe (`SALE`) va `MANAGER` KHONG qua duoc route nao; ke toan va quan tri qua duoc tat ca', async () => {
     for (const route of await routesOf()) {
-      const action = route.action as Parameters<typeof roleCanPerform>[1];
-      expect(roleCanPerform('SALE', action), `SALE ${route.path}`).toBe(false);
-      expect(roleCanPerform('MANAGER', action), `MANAGER ${route.path}`).toBe(false);
-      expect(roleCanPerform('ACCOUNTING', action), `ACCOUNTING ${route.path}`).toBe(true);
-      expect(roleCanPerform('ADMIN', action), `ADMIN ${route.path}`).toBe(true);
+      const action = route.action as Parameters<typeof presetIncludes>[1];
+      expect(presetIncludes('SALE', action), `SALE ${route.path}`).toBe(false);
+      expect(presetIncludes('MANAGER', action), `MANAGER ${route.path}`).toBe(false);
+      expect(presetIncludes('ACCOUNTING', action), `ACCOUNTING ${route.path}`).toBe(true);
+      expect(presetIncludes('ADMIN', action), `ADMIN ${route.path}`).toBe(true);
     }
   });
 

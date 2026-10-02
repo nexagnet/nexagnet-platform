@@ -107,7 +107,10 @@ export interface World {
   readonly unhandled: string[];
   /** Bao cao vong chay (nguon cot "Hiện trường") dang hong — 503. */
   journeyDown: boolean;
-  /** Lan tien chang KE TIEP bi guard quyen tu choi: 403, KHONG `reason`. */
+  /**
+   * Lan tien chang KE TIEP bi guard quyen tu choi — cung than `403` voi `actionNotPermitted` cua may
+   * chu tu `#395`: `reason: 'ACTION_NOT_PERMITTED'`, cau co dau, ma hanh dong o `detail.action`.
+   */
   denyNextLegWrite: boolean;
   tick: number;
 }
@@ -115,6 +118,9 @@ export interface World {
 const json = async (route: Route, body: unknown, status = 200): Promise<void> => {
   await route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
 };
+
+/** Cau cua `TransportActionGuard` khi thieu quyen van tai (`transport-access-errors.ts`). */
+export const ACTION_NOT_PERMITTED_MESSAGE = 'Bạn không có quyền thực hiện thao tác này.';
 
 /** Than loi CO KIEU cua mien — dung hinh dang `transportErrorBody` (`#168 B7`). */
 const denied = (route: Route, reason: string, message: string, status = 403): Promise<void> =>
@@ -525,8 +531,10 @@ const transitionLeg = async (
       route,
       {
         statusCode: 403,
-        message: 'Ban khong co quyen thuc hien thao tac nay (transport.run.manage)',
+        message: ACTION_NOT_PERMITTED_MESSAGE,
         error: 'Forbidden',
+        reason: 'ACTION_NOT_PERMITTED',
+        detail: { action: 'transport.run.manage' },
       },
       403,
     );

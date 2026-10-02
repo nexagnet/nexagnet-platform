@@ -48,12 +48,25 @@ export const DINH_VU_FACTORY: Point = { latitude: 20.8264, longitude: 106.7752 }
 export const TAN_PHU_HUNG: Point = { latitude: 21.617, longitude: 105.817 };
 export const KCN_DINH_VU: Point = { latitude: 20.8301, longitude: 106.7613 };
 
+/**
+ * Nhan loai DUNG nhu may chu that tra (`PLACE_KIND_LABEL` / `fenceKindLabel`, `#395` §2.1): kho cua
+ * mot KHACH HANG (phap nhan co mat khach hang) la "Địa điểm khách hàng", nha may cua don vi khac la
+ * "Nhà máy / kho đối tác", hang rao `CUSTOMER` cu la "Điểm khách hàng (kiểu cũ)".
+ */
+export const KNOWN_PLACE_LABEL = {
+  DEPOT: 'Bãi xe',
+  CUSTOMER_SITE: 'Địa điểm khách hàng',
+  PARTNER_SITE: 'Nhà máy / kho đối tác',
+  LEGACY_CUSTOMER: 'Điểm khách hàng (kiểu cũ)',
+} as const;
+
 const KNOWN_PLACES = {
   available: true,
   places: [
     {
       id: 'gf-depot-hn',
       kind: 'DEPOT',
+      kindLabel: KNOWN_PLACE_LABEL.DEPOT,
       name: 'Bãi xe Hà Nội',
       detail: null,
       point: { latitude: 20.9652, longitude: 105.8468 },
@@ -62,6 +75,7 @@ const KNOWN_PLACES = {
     {
       id: 'gf-dinh-vu',
       kind: 'COUNTERPARTY_SITE',
+      kindLabel: KNOWN_PLACE_LABEL.PARTNER_SITE,
       name: 'Nhà máy thép Đình Vũ',
       detail: 'Công ty CP Thép Đông Á',
       point: DINH_VU_FACTORY,
@@ -70,10 +84,21 @@ const KNOWN_PLACES = {
     {
       id: 'gf-tan-phu-hung',
       kind: 'COUNTERPARTY_SITE',
+      kindLabel: KNOWN_PLACE_LABEL.CUSTOMER_SITE,
       name: 'Kho Nhựa Tân Phú Hưng',
       detail: 'Công ty TNHH Nhựa Tân Phú Hưng',
       point: TAN_PHU_HUNG,
       radiusMetres: 250,
+    },
+    {
+      // Nam TRONG khung cua ba diem tren — khong doi khung ban do ban dau cua cac bai kiem khac.
+      id: 'gf-kho-cu-hung-yen',
+      kind: 'CUSTOMER',
+      kindLabel: KNOWN_PLACE_LABEL.LEGACY_CUSTOMER,
+      name: 'Kho cũ Hưng Yên',
+      detail: 'Công ty TNHH Nhựa Tân Phú Hưng',
+      point: { latitude: 20.95, longitude: 106.05 },
+      radiusMetres: 200,
     },
   ],
 };

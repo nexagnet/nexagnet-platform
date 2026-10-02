@@ -95,13 +95,15 @@ describe('#376 — lenh van phong tren duong truyen', () => {
     expect(failure).toMatchObject({ status: 403, reason: 'LEG_FIELD_DELIVERY_NOT_RECORDED' });
   });
 
-  it('guard quyen khong co `reason`: `reason` la null — man hinh hien nguyen van', async () => {
+  it('guard quyen (`#395`): `reason` CO KIEU `ACTION_NOT_PERMITTED` va cau co dau cua may chu', async () => {
     vi.mocked(authFetch).mockResolvedValue(
       respond(
         {
           statusCode: 403,
-          message: 'Ban khong co quyen thuc hien thao tac nay (transport.run.manage)',
+          message: 'Bạn không có quyền thực hiện thao tác này.',
           error: 'Forbidden',
+          reason: 'ACTION_NOT_PERMITTED',
+          detail: { action: 'transport.run.manage' },
         },
         403,
       ),
@@ -110,9 +112,20 @@ describe('#376 — lenh van phong tren duong truyen', () => {
       .transitionLeg('run-1', 'leg-2', { to: 'IN_TRANSIT' })
       .catch((error: unknown) => error);
     expect(failure).toMatchObject({
-      reason: null,
-      message: 'Ban khong co quyen thuc hien thao tac nay (transport.run.manage)',
+      status: 403,
+      reason: 'ACTION_NOT_PERMITTED',
+      message: 'Bạn không có quyền thực hiện thao tác này.',
     });
+  });
+
+  it('than 403 khong co `reason` (may chu cu): `reason` la null — man hinh hien nguyen van', async () => {
+    vi.mocked(authFetch).mockResolvedValue(
+      respond({ statusCode: 403, message: 'Forbidden resource', error: 'Forbidden' }, 403),
+    );
+    const failure = await transportApi.movement
+      .transitionLeg('run-1', 'leg-2', { to: 'IN_TRANSIT' })
+      .catch((error: unknown) => error);
+    expect(failure).toMatchObject({ reason: null, message: 'Forbidden resource' });
   });
 });
 

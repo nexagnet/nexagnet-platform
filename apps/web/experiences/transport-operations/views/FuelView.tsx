@@ -2,6 +2,7 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
+import { PermissionGate } from '../components/PermissionGate';
 import { DataTable, MetricCard, PageHeader, StatusBadge } from '../components/primitives';
 import { ConfirmAction, EmptyState, ErrorState, LoadingState } from '../components/SectionState';
 import {
@@ -12,7 +13,7 @@ import {
   useReconciliations,
 } from '../hooks/useTransportWorkspace';
 import { useRevealOnOpen } from '../hooks/useRevealOnOpen';
-import { hasOperationsScope, operationsEmptyMessage } from '../transport-actions';
+import { canPerform, hasOperationsScope, operationsEmptyMessage } from '../transport-actions';
 import { transportApi } from '../transport-api';
 import {
   FuelConsumptionDrilldown,
@@ -51,23 +52,32 @@ export function FuelView() {
   const [openId, setOpenId] = useState<string | null>(null);
   const [consumptionFocus, setConsumptionFocus] = useState<ConsumptionFocus | null>(null);
 
-  if (!hasOperationsScope(navigation.role)) {
+  if (!hasOperationsScope(navigation)) {
     return (
       <>
         <PageHeader title="Nhiên liệu" />
-        <ErrorState message={operationsEmptyMessage(navigation.role)} />
+        <ErrorState message={operationsEmptyMessage(navigation)} />
       </>
     );
   }
 
   const rows = toReconciliationRows(reconciliations.data ?? [], suppliers.data ?? []);
+  /**
+   * `#395` — KY DOI SOAT la phan phu (`transport.fuel.reconciliation.read`): nguoi chi duoc xem va
+   * duyet phieu thay mot cau, khong thay "Chưa có kỳ đối soát nào." (mot cau sai) hay "0 kỳ".
+   */
+  const canReadReconciliations = canPerform(navigation, 'transport.fuel.reconciliation.read');
 
   return (
     <>
       <PageHeader
         title="Nhiên liệu"
         summary="Phiếu đổ dầu, xác thực phiếu, nhập bảng kê cây xăng và đối soát."
-        context={<span className="tx-count">{rows.length} kỳ đối soát</span>}
+        context={
+          canReadReconciliations ? (
+            <span className="tx-count">{rows.length} kỳ đối soát</span>
+          ) : undefined
+        }
       />
 
       {/*
@@ -100,13 +110,15 @@ export function FuelView() {
 
       <StatementImport
         suppliers={suppliers.data ?? []}
-        role={navigation.role}
+        viewer={navigation}
         onImported={() => void queryClient.invalidateQueries({ queryKey: ['transport', 'fuel'] })}
       />
 
       <section aria-label="Kỳ đối soát bảng kê">
         <h2>Kỳ đối soát</h2>
-        {rows.length === 0 && !reconciliations.isLoading ? (
+        {!canReadReconciliations ? (
+          <PermissionGate viewer={navigation} action="transport.fuel.reconciliation.read" />
+        ) : rows.length === 0 && !reconciliations.isLoading ? (
           <EmptyState
             title="Chưa có kỳ đối soát nào."
             nextAction={
@@ -278,7 +290,7 @@ function ReconciliationWorkspace({
     );
   }
 
-  const model = toReconciliationWorkspace(workspace.data, navigation.role);
+  const model = toReconciliationWorkspace(workspace.data, navigation);
   const needsPair =
     resolving?.options.find((option) => option.resolution === resolution)?.requiresTargets === true;
 

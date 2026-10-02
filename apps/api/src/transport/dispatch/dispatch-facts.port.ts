@@ -120,7 +120,7 @@ export class DispatchCoreFactsAdapter extends DispatchCoreFacts {
 export abstract class DispatchLocationFacts {
   /** Ban dinh vi gan nhat cua mot chiec xe, hoac `null`. KHONG BAO GIO tra ve ca chuoi. */
   abstract latestObservationForVehicle(vehicleId: string): Promise<ObservationSample | null>;
-  /** So tra cuu dia diem: hang rao dang hoat dong, noi voi dia diem phap nhan neu co. */
+  /** So tra cuu dia diem: hang rao CON HIEU LUC THAT, noi voi dia diem phap nhan neu co. */
   abstract placeIndex(): Promise<readonly PlaceIndexEntry[]>;
 }
 
@@ -154,9 +154,14 @@ export class DispatchLocationFactsAdapter extends DispatchLocationFacts {
     };
   }
 
+  /**
+   * `#395`: CUNG vi tu "con hieu luc that" voi dia diem da biet va luat trung ten
+   * (`listEffectivelyActive()`): hang rao cua mot kho da nghi, cua mot phap nhan da nghi, hay cua mot
+   * khach da nghi khong con giai duoc mot nhan chang — va khong con lam nhan cua ai "mo ho".
+   */
   async placeIndex(): Promise<readonly PlaceIndexEntry[]> {
     const [fences, sites] = await Promise.all([
-      this.geofences.listActive(),
+      this.geofences.listEffectivelyActive(),
       this.sites.listActive(),
     ]);
     const siteNameById = new Map(sites.map((site) => [site.id, site.name] as const));

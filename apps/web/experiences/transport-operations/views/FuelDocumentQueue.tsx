@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { PermissionGate } from '../components/PermissionGate';
 import { CommandPanel, DataTable, StatusBadge } from '../components/primitives';
 import { EmptyState, ErrorState, LoadingState } from '../components/SectionState';
 import { FUEL_DOCUMENT_STATUS_LABEL } from '../customer-view';
@@ -51,7 +52,10 @@ export function FuelDocumentQueue() {
   );
   const reveal = useRevealOnOpen<HTMLDivElement>(openId);
 
-  if (!canPerform(navigation.role, 'transport.fuel.document.read')) return null;
+  // `#395` — phan phu cua man Nhien lieu: thieu quyen thi noi mot cau, khong lang le bien mat.
+  if (!canPerform(navigation, 'transport.fuel.document.read')) {
+    return <PermissionGate viewer={navigation} action="transport.fuel.document.read" />;
+  }
 
   const rows = toDocumentQueueRows(documents.data ?? []);
 

@@ -3,11 +3,10 @@ import { Throttle } from '@nestjs/throttler';
 import type { z } from 'zod';
 import { Roles } from '../../auth/roles.decorator.js';
 import type { AuthenticatedRequest } from '../../auth/session.types.js';
-import { loadFoundationEnv } from '../../config/foundation-env.js';
-import { roleCanPerform } from '../transport-actions.js';
 import {
   RequiresTransportAction,
   TransportActionGuard,
+  requestCanPerform,
   transportErrorToHttp,
 } from '../transport-action.guard.js';
 import { transportActorOf } from '../transport-actor.js';
@@ -106,17 +105,14 @@ export class DispatchController {
    * `transport.location.history.read`. Ke toan khong co ma do (`ACCOUNTING_DENIED`), nen ho thay
    * moi con so cua bang de nghi — km rong, gio den, ly do — nhung khong thay chiec xe dang dung o
    * dau. Do dung la thu ho can de doi soat, va dung nhung gi ho khong can.
+   *
+   * `#395`: tra loi bang TAP QUYEN HIEU LUC cua tai khoan (vai khoi diem + quyen rieng), cung mot
+   * cau tra loi voi guard — xem `requestCanPerform`.
    */
   private callerOf(request: AuthenticatedRequest): DispatchCaller {
-    const actor = transportActorOf(request);
-    if (loadFoundationEnv().AUTH_MODE !== 'session') {
-      return { actor, canReadLocationHistory: true };
-    }
-    const role = request.authUser?.role;
     return {
-      actor,
-      canReadLocationHistory:
-        role !== undefined && roleCanPerform(role, 'transport.location.history.read'),
+      actor: transportActorOf(request),
+      canReadLocationHistory: requestCanPerform(request, 'transport.location.history.read'),
     };
   }
 

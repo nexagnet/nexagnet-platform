@@ -1,7 +1,7 @@
 import { BadRequestException, RequestMethod } from '@nestjs/common';
 import { describe, expect, it } from 'vitest';
 import { ROLES_KEY } from '../../auth/roles.decorator.js';
-import { roleCanPerform } from '../transport-actions.js';
+import { presetIncludes } from '../transport-actions.js';
 import { TRANSPORT_ACTION_KEY } from '../transport-action.guard.js';
 import { TransportPlaceService } from './place.service.js';
 import { TransportPlaceSearchPort } from './place-search.port.js';
@@ -173,9 +173,9 @@ describe('phan quyen va gioi han cua be mat tim dia diem', () => {
       expect(Reflect.getMetadata(ROLES_KEY, handler)).toEqual(['ACCOUNTING', 'ADMIN']);
       expect(Reflect.getMetadata(TRANSPORT_ACTION_KEY, handler)).toBe('transport.order.manage');
     }
-    expect(roleCanPerform('ADMIN', 'transport.order.manage')).toBe(true);
-    expect(roleCanPerform('ACCOUNTING', 'transport.order.manage')).toBe(true);
-    expect(roleCanPerform('SALE', 'transport.order.manage')).toBe(false);
+    expect(presetIncludes('ADMIN', 'transport.order.manage')).toBe(true);
+    expect(presetIncludes('ACCOUNTING', 'transport.order.manage')).toBe(true);
+    expect(presetIncludes('SALE', 'transport.order.manage')).toBe(false);
   });
 
   it('tim 20/phut, tim nguoc 30/phut', () => {

@@ -251,7 +251,7 @@ export function TripAssignForm({
   drivers,
   currentVehicleId,
   currentDriverId,
-  role,
+  viewer,
   onDone,
 }: {
   readonly tripId: string;
@@ -259,7 +259,7 @@ export function TripAssignForm({
   readonly drivers: readonly Driver[];
   readonly currentVehicleId: string | null;
   readonly currentDriverId: string | null;
-  readonly role: Parameters<typeof canPerform>[0];
+  readonly viewer: Parameters<typeof canPerform>[0];
   readonly onDone: () => void;
 }) {
   const [draft, setDraft] = useState(emptyAssignmentDraft);
@@ -298,7 +298,7 @@ export function TripAssignForm({
     onError: (error: Error) => setFailure(error.message),
   });
 
-  if (!canPerform(role, 'transport.trip.assign')) return null;
+  if (!canPerform(viewer, 'transport.trip.assign')) return null;
 
   const isNoOp = assignmentDraftIsNoOp(draft, active);
 

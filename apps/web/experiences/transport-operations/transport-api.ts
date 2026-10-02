@@ -511,13 +511,17 @@ export interface CreateVehicleInput {
 /** Bien so KHONG sua duoc — gui kem la 400 vi schema `.strict()`. */
 export type UpdateVehicleInput = Partial<Omit<CreateVehicleInput, 'registrationPlate'>>;
 
+/**
+ * KHONG co `authUserId` (`#395`): may chu tu choi truong do bang `400` o ca tao lan sua ho so. Noi
+ * tai khoan dang nhap voi ho so lai xe CHI qua `PUT /transport/drivers/:id/account`
+ * (`accountLinksApi.linkDriver`) — mot duong co quyen rieng (chi Giam doc) va co lich su.
+ */
 export interface CreateDriverInput {
   readonly fullName: string;
   readonly phone: string;
   readonly licenceClass: string;
   readonly licenceExpiry: BusinessDate;
   readonly status?: 'ACTIVE' | 'INACTIVE';
-  readonly authUserId?: string | null;
 }
 
 export interface CreateCustomerInput {

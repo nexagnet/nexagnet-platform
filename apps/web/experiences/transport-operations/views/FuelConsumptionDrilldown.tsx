@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { useTenantRuntime } from '../../../lib/tenant-runtime-context';
+import { PermissionGate } from '../components/PermissionGate';
 import { CommandPanel, DataTable, MetricCard, StatusBadge } from '../components/primitives';
 import { EmptyState, ErrorState, LoadingState } from '../components/SectionState';
 import {
@@ -51,7 +52,7 @@ export function FuelConsumptionPicker({
   const [to, setTo] = useState(initial.to);
   const [problem, setProblem] = useState<string | null>(null);
 
-  if (!canPerform(navigation.role, 'transport.fuel.entry.read')) return null;
+  if (!canPerform(navigation, 'transport.fuel.entry.read')) return null;
 
   return (
     <CommandPanel
@@ -59,9 +60,12 @@ export function FuelConsumptionPicker({
       hint="Mốc km trước → km hiện tại → quãng đường → số lít → L/100km của một xe trong một kỳ. Chỉ để soát xét."
       openLabel="Xem tiêu hao"
     >
+      {/* `#395` — o chon xe doc danh sach xe: thieu quyen thi noi, khong de mot o chon rong. */}
+      <PermissionGate viewer={navigation} action="transport.vehicle.read" />
       <form
         className="tx-filters"
         aria-label="Chọn xe và kỳ tiêu hao"
+        hidden={!canPerform(navigation, 'transport.vehicle.read')}
         onSubmit={(event) => {
           event.preventDefault();
           const found = vehicleId === '' ? 'Chọn một xe.' : consumptionPeriodProblem({ from, to });

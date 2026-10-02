@@ -2,9 +2,11 @@
 
 import { useId } from 'react';
 import {
+  DEPOT_NAME_LOCK_HINT,
   ENDPOINT_BADGE,
   ENDPOINT_NOUN,
   ENDPOINT_ROLE,
+  isNameLocked,
   MAP_POINT_UNNAMED,
   NAME_MAX_LENGTH,
   sourceLineOf,
@@ -69,7 +71,9 @@ function Stub({
   readonly onClear: (endpoint: DraftEndpoint) => void;
 }): React.ReactElement {
   const bodyId = useId();
+  const lockHintId = useId();
   const line = place === null ? null : sourceLineOf(place);
+  const isLocked = place !== null && isNameLocked(place);
   const noun = ENDPOINT_NOUN[endpoint];
   const shownName = place === null ? 'Chưa chọn' : place.name.trim() || MAP_POINT_UNNAMED;
 
@@ -123,7 +127,18 @@ function Stub({
               onChange={(event) => onRename(endpoint, event.target.value)}
               aria-invalid={place.name.trim().length === 0}
               autoComplete="off"
+              /*
+               * `#395` §2.3 — ten bai xe KHOA: `readOnly` chu khong `disabled`, de van doc/chon/sao
+               * chep duoc va trinh doc man hinh van doc ra, kem cau noi vi sao.
+               */
+              readOnly={isLocked}
+              aria-describedby={isLocked ? lockHintId : undefined}
             />
+            {isLocked ? (
+              <small className="tx-ticket__lock" id={lockHintId}>
+                {DEPOT_NAME_LOCK_HINT}
+              </small>
+            ) : null}
           </label>
           <button
             type="button"

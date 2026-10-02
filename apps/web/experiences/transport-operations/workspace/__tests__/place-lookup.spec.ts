@@ -117,24 +117,44 @@ describe('trang thai tim -> MOT cau, moi trang thai mot cau', () => {
 });
 
 describe('dia diem da biet', () => {
-  it('nhom theo viec: bai xe, nha may/kho, kho khach; nhom rong khong hien', () => {
+  it('nhom theo viec: bai xe, kho khach hang, nha may/kho doi tac; nhom rong khong hien', () => {
     const groups = groupKnownPlaces([
       place({ id: 'b', kind: 'COUNTERPARTY_SITE', name: 'Nhà máy thép Đình Vũ' }),
       place({ id: 'a', kind: 'DEPOT', name: 'Bãi xe Hà Nội' }),
+      // `#395` §2.1 — kho cua KHACH HANG la mot `COUNTERPARTY_SITE`; may chu noi nhan cua no.
+      place({
+        id: 'c',
+        kind: 'COUNTERPARTY_SITE',
+        name: 'Kho Nhựa Tân Phú Hưng',
+        kindLabel: 'Địa điểm khách hàng',
+      }),
+      // Hang rao `CUSTOMER` kieu cu: may chu cu khong tra nhan — duong lui noi DUNG ten may chu moi.
+      place({ id: 'd', kind: 'CUSTOMER', name: 'Kho cũ Hưng Yên' }),
     ]);
     expect(groups.map((group) => [group.title, group.places.map((entry) => entry.id)])).toEqual([
       ['Bãi xe', ['a']],
-      ['Nhà máy / kho', ['b']],
+      ['Địa điểm khách hàng', ['c']],
+      ['Nhà máy / kho đối tác', ['b']],
+      ['Điểm khách hàng (kiểu cũ)', ['d']],
     ]);
     expect(groupKnownPlaces([])).toEqual([]);
   });
 
-  it('dong nguon noi ten phap nhan khi co', () => {
+  it('dong nguon noi ten CHU cua moi loai khi co (#395) — tru bai xe cua chinh cong ty', () => {
     expect(knownPlaceSourceLine('COUNTERPARTY_SITE', ' Công ty CP Thép Đông Á ')).toBe(
-      'Nhà máy / kho của Công ty CP Thép Đông Á',
+      'Nhà máy / kho đối tác của Công ty CP Thép Đông Á',
     );
-    expect(knownPlaceSourceLine('COUNTERPARTY_SITE', null)).toBe('Nhà máy / kho');
-    expect(knownPlaceSourceLine('CUSTOMER', 'bo qua')).toBe('Kho khách hàng');
+    expect(knownPlaceSourceLine('COUNTERPARTY_SITE', null)).toBe('Nhà máy / kho đối tác');
+    expect(knownPlaceSourceLine('CUSTOMER', 'Công ty A')).toBe(
+      'Điểm khách hàng (kiểu cũ) của Công ty A',
+    );
+    expect(knownPlaceSourceLine('CUSTOMER', 'Công ty A', 'Điểm khách hàng (kiểu cũ)')).toBe(
+      'Điểm khách hàng (kiểu cũ) của Công ty A',
+    );
+    expect(knownPlaceSourceLine('COUNTERPARTY_SITE', 'Công ty A', 'Địa điểm khách hàng')).toBe(
+      'Địa điểm khách hàng của Công ty A',
+    );
+    expect(knownPlaceSourceLine('DEPOT', 'Vận tải Việt')).toBe('Bãi xe');
   });
 });
 

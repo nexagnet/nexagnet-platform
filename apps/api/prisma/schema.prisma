@@ -156,6 +156,13 @@ enum UserRole {
   ADMIN
 }
 
+/// HIEU LUC cua mot dong quyen rieng (#395): THEM mot quyen ngoai vai khoi diem, hoac BOT mot
+/// quyen vai khoi diem dang co. Mien so huu ma quyen quyet dinh dong nao hop le.
+enum UserPermissionEffect {
+  ALLOW
+  DENY
+}
+
 // ----- Nguon su that (tang 6) -----
 
 model Dealer {
@@ -684,19 +691,45 @@ model ParseFeedback {
 // ----- Quan tri (Phase 5) -----
 
 model User {
-  id                String    @id @default(cuid())
-  username          String    @unique
-  name              String
-  email             String?   @unique
-  phone             String?   @unique
-  passwordHash      String
-  role              UserRole
-  disabledAt        DateTime?
-  credentialVersion Int       @default(1)
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
-  lastLoginAt       DateTime?
-  passwordChangedAt DateTime?
+  id                         String                @id @default(cuid())
+  username                   String                @unique
+  name                       String
+  email                      String?               @unique
+  phone                      String?               @unique
+  passwordHash               String
+  role                       UserRole
+  disabledAt                 DateTime?
+  credentialVersion          Int                   @default(1)
+  createdAt                  DateTime              @default(now())
+  updatedAt                  DateTime              @updatedAt
+  lastLoginAt                DateTime?
+  passwordChangedAt          DateTime?
+  /// Tai khoan dang dung MAT KHAU TAM (#395): phai doi truoc khi lam bat cu viec gi khac.
+  /// `true` thi `temporaryPasswordExpiresAt` BAT BUOC co — `CHECK` trong migration.
+  mustChangePassword         Boolean               @default(false)
+  temporaryPasswordExpiresAt DateTime?
+  /// Chuc danh hien thi ("Dieu hanh ca dem") — KHONG mang nghia phan quyen nao.
+  jobTitle                   String?
+  permissionGrants           UserPermissionGrant[]
+}
+
+/// QUYEN RIENG cua mot tai khoan (#395) — lop tren vai khoi diem (`User.role`).
+///
+/// Mot dong = mot ma quyen cua mot mien (vd `transport.vehicle.manage`) voi hieu luc ALLOW/DENY.
+/// `permission` la chuoi, khong phai enum: tu vung thuoc ve MIEN so huu (`transport-actions.ts`),
+/// va mien kiem ma do luc ghi. Xoa tai khoan thi quyen rieng di theo (`ON DELETE CASCADE`) —
+/// reset demo xoa cung User bang `deleteMany`.
+model UserPermissionGrant {
+  id         String               @id @default(cuid())
+  userId     String
+  user       User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  permission String
+  effect     UserPermissionEffect
+  /// Username cua nguoi cap — cung quy uoc voi `AuditLog.actor`.
+  grantedBy  String
+  createdAt  DateTime             @default(now())
+
+  @@unique([userId, permission])
 }
 
 /// Persistent backing store for express-session. `data` contains the serialized server-side
@@ -5012,10 +5045,16 @@ model TransportGeofence {
   radiusMetres Int
   status       TransportPartyStatus         @default(ACTIVE)
   note         String?
+  /// Dia chi hien thi cua dia diem van hanh (#395). NULL = chua nhap; chuoi rong bi `CHECK` chan.
+  /// Chi de doc — khong phep so khop nao dung cot nay.
+  address      String?
   recordedBy   String
   createdAt    DateTime                     @default(now())
   updatedAt    DateTime                     @updatedAt
 
+  /// Hai chi muc UNIQUE MOT PHAN song trong SQL tho (`20260925100100_transport_place_admin`):
+  /// `TransportGeofence_one_active_depot` (toi da MOT bai xe dang bat) va
+  /// `TransportGeofence_depot_code_key` (ma bai xe khong trung). Prisma khong khai duoc chung.
   @@index([subjectKind, subjectId])
   @@index([status])
 }

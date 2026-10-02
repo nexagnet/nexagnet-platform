@@ -1954,8 +1954,17 @@ export interface KnownPlace {
   readonly id: string;
   readonly kind: KnownPlaceKind;
   readonly name: string;
-  /** Ten phap nhan so huu (chi `COUNTERPARTY_SITE`), con lai `null`. */
+  /**
+   * Ten CHU cua dia diem — phap nhan / khach hang (`#395`: moi loai, khong chi `COUNTERPARTY_SITE`).
+   * `null` khi khong co (bai xe cua chinh cong ty).
+   */
   readonly detail: string | null;
+  /**
+   * NHAN LOAI do may chu tinh (`#395` §2.1): "Bãi xe" · "Địa điểm khách hàng" · "Nhà máy / kho đối
+   * tác". TUY CHON: may chu cu khong tra, man hinh suy tu `kind`. Chi may chu biet mot nha may co
+   * thuoc mot khach hang hay khong.
+   */
+  readonly kindLabel?: string | null;
   readonly point: GeoPoint;
   readonly radiusMetres: number;
 }

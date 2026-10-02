@@ -273,6 +273,7 @@ import { TransportPlaceService } from './transport/places/place.service.js';
 import { createPlaceSearchPort } from './transport/places/place-search-provider.factory.js';
 import { TransportPlaceSearchPort } from './transport/places/place-search.port.js';
 import { TransportPlacesController } from './transport/places/places.controller.js';
+import { PlaceAdminController } from './transport/places/admin/place-admin.controller.js';
 import { TransportModule } from './transport/transport.module.js';
 import { DriverTripsController } from './transport/trips/driver-trips.controller.js';
 import { TripsController } from './transport/trips/trips.controller.js';
@@ -569,6 +570,12 @@ const CONTROLLERS: readonly Owned<Type<unknown>>[] = [
   // roi: ke toan doc duoc, nhung khong rut duoc chung cu va khong doi duoc ban kinh mot hang rao
   // (hang rao cham LUC DOC, nen sua no doi ket luan cua ca nhung lan giao da xong).
   owned('transport-proof', ProofReviewController),
+  /*
+   * DIA DIEM VAN HANH (`#395`) — bai xe, kho khach hang, nha may doi tac: MOT so, la so hang rao.
+   * Di cung `transport-proof` vi so hang rao la cua capability do; controller chi tiem
+   * `PlaceAdminService` ma `TransportProofModule` export.
+   */
+  owned('transport-proof', PlaceAdminController),
   // MOC VAN HANH — HAI be mat, HAI quyen, HAI duong ghi khac nhau. Be mat lai xe ghi kem chung cu
   // vi tri va chi tren vong chay cua chinh ho; be mat van hanh ghi duoc moi vong chay nhung KHONG
   // dinh kem chung cu vi tri. Xem `CheckpointService`: hai duong do tach han o tang dich vu.

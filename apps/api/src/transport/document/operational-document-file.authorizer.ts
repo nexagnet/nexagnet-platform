@@ -6,7 +6,7 @@ import {
   type FileDomainVerdict,
 } from '../../files/file-authorization.port.js';
 import { TransportCheckpointCoreFacts } from '../checkpoint/checkpoint-facts.port.js';
-import { roleCanPerform } from '../transport-actions.js';
+import { canPerformTransportAction } from '../permissions/transport-permission-rules.js';
 import { OperationalDocumentRepository } from './document.repository.js';
 import type { OperationalDocument } from './document.types.js';
 import { PhysicalReceiptHandoverRepository } from './handover.repository.js';
@@ -140,13 +140,24 @@ export class OperationalDocumentFileAuthorizer extends FileDomainAuthorizer {
       : { kind: 'DENIED' };
   }
 
-  /** Vai tu CSDL + bang cua Lane O. Tai khoan da vo hieu hoa khong con vai nao. */
+  /**
+   * Vai + quyen rieng tu CSDL, qua CUNG cau tra loi voi `TransportActionGuard` (`#395`). Tai khoan
+   * da vo hieu hoa khong con quyen nao.
+   *
+   * Duong tai byte tep (`GET /files/:id/content`) KHONG di qua guard van tai, nen day la cho duy
+   * nhat mot `DENY transport.operational_document.read` tren mot ke toan co hieu luc voi tep — va mot
+   * `ALLOW` cho mot tai khoan Dieu hanh cung chi co tac dung o day. Kho khong tra `permissionGrants`
+   * (fixture cu) = khong co quyen rieng: tra loi dung nhu vai khoi diem.
+   */
   private async holds(
     authUserId: string,
     action: 'transport.operational_document.read' | 'transport.operational_document.withdraw',
   ): Promise<boolean> {
     const user = await this.users.findById(authUserId);
     if (!user || user.disabledAt !== null) return false;
-    return roleCanPerform(user.role, action);
+    return canPerformTransportAction(
+      { role: user.role, permissionGrants: user.permissionGrants ?? [] },
+      action,
+    );
   }
 }

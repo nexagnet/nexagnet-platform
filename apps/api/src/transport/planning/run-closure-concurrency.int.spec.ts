@@ -165,21 +165,25 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
        * trigger dung luc tep kia dang xoa se lam lan xoa do chet vi chinh cai trigger vua bat. Doi
        * con so o mot tep ma quen tep kia se lam khoa mat tac dung mot cach im lang.
        */
-      await prisma.$executeRawUnsafe(`SELECT pg_advisory_lock(${WAITING_TRIGGER_LOCK})`);
-      for (const [table, trigger] of PROTECTED_TABLES) {
-        await prisma.$executeRawUnsafe(`ALTER TABLE "${table}" DISABLE TRIGGER "${trigger}"`);
-      }
-      try {
-        await prisma.transportDeliveryWaitingSession.deleteMany({
-          where: { runId: { in: runIds } },
-        });
-        await prisma.transportRunCheckpoint.deleteMany({ where: { runId: { in: runIds } } });
-      } finally {
-        for (const [table, trigger] of PROTECTED_TABLES) {
-          await prisma.$executeRawUnsafe(`ALTER TABLE "${table}" ENABLE TRIGGER "${trigger}"`);
-        }
-        await prisma.$executeRawUnsafe(`SELECT pg_advisory_unlock(${WAITING_TRIGGER_LOCK})`);
-      }
+      // Khoa tu van MUC GIAO DICH, moi lenh trong CUNG mot giao dich (cung ly do voi
+      // `waiting-delivery-accepted.int.spec.ts`): khoa muc phien qua pool Prisma co the nha tren
+      // mot ket noi khac ("you don't own a lock"), ro lai va chan buoc don cua moi tep dung chung so.
+      await prisma.$transaction(
+        async (tx) => {
+          await tx.$executeRawUnsafe(`SELECT pg_advisory_xact_lock(${WAITING_TRIGGER_LOCK})`);
+          for (const [table, trigger] of PROTECTED_TABLES) {
+            await tx.$executeRawUnsafe(`ALTER TABLE "${table}" DISABLE TRIGGER "${trigger}"`);
+          }
+          await tx.transportDeliveryWaitingSession.deleteMany({
+            where: { runId: { in: runIds } },
+          });
+          await tx.transportRunCheckpoint.deleteMany({ where: { runId: { in: runIds } } });
+          for (const [table, trigger] of PROTECTED_TABLES) {
+            await tx.$executeRawUnsafe(`ALTER TABLE "${table}" ENABLE TRIGGER "${trigger}"`);
+          }
+        },
+        { maxWait: 10_000, timeout: 45_000 },
+      );
 
       await prisma.transportOrderRunPlan.deleteMany({ where: { runId: { in: runIds } } });
       await prisma.transportRunLeg.deleteMany({ where: { runId: { in: runIds } } });

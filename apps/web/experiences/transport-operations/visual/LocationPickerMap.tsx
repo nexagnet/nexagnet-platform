@@ -89,6 +89,11 @@ export interface LocationPickerMapProps {
   readonly onMarkerActivate?: (marker: PickerMarker) => void;
   readonly onMarkerDrag?: (marker: PickerMarker, point: GeoPoint) => void;
   readonly accuracy?: PickerAccuracy | null;
+  /**
+   * `#395` — VONG BAN KINH cua nhieu dia diem (man "Địa điểm vận hành"): moi vong la mot hang rao, ve
+   * cung mau voi vong sai so nhung nhat hon. Vong DANG SUA nen dat o `accuracy` de noi ro hon.
+   */
+  readonly rings?: readonly PickerAccuracy[] | null;
   /** Doan thang noi hai dau — duong CHIM BAY, ve dut de khong ai doc nham la duong xe chay. */
   readonly straightLine?: readonly [GeoPoint, GeoPoint] | null;
   readonly testId?: string;
@@ -170,10 +175,12 @@ const PIN_CLASS: Readonly<Record<PickerMarker['kind'], string>> = {
   CUSTOMER: 'tx-pin tx-pin--known tx-pin--customer',
   SEARCH_RESULT: 'tx-pin tx-pin--result',
   MY_POSITION: 'tx-pin tx-pin--me',
+  PLACE: 'tx-pin tx-pin--stake tx-pin--place',
 };
 
+/** Ghim dang COC (neo day, keo duoc): hai dau tuyen, va diem dang dat o man dia diem (`#395`). */
 const isEndpoint = (marker: PickerMarker): boolean =>
-  marker.kind === 'ORIGIN' || marker.kind === 'DESTINATION';
+  marker.kind === 'ORIGIN' || marker.kind === 'DESTINATION' || marker.kind === 'PLACE';
 
 /* Ghim dang duoc tro trong danh sach noi len tren moi ghim khac; hai dau tuyen luon tren cung. */
 const zIndexOf = (marker: PickerMarker): number =>
@@ -232,6 +239,7 @@ function PickerCanvas({
   onMarkerActivate,
   onMarkerDrag,
   accuracy,
+  rings,
   straightLine,
   overlayInsets,
 }: CanvasProps): React.ReactElement {
@@ -335,6 +343,27 @@ function PickerCanvas({
             id="tx-picker-straight-line"
             type="line"
             paint={{ 'line-color': colors.line, 'line-width': 2, 'line-dasharray': [2, 2] }}
+          />
+        </Source>
+      )}
+      {rings == null || rings.length === 0 ? null : (
+        <Source
+          id="tx-picker-rings"
+          type="geojson"
+          data={{
+            type: 'FeatureCollection',
+            features: rings.map((ring) => accuracyRing(ring.center, ring.radiusMetres)),
+          }}
+        >
+          <Layer
+            id="tx-picker-rings-fill"
+            type="fill"
+            paint={{ 'fill-color': colors.accent, 'fill-opacity': 0.06 }}
+          />
+          <Layer
+            id="tx-picker-rings-edge"
+            type="line"
+            paint={{ 'line-color': colors.accent, 'line-opacity': 0.35, 'line-width': 1 }}
           />
         </Source>
       )}

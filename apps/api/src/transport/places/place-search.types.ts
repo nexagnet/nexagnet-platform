@@ -103,8 +103,20 @@ export interface KnownPlace {
   /** `TransportGeofence.id` — hang rao LA dia diem da biet. */
   readonly id: string;
   readonly kind: KnownPlaceKind;
+  /**
+   * NHAN LOAI cho nguoi tao don (`#395` §2.1) — CUNG nhan voi man "Dia diem van hanh": "Bãi xe",
+   * "Địa điểm khách hàng" (phap nhan so huu co lien ket khach hang), "Nhà máy / kho đối tác", "Điểm
+   * khách hàng (kiểu cũ)". Chi may chu biet mot nha may co thuoc mot khach hang hay khong — `kind`
+   * mot minh khong phan biet duoc hai loai giua.
+   */
+  readonly kindLabel: string;
   readonly name: string;
-  /** Dong phu: ten phap nhan so huu dia diem (chi `COUNTERPARTY_SITE`), con lai `null`. */
+  /** Dia chi hien thi cua hang rao — `null` khi chua nhap. */
+  readonly address: string | null;
+  /**
+   * Dong phu: ten CHU cua dia diem — phap nhan (`COUNTERPARTY_SITE`) hoac khach hang (`CUSTOMER`
+   * kieu cu); `null` voi bai xe cua chinh cong ty.
+   */
   readonly detail: string | null;
   readonly point: GeoPoint;
   readonly radiusMetres: number;

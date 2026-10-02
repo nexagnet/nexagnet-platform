@@ -1,5 +1,6 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import {
+  ACTION_NOT_PERMITTED_MESSAGE,
   commitPlan,
   createWorld,
   DEPOT,
@@ -412,9 +413,7 @@ test.describe('#376 — van phong dong khe workflow Leg -> Order -> Ket thuc don
     const progress = page.getByRole('region', { name: 'Tiến độ vòng chạy VC-001' });
     await advance(page, `Bắt đầu chạy — ${LEG_1}`, `Ghi ${LEG_1} đang chạy?`, 'Bắt đầu chạy');
 
-    await expect(progress.locator('.tx-state--error')).toHaveText(
-      'Ban khong co quyen thuc hien thao tac nay (transport.run.manage)',
-    );
+    await expect(progress.locator('.tx-state--error')).toHaveText(ACTION_NOT_PERMITTED_MESSAGE);
     await expect(legRow(progress, 1)).toContainText('Dự kiến');
     await expect(progress.getByRole('status', { name: 'Đóng vòng chạy VC-001' })).toContainText(
       'Chưa chạy',

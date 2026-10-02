@@ -29,6 +29,14 @@ import { DEMO_SEED_ACTOR } from './demo-seed.js';
  * khong tim-hoac-tao lai phap nhan hay dia diem. Nho vay nguoi van hanh doi ten dia diem, doi ma so
  * thue phap nhan, hay nghi hang rao — lan khoi dong sau khong de lai mot ban sao nao.
  *
+ * `#395`: Giam doc doi ten mot dia diem van hanh thi nhan hang rao VA ten dia diem doi CUNG luc — dau
+ * vet theo nhan mat. Nen diem dia diem con mot dau vet ON DINH: phap nhan cua khach mau (tim theo ma
+ * so thue / ten nhu cu) da co mot dia diem mang hang rao cua may gieo (MOI trang thai) -> da gieo.
+ * Bai xe: co BAT KY hang rao `DEPOT` nao (moi trang thai) -> bai xe da duoc quan ly o man "Dia diem
+ * van hanh", may gieo khong them bai thu hai (`DEPOT_ALREADY_MANAGED`). Hai chi muc cua DB
+ * (toi da mot bai dang bat, ma bai khong trung) chan them mot lan nua neu hai ben ghi chong nhau: lan
+ * thu lai doc thay bai vua ghi va bo qua.
+ *
  * ---------------------------------------------------------------------------
  * KHONG BAO GIO TAO MOT NHAN MO HO.
  *
@@ -72,10 +80,10 @@ interface DemoPoint {
 }
 
 /**
- * Bai xe cua doi xe mau. `subjectId`/`label` KHOP DUNG kho trong
- * `tenants/transport-preview/tenant.json` (`policies.transportPlanning.depots`): chang RONG do he
- * thong len ke hoach mang dung nhan nay, nen hang rao nay giai duoc chung theo nhan (bai kiem giu
- * hai cho khong troi nhau).
+ * Bai xe cua doi xe mau. Tu `#395` hang rao nay LA bai xe cua khau lap ke hoach (danh ba bai xe doc
+ * hang rao `DEPOT`; goi xem truoc khong con khai `transportPlanning.depots`): chang RONG do he thong
+ * len ke hoach mang dung nhan nay, va dong vong chay so dung nhan nay. Ma `DEPOT-HN` giu nguyen ma
+ * cua cau hinh cu, nen lich su chang rong cu van cung mot danh tinh.
  */
 export const DEMO_DEPOT_MARKER = {
   subjectId: 'DEPOT-HN',
@@ -129,6 +137,11 @@ export type DemoPlaceSkipReason =
   | 'MARKER_ALREADY_SEEDED'
   /** Bai xe da co hang rao (co the do nguoi van hanh khai, ke ca da nghi) — giu nguyen. */
   | 'DEPOT_ALREADY_FENCED'
+  /**
+   * Da co MOT hang rao `DEPOT` khac (moi trang thai) — bai xe dang duoc quan ly o man "Dia diem van
+   * hanh"; them bai mau se la bai thu hai (`#395`).
+   */
+  | 'DEPOT_ALREADY_MANAGED'
   /** Dia diem tim thay da co hang rao cua no — khong them cai thu hai. */
   | 'SITE_ALREADY_FENCED'
   /** Mot hang rao DANG HOAT DONG trung nhan sau chuan hoa — them nua la tao nhan mo ho. */
@@ -276,6 +289,11 @@ async function seedMarker(tx: DemoPlacesTx, plan: MarkerPlan): Promise<MarkerOut
       select: { id: true },
     });
     if (fenced) return skip(plan.label, 'DEPOT_ALREADY_FENCED');
+    const managed = await tx.transportGeofence.findFirst({
+      where: { subjectKind: 'DEPOT' },
+      select: { id: true },
+    });
+    if (managed) return skip(plan.label, 'DEPOT_ALREADY_MANAGED');
   }
 
   if (await labelTakenByActiveFence(tx, plan.label)) {
@@ -308,6 +326,9 @@ async function seedSiteMarker(
           orderBy: { createdAt: 'asc' },
           select: { id: true },
         });
+  if (foundParty && (await hasSeededSite(tx, foundParty.id))) {
+    return skip(plan.label, 'MARKER_ALREADY_SEEDED');
+  }
   const party =
     foundParty ??
     (await tx.transportCounterparty.create({
@@ -351,6 +372,28 @@ async function seedSiteMarker(
     data: fenceData('COUNTERPARTY_SITE', site.id, plan.label, plan.point),
   });
   return { created: { ...created, geofence: 1 }, skipped: null };
+}
+
+/**
+ * DAU VET ON DINH cua mot diem dia diem (`#395`): phap nhan nay da co mot dia diem mang hang rao cua
+ * may gieo (moi trang thai). Khong doc nhan hay ten — Giam doc doi ca hai o man "Dia diem van hanh",
+ * va may gieo khong duoc "sua lai" lan doi ten do bang mot ban sao mang ten cu.
+ */
+async function hasSeededSite(tx: DemoPlacesTx, counterpartyId: string): Promise<boolean> {
+  const sites = await tx.transportCounterpartySite.findMany({
+    where: { counterpartyId },
+    select: { id: true },
+  });
+  if (sites.length === 0) return false;
+  const fence = await tx.transportGeofence.findFirst({
+    where: {
+      recordedBy: DEMO_SEED_ACTOR,
+      subjectKind: 'COUNTERPARTY_SITE',
+      subjectId: { in: sites.map((site) => site.id) },
+    },
+    select: { id: true },
+  });
+  return fence !== null;
 }
 
 /**

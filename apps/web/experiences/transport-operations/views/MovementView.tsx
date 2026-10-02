@@ -3,6 +3,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import { useTenantRuntime } from '../../../lib/tenant-runtime-context';
+import { PermissionGate, PermissionNote } from '../components/PermissionGate';
 import { DataTable, MetricCard, PageHeader, StatusBadge } from '../components/primitives';
 import { EmptyState, ErrorState, LoadingState } from '../components/SectionState';
 import {
@@ -161,16 +162,30 @@ export function MovementView() {
   const plateOf = (vehicleId: string): string =>
     vehicles.data?.find((vehicle) => vehicle.id === vehicleId)?.registrationPlate ?? '—';
 
-  /** Ma vong chay doc duoc thay cho `runId`. */
+  /**
+   * Ma vong chay doc duoc thay cho `runId`. Chua doc duoc danh sach vong chay (`#395`: nguoi chi
+   * duoc xem don) thi noi dung vay — KHONG bao gio in `runId` (mot `cuid`) ra man hinh.
+   */
   const runCodeOf = (runId: string): string =>
-    runs.data?.find((run) => run.id === runId)?.code ?? runId;
+    runs.data === undefined
+      ? 'Vòng chạy chưa đọc được mã'
+      : (runs.data.find((run) => run.id === runId)?.code ?? runId);
 
-  /** Ten khach doc duoc thay cho `customerId` — man hinh khong hien mot `cuid` bao gio. */
+  /**
+   * Ten khach doc duoc thay cho `customerId` — man hinh khong hien mot `cuid` bao gio. Danh ba CHUA
+   * co trong tay (chua duoc cap quyen xem khach) khac han "khach da go khoi danh muc" (`#395`).
+   */
   const customerNameOf = (customerId: string | null): string =>
     customerId === null
       ? '—'
-      : (customers.data?.find((customer) => customer.id === customerId)?.name ??
-        'khách đã gỡ khỏi danh mục');
+      : customers.data === undefined
+        ? 'Khách hàng chưa đọc được tên'
+        : (customers.data.find((customer) => customer.id === customerId)?.name ??
+          'khách đã gỡ khỏi danh mục');
+
+  /** Lap ke hoach tu don doi biet ke hoach dang co (`run.read`) va quyen giao xe (`run.manage`). */
+  const canPlan =
+    canPerform(navigation, 'transport.run.read') && canPerform(navigation, 'transport.run.manage');
 
   /** Ma don doc duoc thay cho `orderId`. */
   const orderCodeOf = (orderId: string | null): string =>
@@ -218,7 +233,7 @@ export function MovementView() {
   }
 
   const visibleOrders = filterOrders(orders.data, filter, customerNameOf);
-  const canCreate = canPerform(navigation.role, 'transport.order.manage');
+  const canCreate = canPerform(navigation, 'transport.order.manage');
   const openState = openOrderFilterState(orders.data, visibleOrders, openOrderId);
   const activePlan = orderPlans.data?.find((plan) => plan.cancelledAt === null) ?? null;
   /* Bo loc giau don dang mo: chi tiet cua no AN theo (co mot cau + nut bo loc), khong lang le o lai. */
@@ -257,6 +272,12 @@ export function MovementView() {
       >
         {composer.notice ?? ''}
       </p>
+
+      {/* `#395` — ten khach va bien so la danh ba RIENG: thieu quyen thi noi, khong de o trong. */}
+      <PermissionNote
+        viewer={navigation}
+        actions={['transport.customer.read', 'transport.vehicle.read']}
+      />
 
       {/* Loc PHIA MAY KHACH: danh sach da nam het trong bo nho; URL khong doi. */}
       <div className="tx-orderfilter" role="search" aria-label="Tìm và lọc đơn">
@@ -354,7 +375,7 @@ export function MovementView() {
         <>
           {(() => {
             const selected = orders.data?.find((entry) => entry.id === openOrderId);
-            if (selected === undefined || activePlan !== null) return null;
+            if (selected === undefined || activePlan !== null || !canPlan) return null;
             return (
               <form
                 className="tx-panel tx-filters"
@@ -503,7 +524,11 @@ export function MovementView() {
         </p>
       </section>
 
-      {runs.errorMessage !== null ? (
+      {/* `#395` — bang vong chay la PHAN PHU (`transport.run.read`): nguoi chi duoc xem don thay
+          mot cau, khong thay mot bang vong chay rong. */}
+      {!canPerform(navigation, 'transport.run.read') ? (
+        <PermissionGate viewer={navigation} action="transport.run.read" />
+      ) : runs.errorMessage !== null ? (
         <ErrorState message={runs.errorMessage} onRetry={runs.refetch} />
       ) : (
         <DataTable<VehicleRun>

@@ -54,6 +54,11 @@ export abstract class CounterpartyRepository {
     subjectId: string,
   ): Promise<CounterpartyLink | null>;
   abstract listLinks(counterpartyId: string): Promise<CounterpartyLink[]>;
+  /**
+   * Lien ket cua NHIEU phap nhan trong MOT lan doc (`#395`: Tao don can biet dia diem nao la cua
+   * khach hang ma khong hoi tung phap nhan). Cung thu tu voi `listLinks`.
+   */
+  abstract listLinksOf(counterpartyIds: readonly string[]): Promise<CounterpartyLink[]>;
   abstract link(input: LinkSubjectInput): Promise<CounterpartyLink>;
   /** Tra ve `true` neu that su co mot hang bi go. Idempotent. */
   abstract unlink(kind: CounterpartySubjectKind, subjectId: string): Promise<boolean>;
@@ -137,6 +142,11 @@ export class InMemoryCounterpartyRepository extends CounterpartyRepository {
     return sortLinks(
       [...this.links.values()].filter((link) => link.counterpartyId === counterpartyId),
     );
+  }
+
+  async listLinksOf(counterpartyIds: readonly string[]): Promise<CounterpartyLink[]> {
+    const wanted = new Set(counterpartyIds);
+    return sortLinks([...this.links.values()].filter((link) => wanted.has(link.counterpartyId)));
   }
 
   async link(input: LinkSubjectInput): Promise<CounterpartyLink> {

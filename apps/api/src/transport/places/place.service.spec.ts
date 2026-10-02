@@ -255,7 +255,9 @@ describe('dia diem da biet', () => {
     const place: KnownPlace = {
       id: 'f1',
       kind: 'DEPOT',
+      kindLabel: 'Bãi xe',
       name: 'Bãi xe Hà Nội',
+      address: null,
       detail: null,
       point: { latitude: 20.9652, longitude: 105.8468 },
       radiusMetres: 250,

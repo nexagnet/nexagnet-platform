@@ -97,36 +97,78 @@ export function searchOutcomeOf(response: PlaceSearchResponse): SearchOutcomeVie
  * Dia diem da biet — doc tu hang rao, nhom theo viec nguoi dung lam
  * ------------------------------------------------------------------ */
 
+/**
+ * NHAN LOAI khi may chu KHONG tra `kindLabel` (`#395` §2.1 — cung nhan voi man "Địa điểm vận hành",
+ * `PLACE_KIND_LABEL` phia API). Kho cua mot khach hang la mot `COUNTERPARTY_SITE` cua phap nhan
+ * khach — chi may chu biet dieu do, nen duong lui o day noi "đối tác"; `CUSTOMER` la hang rao KIEU CU
+ * gan thang vao khach hang, va may chu goi no dung ten do.
+ */
 export const KNOWN_PLACE_KIND_LABEL: Readonly<Record<KnownPlaceKind, string>> = {
   DEPOT: 'Bãi xe',
-  COUNTERPARTY_SITE: 'Nhà máy / kho',
-  CUSTOMER: 'Kho khách hàng',
+  COUNTERPARTY_SITE: 'Nhà máy / kho đối tác',
+  CUSTOMER: 'Điểm khách hàng (kiểu cũ)',
 };
 
-/** Thu tu nhom = thu tu may chu sap xep: bai xe truoc (noi xe xuat phat), roi noi lay/giao. */
-const KNOWN_PLACE_ORDER: readonly KnownPlaceKind[] = ['DEPOT', 'COUNTERPARTY_SITE', 'CUSTOMER'];
+/** Nhan may chu dat cho kho cua MOT KHACH HANG (phap nhan co mat khach hang). */
+export const CUSTOMER_SITE_KIND_LABEL = 'Địa điểm khách hàng';
+
+/** Nhan loai cua MOT dia diem: nhan may chu tinh, khong co thi suy tu `kind`. */
+export const knownPlaceKindLabel = (place: {
+  readonly kind: KnownPlaceKind;
+  readonly kindLabel?: string | null;
+}): string =>
+  place.kindLabel != null && place.kindLabel.trim().length > 0
+    ? place.kindLabel.trim()
+    : KNOWN_PLACE_KIND_LABEL[place.kind];
+
+/**
+ * Thu tu nhom: bai xe truoc (noi xe xuat phat), roi kho khach hang, roi nha may/kho doi tac, cuoi
+ * cung diem khach hang kieu cu.
+ */
+const KNOWN_PLACE_ORDER: readonly string[] = [
+  KNOWN_PLACE_KIND_LABEL.DEPOT,
+  CUSTOMER_SITE_KIND_LABEL,
+  KNOWN_PLACE_KIND_LABEL.COUNTERPARTY_SITE,
+  KNOWN_PLACE_KIND_LABEL.CUSTOMER,
+];
 
 export interface KnownPlaceGroup {
-  readonly kind: KnownPlaceKind;
+  /** Khoa on dinh cua nhom = nhan loai. */
+  readonly key: string;
   readonly title: string;
   readonly places: readonly KnownPlace[];
 }
 
-/** Nhom rong KHONG hien: mot tieu de "Kho khách hàng" treo tren khoang trong la mot cau hoi thua. */
+/** Nhom rong KHONG hien: mot tieu de treo tren khoang trong la mot cau hoi thua. */
 export function groupKnownPlaces(places: readonly KnownPlace[]): readonly KnownPlaceGroup[] {
-  return KNOWN_PLACE_ORDER.map((kind) => ({
-    kind,
-    title: KNOWN_PLACE_KIND_LABEL[kind],
-    places: places.filter((place) => place.kind === kind),
-  })).filter((group) => group.places.length > 0);
+  const titles = [...new Set(places.map(knownPlaceKindLabel))].sort((left, right) => {
+    const rank = (title: string) => {
+      const index = KNOWN_PLACE_ORDER.indexOf(title);
+      return index < 0 ? KNOWN_PLACE_ORDER.length : index;
+    };
+    return rank(left) - rank(right) || left.localeCompare(right, 'vi');
+  });
+  return titles.map((title) => ({
+    key: title,
+    title,
+    places: places.filter((place) => knownPlaceKindLabel(place) === title),
+  }));
 }
 
-/** Dong nguon cua mot dia diem da biet: loai, va phap nhan so huu khi co. */
-export function knownPlaceSourceLine(kind: KnownPlaceKind, owner: string | null): string {
-  if (kind === 'COUNTERPARTY_SITE' && owner !== null && owner.trim().length > 0) {
-    return `Nhà máy / kho của ${owner.trim()}`;
+/**
+ * Dong nguon cua mot dia diem da biet: loai, va CHU khi co (`#395`: moi loai). Bai xe khong mang ten
+ * chu — no la cua chinh cong ty.
+ */
+export function knownPlaceSourceLine(
+  kind: KnownPlaceKind,
+  owner: string | null,
+  kindLabel?: string | null,
+): string {
+  const label = knownPlaceKindLabel({ kind, kindLabel });
+  if (kind !== 'DEPOT' && owner !== null && owner.trim().length > 0) {
+    return `${label} của ${owner.trim()}`;
   }
-  return KNOWN_PLACE_KIND_LABEL[kind];
+  return label;
 }
 
 /* ------------------------------------------------------------------ *
@@ -296,7 +338,9 @@ export type PickerMarkerKind =
   | 'COUNTERPARTY_SITE'
   | 'CUSTOMER'
   | 'SEARCH_RESULT'
-  | 'MY_POSITION';
+  | 'MY_POSITION'
+  /** `#395` — diem DANG DAT o man "Địa điểm vận hành": coc keo duoc, cung khuon Lay/Giao. */
+  | 'PLACE';
 
 /**
  * Mot ghim. Mau KHONG BAO GIO la tin hieu duy nhat: moi ghim co `badge` (chu tren ghim) hoac hinh

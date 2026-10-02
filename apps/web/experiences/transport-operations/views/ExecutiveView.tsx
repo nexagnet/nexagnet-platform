@@ -1,5 +1,6 @@
 'use client';
 
+import { PermissionGate } from '../components/PermissionGate';
 import { MetricCard, PageHeader } from '../components/primitives';
 import { EmptyState, ErrorState, LoadingState } from '../components/SectionState';
 import {
@@ -80,6 +81,8 @@ export function ExecutiveView(): React.ReactElement {
         </section>
       )}
 
+      {/* `#395` — hai khoi phu, moi khoi mot ma: thieu quyen thi khoi NOI ra, khong bien mat. */}
+      <PermissionGate viewer={input} action="transport.analytics.read" />
       {fleet === null ? null : (
         <section className="tx-panel" aria-label="Hiệu quả chạy xe">
           <h2>Hiệu quả chạy xe</h2>
@@ -111,6 +114,7 @@ export function ExecutiveView(): React.ReactElement {
         </section>
       )}
 
+      <PermissionGate viewer={input} action="transport.settlement.report.read" />
       {finance === null ? null : (
         <section className="tx-panel" aria-label="Tiền">
           <h2>Tiền</h2>

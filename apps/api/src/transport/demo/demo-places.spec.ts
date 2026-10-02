@@ -35,8 +35,13 @@ interface Tables {
 
 const emptyTables = (): Tables => ({ counterparties: [], sites: [], geofences: [] });
 
+/** Bang nhau, hoac `{ in: [...] }` — du cho nhung dieu kien ham gieo dung. */
 const matches = (row: Row, where: Row): boolean =>
-  Object.entries(where).every(([key, value]) => row[key] === value);
+  Object.entries(where).every(([key, value]) =>
+    typeof value === 'object' && value !== null && 'in' in value
+      ? (value as { in: unknown[] }).in.includes(row[key])
+      : row[key] === value,
+  );
 
 function fakePrisma() {
   let sequence = 0;
@@ -73,6 +78,8 @@ function fakePrisma() {
       },
     },
     transportCounterpartySite: {
+      findMany: async ({ where }: { where: Row }) =>
+        view.sites.filter((row) => matches(row, where)),
       findUnique: async ({
         where,
       }: {
@@ -266,6 +273,51 @@ describe('diem dia diem mau (#379)', () => {
     expect(result).toEqual(ALL_SEEDED);
     expect(tables.geofences).toHaveLength(3);
   });
+
+  /**
+   * `#395`: Giam doc doi ten dia diem van hanh o man "Dia diem van hanh" — ten dia diem VA nhan hang
+   * rao doi cung luc. Dau vet theo nhan mat, nhung dau vet ON DINH (phap nhan co dia diem mang hang
+   * rao cua may gieo) con: lan khoi dong sau KHONG tao lai dia diem mang ten cu.
+   */
+  it('doi ten CA dia diem lan nhan hang rao -> van coi la da gieo, khong ban sao', async () => {
+    const { prisma, tables, writes } = fakePrisma();
+    await backfillDemoPlaceMarkers(prisma);
+    writes.length = 0;
+    tables.sites[0] = { ...tables.sites[0], name: 'Nhà máy Đình Vũ 1' };
+    tables.geofences[1] = { ...tables.geofences[1], label: 'Nhà máy Đình Vũ 1' };
+
+    const result = await backfillDemoPlaceMarkers(prisma);
+
+    expect(result).toEqual(ALL_SEEDED);
+    expect(writes).toEqual([]);
+    expect(tables.sites).toHaveLength(2);
+    expect(tables.geofences).toHaveLength(3);
+  });
+
+  /**
+   * `#395`: bai xe da duoc quan ly o man "Dia diem van hanh" (bat ky hang rao `DEPOT` nao, MOI trang
+   * thai) -> may gieo KHONG them bai thu hai, ke ca khi ma va nhan khac bai mau.
+   */
+  it.each(['ACTIVE', 'INACTIVE'])(
+    'da co mot bai xe duoc quan ly (%s) -> DEPOT_ALREADY_MANAGED, khong them bai',
+    async (status) => {
+      const { prisma, tables } = fakePrisma();
+      tables.geofences.push({
+        id: 'fence-director',
+        subjectKind: 'DEPOT',
+        subjectId: 'DEPOT-BAI-XE-GIA-LAM',
+        status,
+        label: 'Bãi xe Gia Lâm',
+        recordedBy: 'giam-doc',
+      });
+
+      const result = await backfillDemoPlaceMarkers(prisma);
+
+      expect(result.skipped).toEqual([{ label: 'Bãi xe Hà Nội', reason: 'DEPOT_ALREADY_MANAGED' }]);
+      expect(result.created.geofence).toBe(2);
+      expect(tables.geofences.filter((row) => row['subjectKind'] === 'DEPOT')).toHaveLength(1);
+    },
+  );
 
   /** Hang rao nguoi van hanh da NGHI khong duoc may gieo hoi sinh. */
   it('hang rao bai xe cua nguoi van hanh da ton tai (ke ca da nghi) -> giu nguyen, khong tao lai', async () => {
@@ -470,15 +522,14 @@ describe('tim phap nhan cua khach mau', () => {
 });
 
 describe('du lieu diem dia diem mau', () => {
-  it('bai xe KHOP dung kho khai trong goi khach xem truoc', () => {
-    const depots = loadTenantConfig().policies.transportPlanning?.depots ?? [];
-
-    expect(depots).toContainEqual(
-      expect.objectContaining({
-        code: DEMO_DEPOT_MARKER.subjectId,
-        label: DEMO_DEPOT_MARKER.label,
-      }),
-    );
+  /**
+   * `#395`: goi xem truoc KHONG con khai bai xe trong cau hinh — hang rao `DEPOT` cua may gieo LA bai
+   * xe cua khau lap ke hoach (danh ba bai xe doc so hang rao). Ma giu dung ma cua cau hinh cu, nen
+   * chang rong da ghi truoc day van mang cung mot danh tinh bai.
+   */
+  it('goi khach xem truoc khong khai bai xe; bai mau giu ma cu DEPOT-HN', () => {
+    expect(loadTenantConfig().policies.transportPlanning?.depots).toBeUndefined();
+    expect(DEMO_DEPOT_MARKER).toMatchObject({ subjectId: 'DEPOT-HN', label: 'Bãi xe Hà Nội' });
   });
 
   it('moi toa do qua parseGeoPoint', () => {

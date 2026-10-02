@@ -751,6 +751,12 @@ flowchart LR
 
 Ghi chú trạng thái đã chốt cho kế hoạch dài hạn: **lộ trình Đợt 1→4 đã được duyệt** (10/07/2026) · **thư viện/dịch vụ đã chốt qua search-first** (danh sách trong kế hoạch con §7) · ⚠️ deadline kỹ thuật: **DeepSeek khai tử model cũ 24/07/2026** — demo đã chuyển `deepseek-v4-flash` ✅.
 
+### 3.3 Vận tải — quản trị tài khoản, phân quyền, địa điểm vận hành
+
+| Hạng mục (hợp đồng chi tiết ở tài liệu kiến trúc) | Trạng thái |
+|---|---|
+| **#395 — Giám đốc quản trị tài khoản + phân quyền (vai khởi điểm + quyền riêng ALLOW/DENY) + địa điểm vận hành trên bản đồ**: API `/settings/users*` + mật khẩu tạm; cưỡng chế quyền vận tải theo từng tài khoản + nối tài khoản với hồ sơ lái xe; "Địa điểm vận hành" = sổ hàng rào, một bãi xe đang dùng làm bãi của lập kế hoạch; màn web nhóm QUẢN TRỊ. Hợp đồng: [api-http.md](../../kien-truc/api-http.md) §3.4 + §3.11 · [transport-domain-contract.md](../../kien-truc/transport-domain-contract.md) §11.5–11.6 · [transport-geospatial.md](../../kien-truc/transport-geospatial.md) §7.2 · [transport-run-planning.md](../../kien-truc/transport-run-planning.md) §2.2 | ✅ **code trên nhánh** `claude/admin-account-permissions-fb485a` (S0 nền + S1–S4, 25/09/2026); ⬜ **chưa merge, chưa deploy, chưa có bằng chứng runtime**. Khi deploy: hai di trú chỉ thêm `20260925100000_auth_user_access` + `20260925100100_transport_place_admin` (di trú thứ hai dừng có chủ đích nếu DB đã có hơn một hàng rào `DEPOT` đang bật hoặc mã bãi trùng); gói `transport-preview` bỏ `transportPlanning.depots` nên bãi xe của bản xem trước là hàng rào `DEPOT-HN` trong DB |
+
 ---
 
 ## 4. DỮ LIỆU CÒN THIẾU (chặn gì — hỏi chị Nguyễn Thu Phương)

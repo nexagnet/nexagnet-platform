@@ -86,10 +86,14 @@ export class AssetOwnershipController {
    *
    * Chi `ADMIN`. Ke toan quan ly duoc ho so va ty le so huu — do la du lieu tai san — nhung CAP
    * QUYEN DOC cho mot con nguoi la mot thao tac phan quyen, va no thuoc ve quan tri he thong.
+   *
+   * `#395`: hanh dong rieng `transport.account_link.manage` (chi Giam doc, `DIRECTOR_ONLY_ACTIONS`)
+   * thay cho `.manage` cua so dang ky. Truoc day chinh sach "chi ADMIN" chi song trong `@Roles`
+   * duoi day; nay bang vai cua mien noi cung mot dieu, nen cong cua mien tu no la du.
    */
   @Put('stakeholders/:id/account')
   @Roles('ADMIN')
-  @RequiresTransportAction('transport.asset_ownership.manage')
+  @RequiresTransportAction('transport.account_link.manage')
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   setAccount(@Param('id') id: string, @Body() body: unknown, @Req() request: AuthenticatedRequest) {
     const input = this.parse(linkStakeholderAccountSchema, body);

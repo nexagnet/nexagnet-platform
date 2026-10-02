@@ -2,9 +2,10 @@
 
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
+import { PermissionNote } from '../components/PermissionGate';
 import { DataTable, PageHeader, StatusBadge } from '../components/primitives';
 import { ConfirmAction, EmptyState, ErrorState, LoadingState } from '../components/SectionState';
-import type { StatusTone } from '../customer-view';
+import { unresolvedReference, type StatusTone } from '../customer-view';
 import {
   TRANSPORT_QUERY_KEYS,
   toSectionQuery,
@@ -107,9 +108,14 @@ export function ExpenseClaimsView() {
     return <LoadingState label="Đang tải đề nghị chi…" />;
   }
 
-  /** Ten lai xe doc duoc thay cho `driverId`. */
+  /**
+   * Ten lai xe doc duoc thay cho `driverId`. Danh ba CHUA co trong tay (`#395`: chua duoc cap quyen
+   * xem ho so lai xe) noi dung dieu do, khong in mot gach ngang nhu the lai xe khong co ten.
+   */
   const driverName = (driverId: string): string =>
-    drivers.data?.find((driver) => driver.id === driverId)?.fullName ?? '—';
+    drivers.data === undefined
+      ? unresolvedReference('Lái xe')
+      : (drivers.data.find((driver) => driver.id === driverId)?.fullName ?? '—');
 
   return (
     <>
@@ -119,6 +125,7 @@ export function ExpenseClaimsView() {
       />
 
       {failure !== null && <ErrorState message={failure} />}
+      <PermissionNote viewer={navigation} actions={['transport.driver.read']} />
 
       <DataTable<ExpenseClaim>
         caption="Đề nghị chi"

@@ -1,7 +1,6 @@
-import type { AuthRole } from '../../../lib/auth';
 import { formatInstant, formatMoney } from '../customer-view';
 import type { RecordFuelCostAttributionInput } from '../transport-api';
-import { canPerform } from '../transport-actions';
+import { canPerform, type TransportViewerInput } from '../transport-actions';
 import type { FuelCostAttributionLine, FuelEntryCostAttributionView } from '../transport-types';
 
 /**
@@ -57,9 +56,9 @@ const targetLabelOf = (line: FuelCostAttributionLine): string => {
 
 export function toFuelCostAttributionModel(
   view: FuelEntryCostAttributionView,
-  role: AuthRole | null,
+  viewer: TransportViewerInput,
 ): FuelCostAttributionModel {
-  const mayRecord = canPerform(role, 'transport.fuel.cost_attribution.record');
+  const mayRecord = canPerform(viewer, 'transport.fuel.cost_attribution.record');
   const totalLabel = formatMoney(view.amount);
 
   if (view.ledger === 'LEGACY_TRIP_EXPENSE') {

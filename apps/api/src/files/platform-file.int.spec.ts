@@ -82,20 +82,24 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')('nen tang tep tren Postgres th
    * thiet, thi do la dau hieu trigger da bi go.
    */
   const cleanup = async (): Promise<void> => {
-    await prisma.$executeRawUnsafe(`SELECT pg_advisory_lock(${PLATFORM_FILE_TRIGGER_LOCK})`);
-    for (const [table, trigger] of guarded) {
-      await prisma.$executeRawUnsafe(`ALTER TABLE "${table}" DISABLE TRIGGER "${trigger}"`);
-    }
-    try {
-      await prisma.platformFileLink.deleteMany({ where: { businessOwnerType: OWNER_TYPE } });
-      await prisma.platformFileLink.deleteMany({ where: { createdBy: CREATED_BY } });
-      await prisma.platformFile.deleteMany({ where: { createdBy: CREATED_BY } });
-    } finally {
-      for (const [table, trigger] of guarded) {
-        await prisma.$executeRawUnsafe(`ALTER TABLE "${table}" ENABLE TRIGGER "${trigger}"`);
-      }
-      await prisma.$executeRawUnsafe(`SELECT pg_advisory_unlock(${PLATFORM_FILE_TRIGGER_LOCK})`);
-    }
+    // Khoa tu van MUC GIAO DICH, moi lenh trong CUNG mot giao dich (cung ly do voi
+    // `waiting-delivery-accepted.int.spec.ts`): khoa muc phien qua pool Prisma co the nha tren
+    // mot ket noi khac ("you don't own a lock"), ro lai va chan buoc don cua moi tep dung chung so.
+    await prisma.$transaction(
+      async (tx) => {
+        await tx.$executeRawUnsafe(`SELECT pg_advisory_xact_lock(${PLATFORM_FILE_TRIGGER_LOCK})`);
+        for (const [table, trigger] of guarded) {
+          await tx.$executeRawUnsafe(`ALTER TABLE "${table}" DISABLE TRIGGER "${trigger}"`);
+        }
+        await tx.platformFileLink.deleteMany({ where: { businessOwnerType: OWNER_TYPE } });
+        await tx.platformFileLink.deleteMany({ where: { createdBy: CREATED_BY } });
+        await tx.platformFile.deleteMany({ where: { createdBy: CREATED_BY } });
+        for (const [table, trigger] of guarded) {
+          await tx.$executeRawUnsafe(`ALTER TABLE "${table}" ENABLE TRIGGER "${trigger}"`);
+        }
+      },
+      { maxWait: 10_000, timeout: 45_000 },
+    );
   };
 
   beforeAll(async () => {
