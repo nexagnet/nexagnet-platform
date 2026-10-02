@@ -127,8 +127,22 @@ const replayed = await allowances.decide({
   note: 'Cat theo muc thoa thuan', idempotencyKey: 'k-1', authUserId: 'boot-boss',
 });
 
+// Bai boot nay chung minh CAU NOI, khong duoc phu thuoc vao thang ma CI dang chay.
+// Production co y dong businessDate cua allowance theo luc de nghi; test phai mo ky KHOP voi
+// chinh fact vua tao, thay vi hard-code thang 09/2026 va bien thanh time-bomb khi qua thang.
+const allowanceDate = approved.businessDate;
+const previousDate = new Date(allowanceDate + 'T00:00:00.000Z');
+previousDate.setUTCDate(previousDate.getUTCDate() - 1);
+const outsideDate = previousDate.toISOString().slice(0, 10);
+
+const outsidePeriod = await payroll.openPeriod({
+  label: 'Ky ngoai allowance', startDate: outsideDate, endDate: outsideDate, createdBy: 'boot',
+});
+const outsideRun = await payroll.runPayroll({ periodId: outsidePeriod.id, runBy: 'boot' });
+const outsideDetail = await payrollRead.payslipDetail(outsideRun.payslips[0].id);
+
 const period = await payroll.openPeriod({
-  label: 'Ky boot', startDate: '2026-09-01', endDate: '2026-09-30', createdBy: 'boot',
+  label: 'Ky boot', startDate: allowanceDate, endDate: allowanceDate, createdBy: 'boot',
 });
 const runOutcome = await payroll.runPayroll({ periodId: period.id, runBy: 'boot' });
 const detail = await payrollRead.payslipDetail(runOutcome.payslips[0].id);
@@ -140,6 +154,9 @@ const proof = {
   missingInputs: [...runOutcome.run.missingInputs].sort(),
   selfApprovalReason,
   selfProposalReason,
+  outsidePeriodAllowanceComponents: outsideDetail.components
+    .filter((component) => component.source === 'WAITING_ALLOWANCE')
+    .map((component) => component.amount),
   allowanceComponents: detail.components
     .filter((component) => component.source === 'WAITING_ALLOWANCE')
     .map((component) => ({
@@ -192,6 +209,8 @@ describe('transport waiting allowance process boot contract', () => {
         /* Lai xe khong tu duyet duoc, va phep kiem la DANH TINH chu khong phai vai. */
         selfApprovalReason: 'WAITING_ALLOWANCE_SELF_DEALING',
         selfProposalReason: 'WAITING_ALLOWANCE_SELF_DEALING',
+        /* Ngoai ky thi KHONG duoc an nham allowance. */
+        outsidePeriodAllowanceComponents: [],
         /* DUNG MOT dong, va so tien la so NGUOI DUYET chot — khong phai so de nghi. */
         allowanceComponents: [
           {
