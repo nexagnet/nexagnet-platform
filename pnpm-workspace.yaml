@@ -16,7 +16,23 @@ overrides:
   '@tiptap/pm': 2.27.2
   '@hono/node-server': 2.0.12
   '@remix-run/router': 1.23.2
-  'brace-expansion@>=2.0.0 <3.0.0': 2.1.4
+  # GHSA-qhr7-859c-m2p7 · GHSA-6j4f-fj2g-mc7p (HIGH, 10/2026) — brace-expansion: DoS do de quy khong
+  # chan, va CA BA dong major dang co trong cay deu dinh: 1.1.18 (eslint > minimatch@3), 2.1.4 va
+  # 5.0.9 (@vitest/coverage-v8 > test-exclude > glob/minimatch). Khong goi nao khai truc tiep.
+  #
+  # Ban cu ghim CHINH XAC `2.1.4` cho ca dai 2.x — chinh cai ghim cung do giu repo o ban dinh loi.
+  # Doi sang SAN theo TUNG major, cung khuon `fast-uri`/`js-yaml` ben duoi: selector chi bat dung
+  # major do, gia tri nang san len ban va nhung KHONG cho vuot tran major (consumer khai ^1/^2/^5).
+  'brace-expansion@<2': '>=1.1.20 <2'
+  'brace-expansion@>=2.0.0 <3.0.0': '>=2.1.6 <3'
+  'brace-expansion@>=5.0.0 <6': '>=5.0.11 <6'
+  # 7 advisory HIGH cua axios (GHSA-c29m-xwm3-cm6r, -mghh-pgcx-3jjj, -x97p-jq2g-jp4f, -3pq3-5fj3-cg6v,
+  # -542g-h47m-68v8, -m8m8-qj5v-23w3, -r4gj-5m52-g5wh) — ca bay vao qua DUY NHAT apps/api >
+  # @hatchet-dev/typescript-sdk > axios (1.18.1, san va 1.20.0). Hatchet khai axios ^1, nen `<2`.
+  axios: '>=1.20.0 <2'
+  # GHSA-m9gg-hp2v-232j (HIGH) — @grpc/grpc-js 1.14.4 qua apps/api > @hatchet-dev/typescript-sdk.
+  # Ban va 1.14.5 cung dong 1.x ma Hatchet/nice-grpc khai.
+  '@grpc/grpc-js': '>=1.14.5 <2'
   # GHSA-5jgf-p345-68v8 · GHSA-f65p-4m7j-42xc · GHSA-fph4-wmhf-6fwf · GHSA-jqff-g426-hqxp —
   # bon advisory HIGH cua fast-uri, ca bon vao repo qua DUY NHAT mot duong bac cau:
   # apps/api -> @modelcontextprotocol/sdk -> ajv@8 -> fast-uri. Khong goi nao trong workspace
