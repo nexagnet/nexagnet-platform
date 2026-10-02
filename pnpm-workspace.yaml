@@ -16,7 +16,14 @@ overrides:
   '@tiptap/pm': 2.27.2
   '@hono/node-server': 2.0.12
   '@remix-run/router': 1.23.2
-  'brace-expansion@>=2.0.0 <3.0.0': 2.1.4
+  # Oct-2026 HIGH recursion advisories: pin each vulnerable major to its patched maintenance line.
+  'brace-expansion@>=1.0.0 <1.1.20': 1.1.21
+  'brace-expansion@>=2.0.0 <2.1.6': 2.1.7
+  'brace-expansion@>=4.0.0 <5.0.11': 5.0.12
+  # Hatchet/AdminJS resolve Axios 1.x; keep the major, lift the security floor only.
+  axios: '>=1.20.0 <2'
+  # Hatchet/nice-grpc stay on grpc-js 1.x; 1.14.5 contains the current HIGH fix.
+  '@grpc/grpc-js': '>=1.14.5 <2'
   # GHSA-5jgf-p345-68v8 · GHSA-f65p-4m7j-42xc · GHSA-fph4-wmhf-6fwf · GHSA-jqff-g426-hqxp —
   # bon advisory HIGH cua fast-uri, ca bon vao repo qua DUY NHAT mot duong bac cau:
   # apps/api -> @modelcontextprotocol/sdk -> ajv@8 -> fast-uri. Khong goi nao trong workspace
