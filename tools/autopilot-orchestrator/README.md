@@ -1,5 +1,10 @@
 # Orchestrator V0 — read-only
 
+> ⚠️ **DEPRECATED — Autopilot V3 ([#361](https://github.com/phungtienviet14-sketch/nexagnet-platform/issues/361)).**
+> Không mở rộng mã này. Đường đang triển khai: [autopilot-v3-cloud-builder.md](../../docs/phat-trien/van-hanh/autopilot-v3-cloud-builder.md).
+> Mã giữ nguyên trên `main` cho tới Phase D (xoá sau khi đường thay thế được chứng minh).
+
+
 Chạy [Giao thức Autopilot V0](../../docs/phat-trien/van-hanh/autopilot-protocol-v0.md) trên **sự
 kiện GitHub thật**. Hợp đồng task: Issue #165.
 

@@ -1,5 +1,10 @@
 # @netviet/autopilot-protocol — Giao thuc Autopilot V0
 
+> ⚠️ **DEPRECATED — Autopilot V3 ([#361](https://github.com/phungtienviet14-sketch/nexagnet-platform/issues/361)).**
+> Không mở rộng mã này. Đường đang triển khai: [autopilot-v3-cloud-builder.md](../../docs/phat-trien/van-hanh/autopilot-v3-cloud-builder.md).
+> Mã giữ nguyên trên `main` cho tới Phase D (xoá sau khi đường thay thế được chứng minh).
+
+
 Ban MAY DOC cua giao thuc ChatGPT <-> GitHub <-> Claude: JSON Schema, may trang thai, cong nghiep
 vu, khoa idempotency, va mot CLI tat dinh. Ban NGUOI DOC (canonical):
 [`docs/phat-trien/van-hanh/autopilot-protocol-v0.md`](../../docs/phat-trien/van-hanh/autopilot-protocol-v0.md).

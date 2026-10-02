@@ -4,6 +4,10 @@
 
 # ADR-0001 — Mặt phẳng điều khiển Autopilot: official-first
 
+> ⚠️ **22/09/2026 — phần "mặt phẳng thực thi = gh-aw" bị thay bởi
+> [ADR-0002](adr-0002-autopilot-v3-github-native.md) (#361, #362).** Nguyên tắc "trạng thái nghiệp vụ =
+> trạng thái GitHub gốc" vẫn giữ. Tệp này và pilot `agent-builder` ở lại làm lịch sử cho tới Phase D.
+
 | | |
 |---|---|
 | **Trạng thái** | **ĐÃ CHẤP NHẬN** — PR [#310](https://github.com/phungtienviet14-sketch/nexagnet-platform/pull/310) qua review độc lập và merge vào `main` thành `86d106e527043dbd0df3d4b93789fa202e77d608`. Cổng §14 của [#309](https://github.com/phungtienviet14-sketch/nexagnet-platform/issues/309) **đã qua** |

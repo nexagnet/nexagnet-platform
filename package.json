@@ -13,9 +13,10 @@
   "packageManager": "pnpm@10.34.4",
   "scripts": {
     "build": "pnpm -r build",
-    "test": "pnpm --filter \"@netviet/tenant...\" build && pnpm -r test && pnpm test:source-manifest && pnpm test:customer-sources && pnpm test:deploy-routes && pnpm test:deploy-contracts && pnpm test:git-hooks",
+    "test": "pnpm --filter \"@netviet/tenant...\" build && pnpm -r test && pnpm test:source-manifest && pnpm test:customer-sources && pnpm test:deploy-routes && pnpm test:deploy-contracts && pnpm test:git-hooks && pnpm test:autopilot-v3",
     "hooks:install": "node tools/git-hooks/install.mjs",
     "test:git-hooks": "node --test tools/git-hooks/pre-push.test.mjs",
+    "test:autopilot-v3": "node --test tools/autopilot-v3/gate.test.mjs tools/autopilot-v3/claude-builder.contract.test.mjs",
     "gen:source-manifest": "node tools/source-manifest/generate.mjs",
     "test:source-manifest": "node --test tools/source-manifest/manifest.test.mjs",
     "test:customer-sources": "node --test tools/customer-source-guardrail/guardrail.test.mjs",

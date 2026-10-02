@@ -4,6 +4,12 @@
 
 # Autopilot V2 — official-first: kiểm kê, đo lại nguồn chính thức, kiến trúc đích, kế hoạch xoá
 
+> ⚠️ **22/09/2026 — hướng thực thi V2 (gh-aw làm nền bắt buộc) bị thay bởi Autopilot V3**
+> ([#361](https://github.com/phungtienviet14-sketch/nexagnet-platform/issues/361),
+> [ADR-0002](../../kien-truc/adr-0002-autopilot-v3-github-native.md)). Đường đang triển khai:
+> [autopilot-v3-cloud-builder.md](autopilot-v3-cloud-builder.md). Tài liệu này giữ làm bằng chứng lịch sử;
+> không mở rộng pilot `agent-builder`.
+
 > Ngày đo lần đầu: **15/09/2026** · `main` lúc đo: `de30a0825572684ce2c524058f94a4bd79e07668`
 > **Đo lại: 16/09/2026** · `main` lúc đo lại: `86d106e527043dbd0df3d4b93789fa202e77d608` — xem §0
 > Hợp đồng task: [#309](https://github.com/phungtienviet14-sketch/nexagnet-platform/issues/309) → activation: [#311](https://github.com/phungtienviet14-sketch/nexagnet-platform/issues/311)
