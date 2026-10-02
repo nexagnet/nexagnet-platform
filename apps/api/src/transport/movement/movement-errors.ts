@@ -11,6 +11,12 @@ export const TRANSPORT_MOVEMENT_ERROR_REASONS = [
   'ORDER_NOT_FOUND',
   'ORDER_CODE_TAKEN',
   'ORDER_CUSTOMER_NOT_FOUND',
+  /**
+   * #379: toa do diem lay / diem giao bi `parseGeoPoint` tu choi (ngoai khoang, khong huu han, hoac
+   * (0, 0) -- dau hieu dinh vi CHUA CO). Hai ma rieng de giao dien chi dung o sai.
+   */
+  'ORDER_ORIGIN_POINT_INVALID',
+  'ORDER_DESTINATION_POINT_INVALID',
   'RUN_NOT_FOUND',
   'RUN_CODE_TAKEN',
   'RUN_VEHICLE_NOT_FOUND',

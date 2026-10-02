@@ -22,6 +22,16 @@ import { resolve } from 'node:path';
  */
 const TRANSPORT_TENANT_DIR = resolve(__dirname, '../../tenants/transport-preview');
 
+/**
+ * NEN BAN DO CUA BO E2E — CUC BO, tru khi nguoi chay CO Y chon khac (#374).
+ *
+ * Nen mac dinh cua san pham la OpenFreeMap (goi Internet). CI bat buoc khong duoc phu thuoc mang
+ * ngoai, nen may chu e2e khai tuong minh `local`. Chay tay khoi `@openfreemap-basemap` hay
+ * `@google-basemap` thi dat bien nay truoc lenh (xem `docs/phat-trien/van-hanh/ban-do-nen.md` §5).
+ * Chuoi rong cung la `local` — mot bien rong khong duoc lang le mo duong ra Internet.
+ */
+const MAP_PROVIDER = process.env.NEXT_PUBLIC_TRANSPORT_MAP_PROVIDER?.trim() || 'local';
+
 export default defineConfig({
   testDir: './e2e/transport',
   fullyParallel: false,
@@ -38,6 +48,11 @@ export default defineConfig({
     reuseExistingServer: false,
     timeout: 120_000,
     // `NEXT_PUBLIC_API_URL=''` lam moi loi goi API thanh duong TUONG DOI, nen `page.route` chan duoc.
-    env: { ...process.env, TENANT_DIR: TRANSPORT_TENANT_DIR, NEXT_PUBLIC_API_URL: '' },
+    env: {
+      ...process.env,
+      TENANT_DIR: TRANSPORT_TENANT_DIR,
+      NEXT_PUBLIC_API_URL: '',
+      NEXT_PUBLIC_TRANSPORT_MAP_PROVIDER: MAP_PROVIDER,
+    },
   },
 });

@@ -8,9 +8,15 @@ import {
   type TransportPlanningDecisionReason,
 } from './planning-decisions.js';
 import {
+  DepotDirectoryHub,
+  readDepots,
+  type DepotDirectory,
+  type DepotEntry,
+} from './depot-directory.js';
+import {
   TRANSPORT_PLANNING_POLICY,
   RUN_CLOSURE_EVENT_BACKSTOP_MS,
-  resolveDepot,
+  resolveDepotFrom,
   usableDepot,
 } from './planning-policy.js';
 import { PlanningService, type RunClosureOutcome } from './planning.service.js';
@@ -71,6 +77,11 @@ export class RunClosureService {
     @Optional() private readonly blockerSource?: RunClosureBlockerSource,
     @Optional() private readonly telemetry?: TelemetryService,
     @Optional() @Inject(TRANSPORT_CLOCK) private readonly clock?: () => Date,
+    /*
+     * DANH BA BAI XE (`#395`) — cuoi va tuy chon, cung ly le voi `PlanningService`: vang mat thi doc
+     * cau hinh goi khach. Luot quet doc no MOT lan va truyen cho moi ung vien.
+     */
+    @Optional() @Inject(DepotDirectoryHub) private readonly depots?: DepotDirectory,
   ) {}
 
   /**
@@ -80,10 +91,23 @@ export class RunClosureService {
    * lai roi chuyen tiep.
    */
   async attempt(runId: string, cause: RunClosureCause): Promise<RunClosureOutcome> {
+    return this.attemptWith(runId, cause, undefined);
+  }
+
+  /**
+   * `attempt()` voi danh ba bai xe DA DOC (luot quet). `undefined` = de `PlanningService` tu doc —
+   * van mot lan, truoc khoa hang vong chay.
+   */
+  private async attemptWith(
+    runId: string,
+    cause: RunClosureCause,
+    depots: readonly DepotEntry[] | undefined,
+  ): Promise<RunClosureOutcome> {
     const blockers = await collectBlockers(this.blockerSource, runId);
     return this.planning.settleRunClosure(runId, {
       blockers,
       cause,
+      ...(depots === undefined ? {} : { depots }),
       /*
        * HOI LAI tren duong da khoa — `#293` R2.
        *
@@ -158,16 +182,19 @@ export class RunClosureService {
         : Math.min(idleHours * HOUR_MS, RUN_CLOSURE_EVENT_BACKSTOP_MS);
     const completedBefore = new Date(now.getTime() - windowMs);
 
+    // MOT lan doc danh ba bai xe cho ca luot quet (`#395`): ung vien va moi lan phan xu nhin CUNG
+    // mot bai, va khong lan phan xu nao doc kho hang rao trong luc giu khoa hang vong chay.
+    const depots = await readDepots(this.depots, this.policy);
     const candidates = await this.movement.listRunClosureCandidates({
       completedBefore,
       idleHours,
-      depotLabel: usableDepot(resolveDepot(this.policy))?.label ?? null,
+      depotLabel: usableDepot(resolveDepotFrom(depots))?.label ?? null,
       limit: this.policy.sweep.batchSize,
     });
 
     let closed = 0;
     for (const candidate of candidates) {
-      if (await this.settleCandidate(candidate)) closed += 1;
+      if (await this.settleCandidate(candidate, depots)) closed += 1;
     }
 
     this.decide(
@@ -192,9 +219,12 @@ export class RunClosureService {
    * nao thi khong de lai dau vet nao — va khi do mot luot quet hong hoan toan giong y mot luot
    * quet sach khong co gi de lam. Nen no phai duoc ghi ra log: day la cho duy nhat phan biet duoc.
    */
-  private async settleCandidate(candidate: VehicleRun): Promise<boolean> {
+  private async settleCandidate(
+    candidate: VehicleRun,
+    depots: readonly DepotEntry[],
+  ): Promise<boolean> {
     try {
-      const outcome = await this.attempt(candidate.id, 'IDLE_SWEEP');
+      const outcome = await this.attemptWith(candidate.id, 'IDLE_SWEEP', depots);
       return outcome.closed;
     } catch (error) {
       this.logger.error(

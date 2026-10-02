@@ -2,9 +2,11 @@ import { Injectable } from '@nestjs/common';
 import { DriverSettlementReadService } from '../driver-settlement/driver-settlement-read.service.js';
 import { SettlementReadService } from '../settlement/settlement-read.service.js';
 import { TripRepository } from '../trips/trip.repository.js';
+import { TransportDomainError } from '../transport.errors.js';
 import type { BusinessDate } from '../business-date.js';
-import type { DirectMarginRollup } from '../settlement/direct-margin.js';
+import type { DirectMargin } from '../settlement/direct-margin.js';
 import type { SettlementFlow } from '../settlement/settlement-flows.js';
+import type { LegacyTripMarginInput } from './company-margin.js';
 import type { DriverBalanceRow, PayableRow, ReceivableSummary } from './finance-summary.js';
 
 /**
@@ -20,8 +22,11 @@ export abstract class FinanceSettlementFacts {
   abstract receivable(asOf: BusinessDate): Promise<ReceivableSummary>;
   /** Hang phai tra cua MOT dong tien. `GD-15` cam mot bien the "tat ca dong tien". */
   abstract payable(flow: SettlementFlow): Promise<readonly PayableRow[]>;
-  /** Bien truc tiep cong don. Mang san `fixedCostsIncluded: false` + cau cong bo. */
-  abstract directMargin(): Promise<DirectMarginRollup>;
+  /**
+   * Bien truc tiep `TX-05` cua TUNG chuyen cu, kem nhan cua chuyen. Phep gop voi viec Run-first nam
+   * o `company-margin.ts` — cong nay chi doc (`#385`).
+   */
+  abstract tripMargins(): Promise<readonly Omit<LegacyTripMarginInput, 'runFirstFuelCost'>[]>;
   /** Ma tien da nhin thay o cac hang phai thu — de phat hien du lieu nhieu dong tien. */
   abstract receivableCurrencies(asOf: BusinessDate): Promise<readonly string[]>;
 }
@@ -54,17 +59,45 @@ export class FinanceSettlementFactsAdapter extends FinanceSettlementFacts {
   }
 
   /**
-   * CONG DON tren MOI chuyen dang co.
+   * Bien TUNG chuyen dang co — CHUYEN CU thoi. Viec Run-first den qua `FinanceRunFirstFacts` (`#385`).
    *
-   * GIOI HAN da biet, ghi ra thay vi giau: `directMarginRollup` doc bien cua tung chuyen, nen day
-   * la mot phep doc theo so chuyen. Mien nay chua co duong truy van theo khoang ngay
-   * (`DocumentQuery` khong co truong ngay — `settlement.repository.ts:112-119`), nen mot bang
-   * "bien truc tiep thang nay" chua dung duoc. Khi co duong do, doi cho nay chu khong doi hinh
-   * dang du lieu: `directMarginRollup` da nhan mot danh sach `tripId` bat ky.
+   * GIOI HAN da biet, ghi ra thay vi giau: day la mot phep doc theo so chuyen. Mien nay chua co
+   * duong truy van theo khoang ngay (`DocumentQuery` khong co truong ngay —
+   * `settlement.repository.ts:112-119`), nen mot bang "bien truc tiep thang nay" chua dung duoc.
    */
-  async directMargin(): Promise<DirectMarginRollup> {
+  async tripMargins(): Promise<readonly Omit<LegacyTripMarginInput, 'runFirstFuelCost'>[]> {
     const trips = await this.trips.list();
-    return this.settlement.directMarginRollup(trips.map((trip) => trip.id));
+    const rows: Omit<LegacyTripMarginInput, 'runFirstFuelCost'>[] = [];
+    for (const trip of trips) {
+      const margin = await this.marginOf(trip.id);
+      if (!margin) continue;
+      rows.push({
+        trip: {
+          id: trip.id,
+          code: trip.code,
+          kind: trip.kind,
+          businessDate: trip.businessDate,
+          originLabel: trip.originLabel,
+          destinationLabel: trip.destinationLabel,
+          customerId: trip.customerId,
+        },
+        margin,
+      });
+    }
+    return rows;
+  }
+
+  /**
+   * Chuyen BIEN MAT giua luc liet ke va luc doc bien (xoa o moi truong thu, hoac mot lan don du lieu)
+   * la chuyen khong con — bo qua no, KHONG lam hong ca bang. Moi loi khac van nem ra nguyen ven.
+   */
+  private async marginOf(tripId: string): Promise<DirectMargin | null> {
+    try {
+      return await this.settlement.tripDirectMargin(tripId);
+    } catch (error) {
+      if (error instanceof TransportDomainError && error.kind === 'NOT_FOUND') return null;
+      throw error;
+    }
   }
 }
 

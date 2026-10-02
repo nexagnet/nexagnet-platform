@@ -12,6 +12,8 @@
  * `transport.types.ts`.
  */
 
+import type { GeoPoint } from '../geo/geo-point.js';
+
 export const ORDER_STATUSES = ['OPEN', 'FULFILLED', 'CANCELLED'] as const;
 export type OrderStatus = (typeof ORDER_STATUSES)[number];
 
@@ -36,8 +38,17 @@ export interface Order {
   readonly status: OrderStatus;
   readonly businessDate: string;
   readonly customerId: string | null;
+  /** Nhan de HIEN THI. Khong phai su that ve vi tri -- xem `originPoint`. */
   readonly originLabel: string;
   readonly destinationLabel: string;
+  /**
+   * DIEM LAY / DIEM GIAO THAT (#379), WGS84. Day moi la su that ve vi tri; nhan o tren chi de
+   * nguoi doc. `null` KHI VA CHI KHI don khong duoc tao qua duong co toa do: don cu truoc #379,
+   * don chieu tu chuyen v1, don seed mau. He thong KHONG BAO GIO bia hay geocode nhan cu thanh
+   * toa do -- mot toa do doan sai con te hon khong co, vi dieu xe se tin no.
+   */
+  readonly originPoint: GeoPoint | null;
+  readonly destinationPoint: GeoPoint | null;
   readonly cargoDescription: string | null;
   /** DOANH THU -- so nguyen dong. `null` = chua bao gia. */
   readonly freightAmount: number | null;

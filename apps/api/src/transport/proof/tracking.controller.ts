@@ -1,11 +1,10 @@
 import { Controller, Get, Param, Req, UseGuards } from '@nestjs/common';
 import { Roles } from '../../auth/roles.decorator.js';
 import type { AuthenticatedRequest } from '../../auth/session.types.js';
-import { loadFoundationEnv } from '../../config/foundation-env.js';
-import { roleCanPerform } from '../transport-actions.js';
 import {
   RequiresTransportAction,
   TransportActionGuard,
+  requestCanPerform,
   transportErrorToHttp,
 } from '../transport-action.guard.js';
 import { transportActorOf } from '../transport-actor.js';
@@ -91,11 +90,11 @@ export class TrackingController {
    * Cung dieu kien mo dau voi `TransportActionGuard`: o che do khong-phien thi khong co danh tinh
    * nao de hoi va toan bo ung dung von khong xac thuc. Lech dieu kien voi cong kia se tao ra mot
    * che do chay ma mot nua so cong mo mot nua dong.
+   *
+   * `#395`: tap quyen HIEU LUC (vai khoi diem + quyen rieng) — xem `requestCanPerform`.
    */
   private canReadCoordinates(request: AuthenticatedRequest): boolean {
-    if (loadFoundationEnv().AUTH_MODE !== 'session') return true;
-    const role = request.authUser?.role;
-    return role !== undefined && roleCanPerform(role, 'transport.location.history.read');
+    return requestCanPerform(request, 'transport.location.history.read');
   }
 
   private async guard<T>(run: () => Promise<T>): Promise<T> {

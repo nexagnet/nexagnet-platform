@@ -1,4 +1,3 @@
-import type { AuthRole } from '../../../lib/auth';
 import {
   FUEL_DISCREPANCY_KIND_LABEL,
   FUEL_DISCREPANCY_RESOLUTION_LABEL,
@@ -21,7 +20,7 @@ import {
   rejectReasonLabel,
   type StatusTone,
 } from '../customer-view';
-import { canPerform } from '../transport-actions';
+import { canPerform, type TransportViewerInput } from '../transport-actions';
 import type { DeclaredFuelFacts } from './fuel-extraction';
 import { REVISABLE_FUEL_RESOLUTIONS, type RevisableFuelResolution } from '../transport-types';
 import type {
@@ -32,6 +31,7 @@ import type {
   FuelEntryInboxPage,
   FuelEntryInboxRow,
   FuelInboxEvidenceRef,
+  FuelPaymentMethod,
   FuelReconciliation,
   FuelReconciliationStatus,
   FuelReconciliationWorkspace,
@@ -75,6 +75,8 @@ export interface FuelEntryRow {
   readonly reviewReasons: readonly string[];
   readonly invoiceNo: string | null;
   readonly canVerify: boolean;
+  /** Cau cua hop xac nhan "Xác thực" — xem `verifyConsequence`. */
+  readonly verifyConsequence: string;
   readonly canReject: boolean;
   readonly canAmend: boolean;
   /** Ly do khong sua duoc — HAI ly do khac nhau, doi hai viec khac nhau cua nguoi dung. */
@@ -109,10 +111,10 @@ const amendBlockedReason = (entry: FuelEntry): string | null => {
 export const toFuelEntryRow = (
   entry: FuelEntry,
   suppliers: ReadonlyMap<string, string>,
-  role: AuthRole | null,
+  viewer: TransportViewerInput,
 ): FuelEntryRow => {
   const blocked = amendBlockedReason(entry);
-  const mayVerify = canPerform(role, 'transport.fuel.entry.verify');
+  const mayVerify = canPerform(viewer, 'transport.fuel.entry.verify');
   return {
     id: entry.id,
     businessDateLabel: formatBusinessDate(entry.businessDate),
@@ -132,6 +134,7 @@ export const toFuelEntryRow = (
     invoiceNo: entry.invoiceNo,
     // `verify` goi lai duoc nhieu lan theo thiet ke, nhung chi co nghia khi con `DECLARED`.
     canVerify: mayVerify && entry.verificationStatus === 'DECLARED',
+    verifyConsequence: verifyConsequence(entry),
     canReject: mayVerify && entry.verificationStatus === 'DECLARED',
     canAmend: mayVerify && blocked === null,
     amendBlockedReason: blocked,
@@ -147,10 +150,10 @@ export const toFuelEntryRow = (
 export const toFuelEntryRows = (
   entries: readonly FuelEntry[],
   suppliers: readonly FuelSupplier[],
-  role: AuthRole | null,
+  viewer: TransportViewerInput,
 ): readonly FuelEntryRow[] => {
   const index = new Map(suppliers.map((row) => [row.id, row.name]));
-  return entries.map((entry) => toFuelEntryRow(entry, index, role));
+  return entries.map((entry) => toFuelEntryRow(entry, index, viewer));
 };
 
 /* ------------------------------------------------------------------ *
@@ -192,9 +195,36 @@ export interface FuelInboxRowModel {
   readonly evidenceCountLabel: string;
   readonly evidence: readonly FuelInboxEvidenceRef[];
   readonly canVerify: boolean;
+  /** Cau cua hop xac nhan "Xác thực" — xem `verifyConsequence`. */
+  readonly verifyConsequence: string;
   readonly canReject: boolean;
   readonly canResubmit: boolean;
 }
+
+/**
+ * HAU QUA cua lan XAC THUC, noi truoc khi bam — theo CACH TRA, vi hai cach tra dan tien di hai ngả.
+ *
+ * `DRIVER_CASH` tru quy lai xe NGAY luc duyet (chuyen cu qua `TX-03`, viec duoc dieu qua mot but toan
+ * `RUN_EXPENSE`, `#369` R-4) va KHONG BAO GIO vao cong no cay xang. Cau cu "vao ky doi soat bang ke"
+ * dung cho phieu ghi no, nhung noi sai voi phieu tien mat (`#385`).
+ */
+export const verifyConsequence = (entry: {
+  readonly paymentMethod: FuelPaymentMethod;
+  readonly amount: number;
+  readonly tripId: string | null;
+}): string => {
+  if (entry.paymentMethod === 'SUPPLIER_ACCOUNT') {
+    return 'Sau khi xác thực, phiếu vào được kỳ đối soát bảng kê; công nợ cây xăng chỉ ghi khi chốt kỳ.';
+  }
+  const cost =
+    entry.tripId === null
+      ? 'Giá thành của phiếu được phân bổ sau ở mục Giá thành nhiên liệu.'
+      : 'Khoản này đồng thời vào chi phí của chuyến.';
+  return (
+    `Sau khi xác thực, ${formatMoney(entry.amount)} trừ vào quỹ lái xe (lái xe đã trả tiền mặt) — ` +
+    `không vào công nợ cây xăng. ${cost}`
+  );
+};
 
 /**
  * NGU CANH CUA MOT PHIEU o dang chu — `#364`. Mot ham cho hop thu ke toan VA danh sach phieu lai xe.
@@ -230,9 +260,9 @@ export const fuelContextLabel = (context: {
  */
 export const toFuelInboxRow = (
   row: FuelEntryInboxRow,
-  role: AuthRole | null,
+  viewer: TransportViewerInput,
 ): FuelInboxRowModel => {
-  const mayVerify = canPerform(role, 'transport.fuel.entry.verify');
+  const mayVerify = canPerform(viewer, 'transport.fuel.entry.verify');
   return {
     id: row.id,
     vehicleId: row.vehicleId,
@@ -270,6 +300,7 @@ export const toFuelInboxRow = (
     evidenceCountLabel: formatCount(row.evidenceCount),
     evidence: row.evidence,
     canVerify: mayVerify && row.verificationStatus === 'DECLARED',
+    verifyConsequence: verifyConsequence(row),
     canReject: mayVerify && row.verificationStatus === 'DECLARED',
     canResubmit: mayVerify && row.verificationStatus === 'REJECTED',
   };
@@ -294,12 +325,12 @@ export interface FuelInboxModel {
  */
 export const toFuelInboxModel = (
   page: FuelEntryInboxPage,
-  role: AuthRole | null,
+  viewer: TransportViewerInput,
 ): FuelInboxModel => {
   const first = page.total === 0 ? 0 : page.offset + 1;
   const last = Math.min(page.offset + page.rows.length, page.total);
   return {
-    rows: page.rows.map((row) => toFuelInboxRow(row, role)),
+    rows: page.rows.map((row) => toFuelInboxRow(row, viewer)),
     pendingLabel:
       page.pendingVerificationCount === 0
         ? 'Không còn phiếu nào chờ xác thực'
@@ -474,11 +505,11 @@ export interface DiscrepancyRow {
 
 export const toDiscrepancyRows = (
   discrepancies: readonly FuelDiscrepancy[],
-  role: AuthRole | null,
+  viewer: TransportViewerInput,
   isFrozen: boolean,
   supersededIds: readonly string[],
 ): readonly DiscrepancyRow[] => {
-  const mayResolve = canPerform(role, 'transport.fuel.reconciliation.resolve');
+  const mayResolve = canPerform(viewer, 'transport.fuel.reconciliation.resolve');
   const superseded = new Set(supersededIds);
   return discrepancies.map((row) => {
     const isSuperseded = superseded.has(row.id);
@@ -554,7 +585,7 @@ export interface ReconciliationWorkspaceModel {
  */
 export const toReconciliationWorkspace = (
   workspace: FuelReconciliationWorkspace,
-  role: AuthRole | null,
+  viewer: TransportViewerInput,
 ): ReconciliationWorkspaceModel => {
   const isFrozen = workspace.reconciliation.state === 'CLOSED';
   const pending = workspace.pendingDiscrepancyCount;
@@ -571,16 +602,17 @@ export const toReconciliationWorkspace = (
     lineRows: toStatementLineRows(workspace.lines),
     discrepancyRows: toDiscrepancyRows(
       workspace.discrepancies,
-      role,
+      viewer,
       isFrozen,
       workspace.supersededDiscrepancyIds,
     ),
     matchedCountLabel: formatCount(workspace.matches.length),
     pendingCountLabel: formatCount(pending),
     isFrozen,
-    canRunMatching: canPerform(role, 'transport.fuel.reconciliation.match') && !isFrozen,
-    canClose: canPerform(role, 'transport.fuel.reconciliation.close') && !isFrozen && pending === 0,
-    canReopen: canPerform(role, 'transport.fuel.reconciliation.reopen') && isFrozen,
+    canRunMatching: canPerform(viewer, 'transport.fuel.reconciliation.match') && !isFrozen,
+    canClose:
+      canPerform(viewer, 'transport.fuel.reconciliation.close') && !isFrozen && pending === 0,
+    canReopen: canPerform(viewer, 'transport.fuel.reconciliation.reopen') && isFrozen,
     closeBlockedReason:
       pending > 0
         ? `Còn ${formatCount(pending)} chênh lệch chưa có quyết định. Đóng kỳ chỉ được khi mọi chênh lệch đã xử lý.`

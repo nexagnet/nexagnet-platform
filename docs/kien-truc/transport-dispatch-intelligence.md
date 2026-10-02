@@ -3,6 +3,10 @@
 > Lane M của [#277](https://github.com/phungtienviet14-sketch/nexagnet-platform/issues/277) ·
 > điều phối [#274](https://github.com/phungtienviet14-sketch/nexagnet-platform/issues/274) ·
 > đo ngày **08/09/2026** trên `main = f5868144905d683c5c67ffce30f6d46810561717`.
+>
+> **As-built [#379](https://github.com/phungtienviet14-sketch/nexagnet-platform/issues/379)
+> (23/09/2026):** đơn hàng **mang toạ độ** điểm lấy/giao. `D-01` bên dưới đã viết lại; điểm lấy hàng
+> không còn được suy từ nhãn chữ.
 
 ## 0. Phán quyết một dòng
 
@@ -15,17 +19,54 @@ thật.** Không mua gì, không xin khoá nào, và không một dòng nghiệp
 
 ## 1. Ba điều đo được trước khi thiết kế
 
-### `D-01` — Đơn hàng **không mang toạ độ**
+### `D-01` — Đơn hàng **mang toạ độ**; nhãn chữ chỉ để hiển thị (#379)
 
-`TransportOrder` trên `main` có `originLabel`/`destinationLabel` là **chuỗi người gõ**. Không cột
-toạ độ, không hạn lấy hàng, không khối lượng hàng. Toạ độ trong hệ này chỉ sống ở **một** chỗ:
-`TransportGeofence` (`latitude`/`longitude`/`radiusMetres`), do người vận hành khai cho kho/bãi.
+Từ [#379](https://github.com/phungtienviet14-sketch/nexagnet-platform/issues/379), `TransportOrder`
+lưu toạ độ điểm lấy và điểm giao (`originPoint`/`destinationPoint`, bốn cột `DOUBLE PRECISION` có
+ràng buộc CHECK — xem [transport-domain-v2.md](transport-domain-v2.md) §12). Người nhập đơn chọn
+chúng trên bản đồ; `originLabel`/`destinationLabel` chỉ còn là chữ **hiển thị**. Đơn vẫn **không**
+mang hạn lấy hàng và khối lượng hàng.
 
-Hệ quả thiết kế (chứ không phải một thiếu sót cần vá): điểm lấy hàng phải **giải** ra từ cái tên
-(`place-resolution.ts`), khớp **khít** hoặc không khớp, và khi không giải được thì trả
-`DISPATCH_PICKUP_LOCATION_UNRESOLVED` chứ không đoán. Hạn lấy hàng và yêu cầu tải trọng đến từ
-**người gọi**; khi không ai khai, bước xếp hạng tương ứng bị **bỏ qua** chứ không chạy với một giá
-trị bịa.
+**Thứ tự giải điểm lấy hàng** (`pickup-resolution.ts`):
+
+| Thứ tự | Nguồn                                                            | Mã quyết định                                               |
+| ------ | ---------------------------------------------------------------- | ----------------------------------------------------------- |
+| 1      | Người gọi **chỉ định tường minh**: `POINT` / `SITE` / `GEOFENCE` | `PICKUP_FROM_EXPLICIT_REQUEST` — thắng cả toạ độ của đơn    |
+| 2      | Toạ độ điểm lấy **lưu trên đơn**                                 | `PICKUP_FROM_ORDER_COORDINATES`, nguồn `ORDER_PICKUP_POINT` |
+| 3      | Đơn cũ (toạ độ `NULL`) hoặc toạ độ hỏng                          | từ chối `DISPATCH_ORDER_PICKUP_COORDINATES_MISSING` (400)   |
+
+**Không còn bước suy từ nhãn.** Trước #379 có một bước giữa 2 và 3: khớp `originLabel` với tên một
+hàng rào. Bước đó đã bị gỡ có chủ ý — một nhãn trùng tên hàng rào là một sự trùng hợp chính tả,
+không phải một lần khảo sát, và một bảng xếp hạng dựa trên nó trông y hệt một bảng xếp hạng thật.
+Đơn cũ không bao giờ được geocode từ chữ thành toạ độ; muốn điều xe cho nó thì người điều xe chỉ
+định điểm lấy tường minh.
+
+Điểm lấy hàng từ toạ độ đơn **không phụ thuộc `transport-proof`**: khách không bật capability đó
+(không sổ hàng rào, không vị trí xe) vẫn giải được điểm lấy. Khi ấy:
+
+- xe **rảnh** (không còn chặng mở) bị loại `VEHICLE_HAS_NO_USABLE_ORIGIN` — không biết nó đang ở
+  đâu, và nó cũng không có việc nào cho biết nó sẽ rảnh ở đâu;
+- xe **bận** mà chặng mở cuối cùng kết thúc ở một đơn **có toạ độ** vẫn hiện ra với chế độ
+  `NEXT_FREE_NEAR`: điểm xuất phát là điểm giao của đơn đó (`ORDER_DELIVERY_POINT`), còn
+  `availableAt` là `null` (kèm khoảng trống `CURRENT_POSITION_UNKNOWN`) vì không biết xe đang ở
+  đâu thì không tính được giờ rảnh. Đây là hành vi **có chủ ý**: người điều xe thấy "xe này sẽ rảnh
+  ở gần đây, chưa biết lúc nào" thay vì mất hẳn chiếc xe khỏi bảng.
+
+**Điểm đến của chặng còn lại** (phép chiếu "xe sẽ rảnh ở đâu", `remaining-leg-plan.ts`): `RunLeg`
+**chưa** có cột toạ độ, nên:
+
+- chặng `LOADED` **cuối cùng** của một đơn trong việc còn lại của xe → điểm **giao** của đơn đó
+  (`ORDER_DELIVERY_POINT`);
+- chặng `EMPTY` đứng ngay trước (cùng vòng chạy, `sequence + 1`) chặng `LOADED` **đầu tiên** của
+  một đơn → điểm **lấy** của đơn kế tiếp (`ORDER_PICKUP_POINT`);
+- còn lại (chặng của đơn cũ, chặng rỗng về bãi, chặng không gắn đơn, chặng giữa của một đơn chạy
+  nhiều chặng có tải) → vẫn giải theo **nhãn chặng** bằng `place-resolution.ts` như trước. Đơn chỉ
+  ghi hai điểm; chặng giữa đi tới một chỗ (bãi trung chuyển) mà đơn không ghi. Đây là phép chiếu,
+  không phải suy điểm lấy của đơn đang điều.
+
+Mỗi đơn được đọc **đúng một lần** mỗi lượt đề nghị (bộ đệm theo lượt); ngân sách
+`maxProjectionRouteCalls` giữ nguyên nghĩa. Hạn lấy hàng và yêu cầu tải trọng vẫn đến từ **người
+gọi**; khi không ai khai, bước xếp hạng tương ứng bị **bỏ qua** chứ không chạy với một giá trị bịa.
 
 ### `D-02` — Xe **không có kích thước**
 
@@ -238,10 +279,11 @@ Một chiếc xe không tự nó là một con người, nhưng có **một** co
 
 ## 7. Cái tầng này chưa làm
 
-| Việc                                  | Vì sao chưa                                                                                |
-| ------------------------------------- | ------------------------------------------------------------------------------------------ |
-| Khớp vết GPS lên đường (`matchTrace`) | chưa báo cáo nào đòi; `#277 M10` chỉ yêu cầu **giữ rõ ranh giới** giữa vết thô và vết khớp |
-| Hình tuyến vẽ lên bản đồ              | HERE trả _flexible polyline_, repo chưa có bộ giải mã; Lane N sẽ quyết khi cần vẽ thật     |
-| Định mức thời gian tại điểm dừng      | `stopServiceSeconds = 0`, và hệ thống **nói ra** hậu quả bằng `availableAtIsLowerBound`    |
-| Gom nhiều đơn vào một vòng chạy       | thuộc `#276 L3`; viết bản thứ hai ở đây sẽ để lại hai bộ luật gom đơn                      |
-| PostGIS                               | xem `D-03`                                                                                 |
+| Việc                                  | Vì sao chưa                                                                                    |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Khớp vết GPS lên đường (`matchTrace`) | chưa báo cáo nào đòi; `#277 M10` chỉ yêu cầu **giữ rõ ranh giới** giữa vết thô và vết khớp     |
+| Hình tuyến vẽ lên bản đồ              | HERE trả _flexible polyline_, repo chưa có bộ giải mã; Lane N sẽ quyết khi cần vẽ thật         |
+| Định mức thời gian tại điểm dừng      | `stopServiceSeconds = 0`, và hệ thống **nói ra** hậu quả bằng `availableAtIsLowerBound`        |
+| Gom nhiều đơn vào một vòng chạy       | thuộc `#276 L3`; viết bản thứ hai ở đây sẽ để lại hai bộ luật gom đơn                          |
+| PostGIS                               | xem `D-03`                                                                                     |
+| Toạ độ ở grain chặng (`RunLeg`)       | #379 đưa toạ độ vào **đơn**; chặng không trỏ tới một đơn có toạ độ vẫn giải theo nhãn (`D-01`) |

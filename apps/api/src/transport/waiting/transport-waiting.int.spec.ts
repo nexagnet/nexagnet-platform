@@ -109,25 +109,29 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')('phien cho tren Postgres that'
      * `pg_advisory_lock` tren mot khoa co dinh lam hai tep xep hang. Khoa duoc nha o `finally`, nen
      * mot bai do khong khoa lai ca lan chay ke tiep.
      */
-    await prisma.$executeRawUnsafe(`SELECT pg_advisory_lock(${WAITING_TRIGGER_LOCK})`);
-    for (const [table, trigger] of [
-      ['TransportDeliveryWaitingSession', 'transport_waiting_session_immutable'],
-      ['TransportRunCheckpoint', 'transport_run_checkpoint_append_only'],
-    ] as const) {
-      await prisma.$executeRawUnsafe(`ALTER TABLE "${table}" DISABLE TRIGGER "${trigger}"`);
-    }
-    try {
-      await prisma.transportDeliveryWaitingSession.deleteMany({ where: { runId: { in: runIds } } });
-      await prisma.transportRunCheckpoint.deleteMany({ where: { runId: { in: runIds } } });
-    } finally {
-      for (const [table, trigger] of [
-        ['TransportDeliveryWaitingSession', 'transport_waiting_session_immutable'],
-        ['TransportRunCheckpoint', 'transport_run_checkpoint_append_only'],
-      ] as const) {
-        await prisma.$executeRawUnsafe(`ALTER TABLE "${table}" ENABLE TRIGGER "${trigger}"`);
-      }
-      await prisma.$executeRawUnsafe(`SELECT pg_advisory_unlock(${WAITING_TRIGGER_LOCK})`);
-    }
+    // Khoa tu van MUC GIAO DICH, moi lenh trong CUNG mot giao dich (cung ly do voi
+    // `waiting-delivery-accepted.int.spec.ts`): khoa muc phien qua pool Prisma co the nha tren
+    // mot ket noi khac ("you don't own a lock"), ro lai va chan buoc don cua moi tep dung chung so.
+    await prisma.$transaction(
+      async (tx) => {
+        await tx.$executeRawUnsafe(`SELECT pg_advisory_xact_lock(${WAITING_TRIGGER_LOCK})`);
+        for (const [table, trigger] of [
+          ['TransportDeliveryWaitingSession', 'transport_waiting_session_immutable'],
+          ['TransportRunCheckpoint', 'transport_run_checkpoint_append_only'],
+        ] as const) {
+          await tx.$executeRawUnsafe(`ALTER TABLE "${table}" DISABLE TRIGGER "${trigger}"`);
+        }
+        await tx.transportDeliveryWaitingSession.deleteMany({ where: { runId: { in: runIds } } });
+        await tx.transportRunCheckpoint.deleteMany({ where: { runId: { in: runIds } } });
+        for (const [table, trigger] of [
+          ['TransportDeliveryWaitingSession', 'transport_waiting_session_immutable'],
+          ['TransportRunCheckpoint', 'transport_run_checkpoint_append_only'],
+        ] as const) {
+          await tx.$executeRawUnsafe(`ALTER TABLE "${table}" ENABLE TRIGGER "${trigger}"`);
+        }
+      },
+      { maxWait: 10_000, timeout: 45_000 },
+    );
     await prisma.transportRunLeg.deleteMany({ where: { runId: { in: runIds } } });
     await prisma.transportRunAssignment.deleteMany({ where: { runId: { in: runIds } } });
     await prisma.transportVehicleRun.deleteMany({ where: { id: { in: runIds } } });

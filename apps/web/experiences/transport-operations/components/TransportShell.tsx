@@ -142,7 +142,12 @@ export function TransportShell({
               KHONG de mot cot trong. Mot danh muc bien mat khong loi giai doc ra y het mot lan mat
               quyen — va do la ket luan dat nhat nguoi dung co the rut ra tu mot thanh ben rong.
             */
-            <p className="tx-nav__none">Không có mục nào khớp “{navQuery}”.</p>
+            <p className="tx-nav__none">
+              {/* `#395`: chua go gi ma khong co muc nao la chuyen QUYEN, khong phai chuyen tim kiem. */}
+              {navQuery.trim().length === 0
+                ? 'Chưa có mục nào bạn được cấp quyền mở.'
+                : `Không có mục nào khớp “${navQuery}”.`}
+            </p>
           ) : null}
           {shownGroups.map((entry) => (
             <div className="tx-nav__group" key={entry.group.id}>

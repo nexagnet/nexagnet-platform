@@ -2,6 +2,7 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
+import { PermissionNote } from '../components/PermissionGate';
 import { DataTable, MetricCard, PageHeader, StatusBadge } from '../components/primitives';
 import { ConfirmAction, EmptyState, ErrorState, LoadingState } from '../components/SectionState';
 import {
@@ -55,11 +56,11 @@ export function DriverSettlementView() {
     void queryClient.invalidateQueries({ queryKey: ['transport', 'costing'] });
   };
 
-  if (!hasOperationsScope(navigation.role)) {
+  if (!hasOperationsScope(navigation)) {
     return (
       <>
         <PageHeader title="Quyết toán lái xe" />
-        <ErrorState message={operationsEmptyMessage(navigation.role)} />
+        <ErrorState message={operationsEmptyMessage(navigation)} />
       </>
     );
   }
@@ -76,6 +77,11 @@ export function DriverSettlementView() {
 
       {balances.isLoading ? <LoadingState label="Đang đọc số dư quyết toán" /> : null}
       {balances.errorMessage ? <ErrorState message={balances.errorMessage} /> : null}
+      {/* `#395` — ten lai xe va bien so la danh ba RIENG: thieu quyen thi noi ra, khong in `id`. */}
+      <PermissionNote
+        viewer={navigation}
+        actions={['transport.driver.read', 'transport.vehicle.read']}
+      />
       {!balances.isLoading && !balances.errorMessage && balanceRows.length === 0 ? (
         <EmptyState title="Chưa có lái xe nào có phiếu lương đã chốt." />
       ) : null}
@@ -121,14 +127,14 @@ export function DriverSettlementView() {
           <CashoutForm
             driverId={selectedDriverId}
             months={view.months}
-            canCashout={canPerform(navigation.role, 'transport.driver_settlement.cashout')}
+            canCashout={canPerform(navigation, 'transport.driver_settlement.cashout')}
             reimbursementOutstanding={statement.data?.balance.reimbursementOutstanding ?? 0}
             onDone={refresh}
           />
 
           <CashoutHistory
             rows={view.cashouts}
-            canReverse={canPerform(navigation.role, 'transport.driver_settlement.reverse')}
+            canReverse={canPerform(navigation, 'transport.driver_settlement.reverse')}
             onDone={refresh}
           />
         </>

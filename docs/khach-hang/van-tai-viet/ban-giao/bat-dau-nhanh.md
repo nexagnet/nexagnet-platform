@@ -1,14 +1,31 @@
 # Bắt đầu nhanh
 
+> **Tài liệu demo/legacy** — xem [“Giới thiệu hệ thống cho lãnh đạo”](gioi-thieu-he-thong-cho-lanh-dao.md) để biết luồng hiện tại.
+> Kế toán và lái xe dùng [Hướng dẫn cho kế toán](huong-dan-ke-toan.md) và [Hướng dẫn cho lái xe](huong-dan-tai-xe.md).
+>
+> Bản này viết theo cách làm dựa trên **chuyến**, trước khi có Đơn hàng → Vòng xe → Chặng. Việc
+> mới bắt đầu ở **Đơn hàng & vòng chạy** (tạo đơn, chọn điểm lấy/giao trên bản đồ); mục
+> **Chuyến xe** nay nằm dưới "Cách làm trước đây" và chỉ để khép chuyến cũ. Danh mục và phần lái
+> xe bên dưới đã được sửa theo màn hình hiện tại; các mục còn lại giữ nguyên để tra cứu.
+
 Ba bản, mỗi bản khoảng 10–15 phút, đọc độc lập với nhau. Ai cũng bắt đầu bằng việc đăng nhập tại
 địa chỉ được cấp; hệ thống mở đúng phần việc của vai được giao, không cần chọn gì thêm.
 
-Màn hình chia bốn nhóm ở thanh bên trái:
+Thanh bên trái (đối chiếu màn hình ngày 24/09/2026):
 
-- **Điều hành** — Tổng quan · Chuyến xe · Đội xe & lái xe
-- **Chi phí & đối soát** — Quỹ lái xe / Chi phí · Nhiên liệu · Công nợ & quyết toán
-- **Tài sản & nhân sự** — Bảo dưỡng & giấy tờ · Lương
-- **Báo cáo** — Biên trực tiếp · AR/AP · Xuất dữ liệu
+- **Tổng quan**
+- **Điều hành** — Đơn hàng & vòng chạy · Bảng điều hành · Điều xe · Đội xe & lái xe
+- **Phải thu** — Kết thúc đơn · Phải thu khách hàng
+- **Phải trả** — Phải trả đối tác & cây xăng · Nhiên liệu
+- **Quỹ & lương lái xe** — Quỹ lái xe · Duyệt chi lái xe · Lương · Quyết toán lái xe
+- **Tổng hợp & hiệu quả** — Tổng hợp tài chính · Hiệu quả từng chuyến · Tổng hợp giám đốc · Bảng
+  đội xe · Báo cáo tuyến · Bản đồ vòng chạy · Xuất dữ liệu
+- **Tài sản** — Bảo dưỡng & giấy tờ · Sở hữu tài sản
+- **Cách làm trước đây** — Chuyến xe
+
+Tên cũ còn gặp ở các mục dưới: _Công nợ & quyết toán_ nay là **Phải thu khách hàng**; _AR/AP_ nay
+là **Phải trả đối tác & cây xăng**; _Biên trực tiếp_ nay là **Hiệu quả từng chuyến**; _Quỹ lái xe /
+Chi phí_ nay là **Quỹ lái xe**.
 
 Trên điện thoại, thanh bên thu lại thành nút **Danh mục** ở đầu màn hình.
 
@@ -16,12 +33,12 @@ Trên điện thoại, thanh bên thu lại thành nút **Danh mục** ở đầ
 
 ## A. Giám đốc — 12 phút
 
-Mục tiêu: sáng mở máy biết ngay hôm nay có gì phải xử lý, và tháng này công ty lãi lỗ ra sao.
+Mục tiêu: sáng mở máy biết ngay hôm nay có gì phải xử lý, và biên trực tiếp tháng này ra sao.
 
 ### 1. Tổng quan (2 phút)
 
-Đây là màn hình mặc định. Sáu ô số ở trên: chuyến đang chạy, chuyến đã lên kế hoạch, đã giao chờ
-đối soát, xe đang rỗi, xe đang bảo dưỡng, lái xe đang làm.
+Đây là màn hình mặc định. Bảy ô số ở trên: đơn đang mở, vòng chạy đang chạy, vòng chạy đã lên kế
+hoạch, xe đang rỗi, xe đang bảo dưỡng, lái xe đang làm, kỳ đối soát đang mở.
 
 Dưới đó là **danh sách việc đang chờ người xử lý**. Mỗi dòng là một chuyến kèm lý do nó nằm đấy
 ("chưa cho chạy", "đã giao, chờ chốt đối soát"). Bấm vào một dòng là sang thẳng chuyến đó.
@@ -158,20 +175,27 @@ cộng và lọc được; ngày giữ dạng `YYYY-MM-DD` để Excel không t�
 
 ## C. Lái xe — 8 phút
 
-Mở trên điện thoại. Bảy mục ở thanh dưới cùng: **Trang chủ · Chuyến · Nhiên liệu · Chi phí · Quỹ ·
-Lịch sử · Phiếu lương**.
+Mở trên điện thoại. Chín mục ở thanh dưới cùng: **Trang chủ · Nhận việc · Hiện trường · Chuyến ·
+Nhiên liệu · Chi phí · Quỹ · Lịch sử · Phiếu lương**.
 
 ### Trang chủ
 
-Chuyến hiện tại của bạn: mã chuyến, tuyến, khách hàng, xe, hàng — và một nút lớn để chuyển trạng
-thái (**Bắt đầu chuyến**, rồi **Đã giao**). Dưới đó là số dư quỹ và số chuyến đang mở.
+Thẻ **Việc được điều từ văn phòng**: mã vòng xe, chặng, tuyến, đơn, và việc kế tiếp phải bấm.
+Văn phòng đã giao việc cho bạn — không cần vào Nhận việc để nhận lại. Nút **Mở Hiện trường** mở
+màn bấm mốc: đã tới điểm lấy hàng, đang xếp hàng, rời điểm lấy hàng, đã đến nơi, khách đã nhận
+hàng, chụp biên nhận giao hàng. Mốc là bằng chứng; văn phòng là người tiến chặng. Dưới thẻ là số
+dư quỹ.
 
 Bạn chỉ thấy **chuyến của chính bạn**. Không có giá cước, không có doanh thu — đó là chủ ý.
 
 ### Khai phiếu đổ dầu
 
 Vào **Nhiên liệu**. Chọn cây xăng, nhập số lít, số tiền, số km trên đồng hồ, số hoá đơn nếu có,
-bấm **Gửi phiếu**. Xe lấy theo chuyến bạn đang chạy, không phải chọn.
+bấm **Gửi phiếu**. Vòng xe và xe lấy theo việc được điều đang mở; gắn chặng là
+không bắt buộc. Chọn **Thanh toán**: _Lái xe trả tiền mặt_ — khi kế toán duyệt, khoản này trừ vào
+quỹ của bạn để công ty hoàn lại, không ghi nợ cây xăng; hoặc _Ghi nợ cây xăng_ — không đụng tới
+quỹ của bạn, và **chưa** thành công nợ ngay: kế toán xác thực phiếu → đối soát với bảng kê của cây
+xăng → đóng kỳ; đóng kỳ xong mới vào công nợ cây xăng.
 
 Phiếu vừa gửi hiện ngay bên dưới ở trạng thái **Mới khai**. Bấm **Đính ảnh chứng từ** để chụp
 biên lai — ảnh gắn vào đúng phiếu đó và kế toán xem được khi đối soát.
@@ -181,7 +205,8 @@ Kế toán có thể **từ chối** một phiếu; phiếu bị từ chối g�
 ### Ghi khoản chi
 
 Vào **Chi phí**. Chọn chuyến (chỉ hiện chuyến bạn được phân công), chọn nhóm chi phí, nhập số
-tiền, đính ảnh nếu có.
+tiền, đính ảnh nếu có. **Hiện chỉ ghi được trên chuyến theo cách cũ** — việc theo vòng xe chưa ghi
+khoản chi dọc đường được.
 
 > Khoản chi này **trừ vào quỹ tạm ứng của chính bạn**. Màn hình nói rõ điều đó ngay trên biểu mẫu.
 
@@ -189,3 +214,7 @@ tiền, đính ảnh nếu có.
 
 **Quỹ** hiện số dư và toàn bộ bút toán của riêng bạn. **Phiếu lương** chỉ hiện phiếu **đã được
 công bố** — phiếu đang ở bản nháp không hiện, kể cả phiếu mang tên bạn.
+
+> **Hạn chế hiện tại:** phần lương **theo chuyến** và **theo km** hiện **chưa tính** việc theo vòng
+> xe — hệ thống chỉ đếm chuyến theo cách cũ. Nếu công ty trả lương theo chuyến hoặc km, kế toán cộng
+> tay phần việc theo vòng xe.

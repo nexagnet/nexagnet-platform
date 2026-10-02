@@ -245,17 +245,53 @@ const auditEntries = [
   },
 ];
 
+/**
+ * `#395` — hinh dang `AccountView` cua may chu moi: them lan dang nhap gan nhat, co mat khau tam,
+ * chuc danh, quyen rieng va co "tai khoan he thong". Man `/settings` doc duoc ca hinh cu lan moi.
+ */
+const accountExtras = {
+  mustChangePassword: false,
+  temporaryPasswordExpiresAt: null,
+  jobTitle: null,
+  permissionGrants: [],
+  isProtected: false,
+};
+
 const users = [
-  { id: 'u-admin', username: 'admin', name: 'Quan Tri Vien', role: 'ADMIN', disabledAt: null },
-  { id: 'u-sale', username: 'sale1', name: 'Nguyen Thu Phuong', role: 'SALE', disabledAt: null },
+  {
+    id: 'u-admin',
+    username: 'admin',
+    name: 'Quan Tri Vien',
+    role: 'ADMIN',
+    disabledAt: null,
+    lastLoginAt: '2026-09-25T01:00:00.000Z',
+    ...accountExtras,
+  },
+  {
+    id: 'u-sale',
+    username: 'sale1',
+    name: 'Nguyen Thu Phuong',
+    role: 'SALE',
+    disabledAt: null,
+    lastLoginAt: null,
+    ...accountExtras,
+  },
   {
     id: 'u-old',
     username: 'ketoan_cu',
     name: 'Ke Toan Cu',
     role: 'ACCOUNTING',
     disabledAt: '2026-08-01T00:00:00.000Z',
+    lastLoginAt: '2026-07-30T08:00:00.000Z',
+    ...accountExtras,
   },
 ];
+
+/** Mat khau tam SINH LUC CHAY — khong mot chuoi mat khau nao nam trong ma nguon. */
+const temporaryCredential = () => ({
+  temporaryPassword: Array.from({ length: 16 }, (_, index) => 'abcdefghjkmnpqrs'[index]).join(''),
+  expiresAt: '2026-09-28T01:00:00.000Z',
+});
 
 const contentSnapshot = {
   provenance: [{ id: 'local_manifest:inventory', kind: 'local_manifest', sourceId: 'inventory' }],
@@ -363,8 +399,27 @@ export async function mockSettingsSurfaces(page: Page, options: MockOptions = {}
   // Dang ky tu CHUNG den RIENG: Playwright uu tien route dang ky SAU, nen mot catch-all dat cuoi
   // se nuot ca cac duong dan rieng phia truoc. Sai thu tu o day tung lam man Thong bao vo that
   // (`leads` tra ve object thay vi mang) va trong nhu mot loi cua ung dung.
-  await page.route('**/settings/users/**', (route) => json(route, users[0]));
-  await page.route('**/settings/users', (route) => json(route, users));
+  // `#395`: tao / dat lai mat khau tra kem `credential` (mat khau tam, mot lan); con lai tra tai khoan.
+  await page.route('**/settings/users/**', (route) =>
+    route.request().url().includes('/credentials/reset')
+      ? json(route, { ...users[1], credential: temporaryCredential() })
+      : json(route, users[0]),
+  );
+  await page.route('**/settings/users', (route) =>
+    route.request().method() === 'POST'
+      ? json(
+          route,
+          {
+            ...users[1],
+            id: 'u-new',
+            username: 'moi',
+            mustChangePassword: true,
+            credential: temporaryCredential(),
+          },
+          201,
+        )
+      : json(route, users),
+  );
   await page.route('**/settings/participants**', (route) => json(route, []));
 
   await page.route('**/settings/source-truth', (route) =>

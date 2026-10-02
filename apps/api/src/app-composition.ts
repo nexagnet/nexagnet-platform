@@ -231,6 +231,10 @@ import {
   FinanceSettlementFacts,
   FinanceSettlementFactsAdapter,
 } from './transport/finance/finance-facts.port.js';
+import {
+  FinanceRunFirstFacts,
+  FinanceRunFirstFactsAdapter,
+} from './transport/finance/finance-run-first.port.js';
 import { ControlTowerReadService } from './transport/control-tower/control-tower-read.service.js';
 import {
   ControlTowerAlertFacts,
@@ -264,6 +268,12 @@ import { DispatchController } from './transport/dispatch/dispatch.controller.js'
 import { DispatchService } from './transport/dispatch/dispatch.service.js';
 import { createRoutingPort } from './transport/dispatch/routing/routing-provider.factory.js';
 import { TransportRoutingPort } from './transport/dispatch/routing/transport-routing.port.js';
+import { KnownPlacesFacts, KnownPlacesFactsAdapter } from './transport/places/known-places.port.js';
+import { TransportPlaceService } from './transport/places/place.service.js';
+import { createPlaceSearchPort } from './transport/places/place-search-provider.factory.js';
+import { TransportPlaceSearchPort } from './transport/places/place-search.port.js';
+import { TransportPlacesController } from './transport/places/places.controller.js';
+import { PlaceAdminController } from './transport/places/admin/place-admin.controller.js';
 import { TransportModule } from './transport/transport.module.js';
 import { DriverTripsController } from './transport/trips/driver-trips.controller.js';
 import { TripsController } from './transport/trips/trips.controller.js';
@@ -452,6 +462,12 @@ const CONTROLLERS: readonly Owned<Type<unknown>>[] = [
    */
   owned('transport-core', DispatchController),
   /*
+   * TIM DIA DIEM cho man tao don (#379) — cung `transport-core`: tao don la viec cua capability
+   * loi, va tim diem lay/giao la mot phan cua tao don. Nha cung cap tim kiem mac dinh TAT; so dia
+   * diem da biet la mot cong TUY CHON cua `transport-proof` (xem khoi PROVIDERS).
+   */
+  owned('transport-core', TransportPlacesController),
+  /*
    * LAP KE HOACH VONG CHAY DO HE THONG QUAN (Lane L, #276) — cung `transport-core`, khong mot
    * capability moi.
    *
@@ -554,6 +570,12 @@ const CONTROLLERS: readonly Owned<Type<unknown>>[] = [
   // roi: ke toan doc duoc, nhung khong rut duoc chung cu va khong doi duoc ban kinh mot hang rao
   // (hang rao cham LUC DOC, nen sua no doi ket luan cua ca nhung lan giao da xong).
   owned('transport-proof', ProofReviewController),
+  /*
+   * DIA DIEM VAN HANH (`#395`) — bai xe, kho khach hang, nha may doi tac: MOT so, la so hang rao.
+   * Di cung `transport-proof` vi so hang rao la cua capability do; controller chi tiem
+   * `PlaceAdminService` ma `TransportProofModule` export.
+   */
+  owned('transport-proof', PlaceAdminController),
   // MOC VAN HANH — HAI be mat, HAI quyen, HAI duong ghi khac nhau. Be mat lai xe ghi kem chung cu
   // vi tri va chi tren vong chay cua chinh ho; be mat van hanh ghi duoc moi vong chay nhung KHONG
   // dinh kem chung cu vi tri. Xem `CheckpointService`: hai duong do tach han o tang dich vu.
@@ -690,6 +712,20 @@ const PROVIDERS: readonly Owned<Provider>[] = [
     useClass: PlanningDispatchAssignmentPlanner,
   }),
   owned('transport-core', DispatchService),
+  /*
+   * TIM DIA DIEM (#379). Cung khuon dieu xe: cong tim kiem duoc dung bang `useFactory` doc bien
+   * moi truong CUC BO (`TRANSPORT_PLACE_SEARCH_*`, xem `place-search-provider.factory.ts`) —
+   * mac dinh TAT, khong goi mang, tat dinh trong CI.
+   *
+   * `KnownPlacesFacts` doc so hang rao cua `transport-proof`, nen den/di cung capability do.
+   * Vang mat thi `TransportPlaceService` nhan `undefined` va man hinh noi "chua co so dia diem".
+   */
+  owned('transport-core', {
+    provide: TransportPlaceSearchPort,
+    useFactory: () => createPlaceSearchPort(process.env),
+  }),
+  owned('transport-core', TransportPlaceService),
+  owned('transport-proof', { provide: KnownPlacesFacts, useClass: KnownPlacesFactsAdapter }),
   /**
    * DONG VONG CHAY DO HE THONG QUAN (`#293` Lane R).
    *
@@ -827,6 +863,15 @@ const PROVIDERS: readonly Owned<Provider>[] = [
   owned('transport-settlement', {
     provide: FinanceSettlementFacts,
     useClass: FinanceSettlementFactsAdapter,
+  }),
+  /*
+   * `#385` — cua so VIEC Run-first. Cung `transport-settlement`: capability do phu thuoc core,
+   * costing lan fuel, nen ca bon thu adapter tiem (`MovementRepository`, `OperatingMetricsReadService`,
+   * hai kho nhien lieu) luon co mat khi bang tai chinh co mat.
+   */
+  owned('transport-settlement', {
+    provide: FinanceRunFirstFacts,
+    useClass: FinanceRunFirstFactsAdapter,
   }),
   owned('transport-workforce', {
     provide: FinanceDriverBalanceFacts,

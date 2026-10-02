@@ -213,6 +213,11 @@ export const FUND_ENTRY_KIND_LABEL = {
    * nhận lại, và gọi nó là lương sẽ làm nó xuất hiện sai chỗ trên mọi bảng đối chiếu.
    */
   REIMBURSEMENT: 'Trả lại hoàn ứng',
+  /**
+   * `#369` R-4 — cung ho voi "Chi phí chuyến", nhung cho VIEC DUOC DIEU (vong xe). Truoc ban nay khoa
+   * vang mat nen dong quy Run-first hien LOAI RONG ca o man lai xe lan man van phong.
+   */
+  RUN_EXPENSE: 'Chi phí vòng xe',
 } as const satisfies Record<DriverFundEntryKind, string>;
 
 /**

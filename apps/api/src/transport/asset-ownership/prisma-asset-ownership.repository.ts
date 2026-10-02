@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import type { TransactionTrail } from '../../audit/audit-trail.js';
 import type { PrismaService } from '../../config/prisma.service.js';
 import {
   AssetOwnershipRepository,
@@ -152,15 +153,33 @@ export class PrismaAssetOwnershipRepository extends AssetOwnershipRepository {
     return row?.id ?? null;
   }
 
+  async linkedAccountOf(stakeholderId: string): Promise<string | null> {
+    const row = await model(this.prisma, 'transportAssetStakeholder').findUnique({
+      where: { id: stakeholderId },
+      select: { authUserId: true },
+    });
+    return row?.authUserId ?? null;
+  }
+
   async setStakeholderAccount(
     id: string,
     authUserId: string | null,
+    trail?: TransactionTrail<AssetStakeholder>,
   ): Promise<AssetStakeholder | null> {
-    const row = await model(this.prisma, 'transportAssetStakeholder').update({
-      where: { id },
-      data: { authUserId },
+    const write = async (client: PrismaService): Promise<AssetStakeholder | null> => {
+      const row = await model(client, 'transportAssetStakeholder').update({
+        where: { id },
+        data: { authUserId },
+      });
+      return row ? toStakeholder(row) : null;
+    };
+    if (!trail) return write(this.prisma);
+    // Dau vet trong CUNG giao dich: hong thi lan noi / go tai khoan lui theo.
+    return this.prisma.$transaction(async (tx) => {
+      const stakeholder = await write(tx as unknown as PrismaService);
+      if (stakeholder) await trail(stakeholder, tx);
+      return stakeholder;
     });
-    return row ? toStakeholder(row) : null;
   }
 
   async openInterest(input: OpenInterestInput): Promise<VehicleOwnershipInterest> {

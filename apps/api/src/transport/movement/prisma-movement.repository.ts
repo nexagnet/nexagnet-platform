@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../config/prisma.service.js';
+import type { GeoPoint } from '../geo/geo-point.js';
 import { fromStoredAmount, toStoredAmount } from '../money.js';
 import { isUniqueViolationOn, type UniqueIndexRef } from '../storage-conflict.js';
 import { TransportDomainError } from '../transport.errors.js';
@@ -74,6 +75,10 @@ interface OrderRow {
   customerId: string | null;
   originLabel: string;
   destinationLabel: string;
+  originLatitude: number | null;
+  originLongitude: number | null;
+  destinationLatitude: number | null;
+  destinationLongitude: number | null;
   cargoDescription: string | null;
   freightAmount: bigint | null;
   currencyCode: string;
@@ -145,6 +150,14 @@ interface OrderLinkRow {
 const iso = (value: Date): string => value.toISOString();
 const isoOrNull = (value: Date | null): string | null => (value === null ? null : iso(value));
 
+/**
+ * Hai cot -> mot diem. Thieu MOT trong hai cot la `null` ca diem: CHECK `*_point_paired` da cam nua
+ * cap, nhung neu no lot (mot lan sua tay khi rang buoc dang go) thi nua cap van KHONG phai mot diem.
+ * Khong `parseGeoPoint` o day: tang doc tra DUNG cai DB giu, de dieu xe tu gan co du lieu hong.
+ */
+const toPoint = (latitude: number | null, longitude: number | null): GeoPoint | null =>
+  latitude === null || longitude === null ? null : { latitude, longitude };
+
 const toOrder = (row: OrderRow): Order => ({
   id: row.id,
   code: row.code,
@@ -153,6 +166,8 @@ const toOrder = (row: OrderRow): Order => ({
   customerId: row.customerId,
   originLabel: row.originLabel,
   destinationLabel: row.destinationLabel,
+  originPoint: toPoint(row.originLatitude, row.originLongitude),
+  destinationPoint: toPoint(row.destinationLatitude, row.destinationLongitude),
   cargoDescription: row.cargoDescription,
   freightAmount: fromStoredAmount(row.freightAmount),
   currencyCode: row.currencyCode,
@@ -161,6 +176,27 @@ const toOrder = (row: OrderRow): Order => ({
   updatedAt: iso(row.updatedAt),
   cancelledAt: isoOrNull(row.cancelledAt),
   cancellationReason: row.cancellationReason,
+});
+
+/**
+ * MOT noi duy nhat dung `data` cua mot lan tao don. Ba duong ghi (`createOrder`, `projectTripOrder`,
+ * `projectTrip`) truoc day moi duong tu liet ke cot, va mot cot moi -- nhu toa do #379 -- chi can
+ * quen o MOT duong la duong do ghi lech. Diem vang (`undefined`/`null`) ghi ca cap NULL, dung hinh
+ * cua CHECK `*_point_paired`; duong chieu tu chuyen v1 di qua day va khong bao gio co toa do.
+ */
+const orderCreateData = (input: CreateOrderInput) => ({
+  code: input.code,
+  businessDate: input.businessDate,
+  originLabel: input.originLabel,
+  destinationLabel: input.destinationLabel,
+  originLatitude: input.originPoint?.latitude ?? null,
+  originLongitude: input.originPoint?.longitude ?? null,
+  destinationLatitude: input.destinationPoint?.latitude ?? null,
+  destinationLongitude: input.destinationPoint?.longitude ?? null,
+  customerId: input.customerId ?? null,
+  cargoDescription: input.cargoDescription ?? null,
+  freightAmount: toStoredAmount(input.freightAmount ?? null),
+  note: input.note ?? null,
 });
 
 const toRun = (row: RunRow): VehicleRun => ({
@@ -241,18 +277,7 @@ export class PrismaMovementRepository extends MovementRepository {
 
   async createOrder(input: CreateOrderInput): Promise<Order> {
     return toOrder(
-      await model(this.prisma, 'transportOrder').create({
-        data: {
-          code: input.code,
-          businessDate: input.businessDate,
-          originLabel: input.originLabel,
-          destinationLabel: input.destinationLabel,
-          customerId: input.customerId ?? null,
-          cargoDescription: input.cargoDescription ?? null,
-          freightAmount: toStoredAmount(input.freightAmount ?? null),
-          note: input.note ?? null,
-        },
-      }),
+      await model(this.prisma, 'transportOrder').create({ data: orderCreateData(input) }),
     );
   }
 
@@ -789,6 +814,14 @@ export class PrismaMovementRepository extends MovementRepository {
     return row ? toOrderLink(row) : null;
   }
 
+  async findOrderLinksByOrders(orderIds: readonly string[]): Promise<TripOrderLink[]> {
+    if (orderIds.length === 0) return [];
+    const rows = await model(this.prisma, 'transportTripOrderLink').findMany({
+      where: { orderId: { in: [...orderIds] } },
+    });
+    return rows.map(toOrderLink);
+  }
+
   async listLegsByOrders(orderIds: readonly string[]): Promise<RunLeg[]> {
     if (orderIds.length === 0) return [];
     const rows: LegRow[] = await model(this.prisma, 'transportRunLeg').findMany({
@@ -817,16 +850,7 @@ export class PrismaMovementRepository extends MovementRepository {
     return this.prisma.$transaction(async (tx: unknown) => {
       const client = tx as PrismaService;
       const orderRow: OrderRow = await model(client, 'transportOrder').create({
-        data: {
-          code: input.order.code,
-          businessDate: input.order.businessDate,
-          originLabel: input.order.originLabel,
-          destinationLabel: input.order.destinationLabel,
-          customerId: input.order.customerId ?? null,
-          cargoDescription: input.order.cargoDescription ?? null,
-          freightAmount: toStoredAmount(input.order.freightAmount ?? null),
-          note: input.order.note ?? null,
-        },
+        data: orderCreateData(input.order),
       });
       const linkRow: OrderLinkRow = await model(client, 'transportTripOrderLink').create({
         data: { tripId: input.tripId, orderId: orderRow.id, projectedBy: input.projectedBy },
@@ -881,18 +905,7 @@ export class PrismaMovementRepository extends MovementRepository {
       const client = tx as PrismaService;
 
       const orderRow: OrderRow | null = input.order
-        ? await model(client, 'transportOrder').create({
-            data: {
-              code: input.order.code,
-              businessDate: input.order.businessDate,
-              originLabel: input.order.originLabel,
-              destinationLabel: input.order.destinationLabel,
-              customerId: input.order.customerId ?? null,
-              cargoDescription: input.order.cargoDescription ?? null,
-              freightAmount: toStoredAmount(input.order.freightAmount ?? null),
-              note: input.order.note ?? null,
-            },
-          })
+        ? await model(client, 'transportOrder').create({ data: orderCreateData(input.order) })
         : null;
 
       const runRow: RunRow = await model(client, 'transportVehicleRun').create({

@@ -6,6 +6,8 @@ dist/
 build/
 .next/
 out/
+# Worker MapLibre 6 — `apps/web/next.config.mjs` sao tu node_modules moi lan Next nap cau hinh (#374).
+apps/web/public/maplibre/
 
 # Environment & secrets
 .env

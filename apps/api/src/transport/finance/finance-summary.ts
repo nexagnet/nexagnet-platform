@@ -1,7 +1,7 @@
 import type { SettlementBuckets } from '../analytics/operating-metrics.js';
 import type { BusinessDate } from '../business-date.js';
-import type { DirectMarginRollup } from '../settlement/direct-margin.js';
 import type { SettlementFlow } from '../settlement/settlement-flows.js';
+import type { CompanyMarginRollup, CompanyMarginView } from './company-margin.js';
 
 /**
  * BANG TAI CHINH — nguoi SAN XUAT dau tien cua `SettlementBuckets` (#244 G5).
@@ -65,11 +65,23 @@ export interface FinanceSummaryView {
    * Hai truong do KHONG duoc bo di khi truyen len man hinh: `GD-13` doi cau "chua gom chi phi co
    * dinh" di kem con so, va #244 G5 cam goi day la `lai rong`/`net profit`. Giu chung trong kieu
    * la cach de cau do khong the roi rung tren duong.
+   *
+   * `#385` — tong CA CONG TY: chuyen cu CONG don Run-first, khong dem trung (`company-margin.ts`).
+   * `basis` noi con so den tu bao nhieu chuyen cu, bao nhieu don, va bao nhieu viec bi loai vi sao.
    */
-  readonly directMargin: DirectMarginRollup;
+  readonly directMargin: CompanyMarginRollup;
   readonly receivable: ReceivableSummary;
   readonly currency: CurrencyCoverage;
   readonly unavailableSources: readonly FinanceSource[];
+}
+
+/**
+ * `#385` — HIEU QUA TUNG VIEC: moi chuyen cu va moi don Run-first mot dong, CUNG tong voi
+ * `FinanceSummaryView.directMargin` (cung mot ham gop o may chu). Man hinh KHONG cong lai cac dong:
+ * tong co tham quyen la `totals`.
+ */
+export interface FinanceMarginView extends CompanyMarginView {
+  readonly generatedFor: BusinessDate;
 }
 
 /* ------------------------------------------------------------------ *

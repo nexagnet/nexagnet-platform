@@ -53,11 +53,15 @@ Chuẩn NestJS, không bọc thêm:
 { "statusCode": 400, "message": "Cần manifest để xem trước", "error": "Bad Request" }
 ```
 
+Vận tải và quản trị tài khoản (`/settings/users`, `/auth`) **thêm** trường `reason` (mã có kiểu) và
+đôi khi `detail` — ba trường chuẩn giữ nguyên. Bảng mã của tài khoản ở §3.4 "Người dùng"; của
+quyền vận tải, nối tài khoản và địa điểm vận hành ở §3.11.
+
 | Mã | Khi nào |
 |---|---|
 | `400` | Body/param không qua zod. Thông điệp nêu đúng trường sai |
 | `401` | Chưa đăng nhập / sai `x-api-key` |
-| `403` | Sai vai, sai `Origin`, hoặc thao tác ngoài allowlist nhóm |
+| `403` | Sai vai, sai `Origin`, thao tác ngoài allowlist nhóm, hoặc thiếu quyền hành động vận tải (`reason: "ACTION_NOT_PERMITTED"`, §3.11) |
 | `404` | Không có bản ghi — **hoặc** đường dẫn chưa được Caddy định tuyến (khi đó thân trả về là HTML) |
 | `409` | Xung đột trạng thái (duyệt đơn đã gửi, chuyển trạng thái campaign không hợp lệ) |
 | `429` | Vượt giới hạn tần suất của route |
@@ -83,19 +87,39 @@ Một biến quyết định toàn bộ: **`AUTH_MODE`**.
 ```
 GET  /auth/config           -> { "mode": "session" }
 POST /auth/login            -> { user, csrfToken }        + đặt cookie phiên
-GET  /auth/me               -> { user, roles }
+GET  /auth/me               -> { user, roles, permissions }
 POST /auth/logout
 ```
 
-Đổi mật khẩu: `POST /auth/credentials/change`. Mọi mutation sau đăng nhập phải kèm
-`x-csrf-token`; token lấy lại bất cứ lúc nào bằng `GET /auth/csrf`.
+Đổi mật khẩu: `POST /auth/credentials/change` — trả `{ user, csrfToken }` với token **mới** (phiên
+được tạo lại): client phải thay token cũ bằng token này, nếu không lần ghi kế tiếp trượt CSRF. Mọi
+mutation sau đăng nhập phải kèm `x-csrf-token`; token lấy lại bất cứ lúc nào bằng `GET /auth/csrf`.
+
+**`#395` — quyền và mật khẩu tạm:**
+
+- `GET /auth/me.permissions` là tập quyền **hiệu lực** do máy chủ tính: quyền nền tảng
+  (`platform.accounts.manage` — chỉ `ADMIN`) cộng quyền của mọi miền đã đăng ký (vận tải:
+  `transport.*`, gồm vai khởi điểm ± quyền riêng của tài khoản). Web chỉ hiện lại, không tự suy từ vai.
+- `user` của `/auth/login` và `/auth/me` mang thêm `mustChangePassword`, `temporaryPasswordExpiresAt`,
+  `jobTitle`, `permissionGrants` (thêm trường, không đổi trường cũ).
+- Tài khoản mới tạo hoặc vừa được đặt lại mật khẩu dùng **mật khẩu tạm** (72 giờ). Khi
+  `mustChangePassword = true`, mọi route trả **`403 { reason: "PASSWORD_CHANGE_REQUIRED" }`** trừ
+  `GET /auth/me`, `POST /auth/credentials/change`, `POST /auth/logout`. Cổng nằm trong
+  `SessionAuthGuard` — chỗ duy nhất đặt `request.authUser` — nên REST, SSE `/events` và tải tệp
+  `/files` đều qua nó.
+- Đăng nhập bằng mật khẩu tạm đã hết hạn (sau khi mật khẩu đúng) →
+  **`401 { reason: "TEMPORARY_PASSWORD_EXPIRED" }`**, "Mật khẩu tạm đã hết hạn. Nhờ Giám đốc cấp mật
+  khẩu mới."; phiên đang mở của tài khoản đó cũng hết hiệu lực (401).
+- Đổi vai / quyền riêng có hiệu lực ở **yêu cầu kế tiếp** của cùng phiên (không cần đăng nhập lại).
+  Khoá tài khoản hoặc đặt lại mật khẩu làm **mọi phiên cũ** của tài khoản đó chết (401).
 
 ### Bốn vai
 
 `SALE` · `ACCOUNTING` · `MANAGER` · `ADMIN`.
 
 Nguyên tắc đang áp dụng: **đọc mở cho cả bốn vai; mọi thao tác chạm nguồn sự thật, chạm tiền, hoặc
-chạm công tắc vận hành đều siết còn `MANAGER` + `ADMIN`.** Quản lý người dùng chỉ `ADMIN`.
+chạm công tắc vận hành đều siết còn `MANAGER` + `ADMIN`.** Quản lý người dùng chỉ `ADMIN`. Miền vận
+tải dùng vai làm **vai khởi điểm** cộng quyền riêng của từng tài khoản — §3.11.
 
 ---
 
@@ -110,9 +134,9 @@ Ký hiệu: **·** = không khai báo vai (mọi phiên hợp lệ đều gọi 
 | GET | `/auth/config` | PUBLIC | |
 | GET | `/auth/csrf` | PUBLIC | |
 | POST | `/auth/login` | PUBLIC | 5 lần / 60s |
-| GET | `/auth/me` | · | |
-| POST | `/auth/logout` | · | |
-| POST | `/auth/credentials/change` | · | |
+| GET | `/auth/me` | · | Mở cả khi đang dùng mật khẩu tạm |
+| POST | `/auth/logout` | · | Mở cả khi đang dùng mật khẩu tạm |
+| POST | `/auth/credentials/change` | · | Mở cả khi đang dùng mật khẩu tạm; trả `csrfToken` mới |
 
 ### 3.2 Dòng sự kiện — `/events`
 
@@ -205,13 +229,67 @@ khách**; nội dung nhập từ gói khách luôn vào ở `draft`.
 
 #### Người dùng — `/settings/users`
 
-| Method | Path | Vai | Giới hạn |
-|---|---|---|---|
-| GET | `/settings/users` | ADMIN | |
-| POST | `/settings/users` | ADMIN | 10 / 60s |
-| PATCH | `/settings/users/:id/role` | ADMIN | |
-| POST | `/settings/users/:id/disable` | ADMIN | |
-| POST | `/settings/users/:id/credentials/reset` | ADMIN | 5 / 60s |
+Tài khoản & phân quyền (`#395`). Mọi route chỉ `ADMIN` — quyền nền tảng `platform.accounts.manage`,
+**không cấp được bằng quyền riêng** (một `MANAGER` được cấp mọi quyền vận tải vẫn nhận 403 ở đây).
+Mọi route nằm dưới `/settings/users*` — tiền tố Caddy đã cổng; không mở tiền tố mới.
+
+| Method | Path | Vai | Giới hạn | Ghi chú |
+|---|---|---|---|---|
+| GET | `/settings/users?q=&status=active\|pending\|disabled&role=` | ADMIN | | `AccountView[]`; `pending` = chờ đổi mật khẩu tạm |
+| GET | `/settings/users/permission-catalog` | ADMIN | | `{ domains: [{ id, groups, presets }], platform }` |
+| POST | `/settings/users/suggest-username` | ADMIN | | `{ name, prefix? }` → `{ username }` (bỏ dấu, `đ`→`d`, thêm `.2`… khi trùng); `200` |
+| POST | `/settings/users` | ADMIN | 10 / 60s | Xem "Tạo / đặt lại" dưới đây |
+| PATCH | `/settings/users/:id` | ADMIN | | `{ name?, email?, phone?, jobTitle? }`; `username` bất biến |
+| GET | `/settings/users/:id/access` | ADMIN | | `AccessBreakdown`: vai khởi điểm, quyền riêng, trạng thái từng việc, câu "Người này làm được gì?" |
+| PUT | `/settings/users/:id/access` | ADMIN | | `{ role, grants, confirmEscalation?, dryRun? }` — thay **trọn** bộ quyền riêng; `dryRun` → `AccessBreakdown` của bộ đề xuất (không ghi, không kiểm toán); ghi thật → `{ account, access }` |
+| PATCH | `/settings/users/:id/role` | ADMIN | | Đường cũ: `{ role, confirmEscalation? }` — đổi vai **và xoá mọi quyền riêng** trong cùng một giao dịch |
+| POST | `/settings/users/:id/disable` | ADMIN | | `{ confirmed: true, reason?: string ≤ 500 }`; `200` |
+| POST | `/settings/users/:id/enable` | ADMIN | | **Mới.** `{ confirmed: true }`; **không** đổi mật khẩu; `200` |
+| POST | `/settings/users/:id/credentials/reset` | ADMIN | 5 / 60s | `{ password? }` — xem dưới |
+| GET | `/settings/users/:id/history?limit=` | ADMIN | | `[{ at, actor, action, summary, before, after }]` từ `AuditLog` (`entityType = 'User'`), gồm cả `auth.login` |
+
+`AccountView` = người dùng như `/auth/me.user` **cộng** `mustChangePassword`,
+`temporaryPasswordExpiresAt`, `jobTitle`, `permissionGrants: [{ permission, effect: ALLOW|DENY }]`,
+`isProtected`.
+
+**Tạo / đặt lại — thay đổi hợp đồng (thêm trường, không bỏ trường nào):**
+
+- Phản hồi `POST /settings/users` và `POST …/credentials/reset` vẫn là tài khoản **ở mức ngoài**
+  như trước, **thêm** `credential: { temporaryPassword, expiresAt }`. Mật khẩu tạm chỉ xuất hiện
+  trong **đúng phản hồi này** — không vào sổ kiểm toán, telemetry hay log.
+- `password` **tuỳ chọn** ở cả hai: bỏ trống thì máy chủ sinh mật khẩu tạm 16 ký tự
+  (`xxxx-xxxx-xxxx-xxxx`, bảng chữ không gây nhầm). Dù có nhập hay không, tài khoản **luôn** phải đổi
+  mật khẩu ở lần đăng nhập đầu (`mustChangePassword = true`, hạn 72 giờ) — kể cả trên màn hình
+  `/settings` của các khách vận hành.
+- Tạo mới thêm `jobTitle?`, `grants?` (mặc định `[]`), `confirmEscalation?`. Tạo vai `ADMIN` bắt buộc
+  `confirmEscalation: true`.
+- **Đặt lại mật khẩu KHÔNG còn mở khoá tài khoản.** Trước `#395` bản Prisma lặng lẽ xoá `disabledAt`
+  khi đặt lại (bản bộ nhớ thì không). Tài khoản cũ bị di trú `20260812162000_auth_sessions` khoá
+  (`legacy_*`, mật khẩu `!legacy-user-disabled-until-reset!` — chú thích "An administrator must
+  explicitly reset/re-enable them") nay khôi phục bằng **`POST …/enable` rồi
+  `POST …/credentials/reset`**.
+
+**Lỗi có kiểu** — thân lỗi `{ statusCode, message (tiếng Việt), error, reason, detail? }`:
+
+| `reason` | Mã | Khi nào |
+|---|---|---|
+| `SELF_LOCKOUT` | 403 | Tự khoá / tự đổi vai-quyền / tự đặt lại mật khẩu qua đường quản trị (dùng `/auth/credentials/change`) |
+| `LAST_ACTIVE_ADMIN` | 409 | Khoá hoặc hạ vai Giám đốc **đang hoạt động cuối cùng**. Đếm dưới khoá (`SELECT … FOR UPDATE` trong một giao dịch) nên hai Giám đốc hạ vai nhau cùng lúc vẫn còn một |
+| `PROTECTED_SERVICE_ACCOUNT` | 409 | Khoá / đổi vai-quyền / đặt lại tài khoản có tên trong env `PROTECTED_ACCOUNT_USERNAMES` (deploy GCP truyền `PILOT_OPERATOR_USERNAME` — người vận hành mà `bootstrap-auth-user.mjs` đòi là ADMIN đang hoạt động). Sửa tên vẫn được |
+| `USERNAME_RESERVED` | 409 | **Chỉ khi tạo mới**: tên dành cho hệ thống (`operator`, `internal-service`, `system`, `import`, `mcp-agent`, `marketing-form` + tên miền khai, vd `demo-seed`). Tài khoản `operator` **đã có** (ADMIN thật trên gd1-test) vẫn đăng nhập bình thường |
+| `ACCOUNT_LINKED_TO_DRIVER` | 409 | Đổi vai / quyền sang một vai **khác `SALE`** khi tài khoản đang nối hồ sơ lái xe — kể cả khi vai không đổi (tài khoản văn phòng còn nối do dữ liệu cũ); miền trả qua `checkAccessChange`. Gỡ nối ở `PUT /transport/drivers/:driverId/account` trước (§3.11) |
+| `ACCESS_INVALID` | 409 | Bộ quyền bị từ chối; `detail.violations = [{ code, permission?, detail? }]` (vd `ADMIN_PRESET_IS_FULL`, `DRIVER_PRESET_IS_SELF_SCOPE_ONLY`, `SOD_CONFLICT`, `UNKNOWN_PERMISSION`, `PLATFORM_PERMISSION_NOT_GRANTABLE`, `GRANT_DUPLICATED`) |
+| `ESCALATION_CONFIRMATION_REQUIRED` | 409 | Cấp vai Giám đốc hoặc quyền nhạy cảm mà thiếu `confirmEscalation: true`. `detail: { violations, actions }` — `actions` là các mã quyền nhạy cảm cần xác nhận (rỗng khi chỉ là nâng lên Giám đốc) |
+| `ACCOUNT_NOT_FOUND` | 404 | |
+| `ACCOUNT_IDENTITY_TAKEN` | 409 | Tên đăng nhập / email / số điện thoại đã thuộc tài khoản khác |
+| `ACCOUNT_INPUT_INVALID` | 400 | Thân yêu cầu sai hình dạng (`detail.issues`) |
+
+Mỗi thay đổi ghi `AuditLog` có `before` + `after` với khoá sống qua lớp che: `auth.user.create`,
+`auth.user.profile.update` (`profile: { name, jobTitle, emailOnFile, phoneOnFile }`),
+`auth.user.access.change` (`role`, `grants`), `auth.user.access.escalate` (lên Giám đốc hoặc thêm
+quyền nhạy cảm — nêu từng mã), `auth.user.disable` (`disabledAt`, `reason`), `auth.user.enable`,
+`auth.credentials.reset` / `auth.credentials.change`
+(`onboarding: { passwordChangeRequired, temporaryCredentialExpiresAt }`).
 
 ### 3.5 Kênh Zalo — `/zalo`
 
@@ -317,6 +395,126 @@ ngoài, và nó đi qua cổng quyền mỗi lần.
 
 > `storage.state` suy ra từ **bộ đếm tải ảnh**, nên trước khi có ảnh đầu tiên nó luôn là `healthy`
 > kể cả khi bucket không tồn tại. Chỉ `reachability` mới là bằng chứng cấu hình đúng.
+
+### 3.11 Vận tải — quyền, nối tài khoản, địa điểm vận hành (`#395`)
+
+> Bản đồ đầy đủ của `/transport/*` nằm ở các tài liệu miền `transport-*.md`; mục này chỉ ghi
+> những gì `#395` đổi ở hợp đồng HTTP. Mô hình quyền: [transport-domain-contract.md](transport-domain-contract.md)
+> §11.5 · địa điểm vận hành: [transport-geospatial.md](transport-geospatial.md) §7.2 · bãi xe của
+> khâu lập kế hoạch: [transport-run-planning.md](transport-run-planning.md) §2.2.
+
+**Cổng quyền của route vận tải.** Route khai `@RequiresTransportAction(<mã>)` được
+`TransportActionGuard` quyết bằng **tập quyền hiệu lực** của tài khoản (vai khởi điểm ± quyền riêng,
+đọc lại từ DB ở mỗi yêu cầu). Khi guard đó nằm trong chuỗi guard của route, `RolesGuard` **nhường**
+cho nó: `@Roles(...)` trên route vận tải chỉ còn là tài liệu và lưới fail-closed khi route thiếu
+guard miền. Hệ quả: một tài khoản `MANAGER` được cấp đúng mã gọi được route ghi `@Roles('ADMIN')`;
+vai ghi ở tài liệu miền là **vai khởi điểm**, không phải trần. Thiếu quyền trả:
+
+```json
+{
+  "statusCode": 403,
+  "message": "Bạn không có quyền thực hiện thao tác này.",
+  "error": "Forbidden",
+  "reason": "ACTION_NOT_PERMITTED",
+  "detail": { "action": "transport.vehicle.manage" }
+}
+```
+
+Trước `#395` thân này chỉ có một câu không dấu kèm mã hành động trong `message`. Các chỗ kiểm quyền
+**trong mã** (điều xe, che toạ độ theo dõi, quyền tải tệp chứng từ, địa điểm của đơn vị khác) hỏi
+cùng một hàm `canPerformTransportAction` với guard.
+
+**Nối tài khoản đăng nhập với hồ sơ** — quyền `transport.account_link.manage`, chỉ Giám đốc (không
+cấp được bằng quyền riêng):
+
+| Method | Path | Giới hạn | Ghi chú |
+|---|---|---|---|
+| PUT | `/transport/drivers/:driverId/account` | 20 / 60s | `{ authUserId: string \| null }` (strict); `null` = gỡ nối. Trả hồ sơ lái xe. Lần gọi không đổi gì thì không ghi gì |
+| GET | `/transport/account-links/:authUserId` | | `{ driver: { id, name, phone, status, vehicle: { id, registrationPlate } \| null } \| null, stakeholder: { id, name, status } \| null }` |
+| PUT | `/transport/asset-ownership/stakeholders/:id/account` | 20 / 60s | Đường cũ, **đổi mã quyền** từ `transport.asset_ownership.manage` sang `transport.account_link.manage`; kiểm thêm tài khoản tồn tại và đang hoạt động |
+
+- `POST /transport/drivers` và `PATCH /transport/drivers/:id` **không còn nhận `authUserId`** (thân
+  strict → `400`): route PUT ở trên là đường ghi duy nhất của `TransportDriver.authUserId` từ HTTP.
+- Lỗi nối: `ACCOUNT_LINK_USER_NOT_FOUND` (404) · `ACCOUNT_LINK_USER_DISABLED` ·
+  `ACCOUNT_LINK_ROLE_MISMATCH` (tài khoản không phải vai Lái xe `SALE`) · `DRIVER_ACCOUNT_TAKEN` (đã
+  nối hồ sơ lái xe khác — kể cả khi hai lần nối đua nhau, unique của DB dịch ra cùng mã) ·
+  `ACCOUNT_LINK_DRIVER_INACTIVE` · `ASSET_STAKEHOLDER_ACCOUNT_TAKEN` — đều 409; `DRIVER_NOT_FOUND`
+  (404). Gỡ nối luôn được, kể cả hồ sơ đã ngừng.
+- Kiểm toán `transport.driver.account_link` / `transport.driver.account_unlink`, `before`/`after`
+  là hồ sơ lái xe.
+
+**Địa điểm vận hành** — `/transport/places/admin`, capability `transport-proof`:
+
+| Method | Path | Quyền | Giới hạn | Ghi chú |
+|---|---|---|---|---|
+| GET | `/transport/places/admin?kind=&status=&q=` | `transport.geofence.read` | | `kind` = `DEPOT` \| `CUSTOMER_SITE` \| `PARTNER_SITE` \| `LEGACY_CUSTOMER`; `status` = `active` \| `inactive` \| `all` (mặc định `all`, lọc theo `effectiveStatus`); `q` ≤ 100 ký tự → `PlaceAdminView[]` |
+| POST | `/transport/places/admin` | `transport.geofence.manage` | 30 / 60s | Tạo; `201` |
+| PATCH | `/transport/places/admin/:id` | `transport.geofence.manage` | 60 / 60s | `{ name?, address?, point?, radiusMetres?, note?, acknowledgeOpenWork? }` |
+| POST | `/transport/places/admin/:id/deactivate` | `transport.geofence.manage` | | `{ reason (1..500), acknowledgeOpenWork? }`; `200` |
+| POST | `/transport/places/admin/:id/activate` | `transport.geofence.manage` | | `{}`; `200` |
+| POST | `/transport/places/admin/:id/make-primary-depot` | `transport.geofence.manage` | | `{ acknowledgeOpenWork? }`; `200` |
+| GET | `/transport/places/admin/:id/history` | `transport.geofence.read` | | `[{ at, actor, action, entityType, before, after }]` — dấu vết của hàng rào và của địa điểm pháp nhân gắn với nó, mới nhất trước |
+
+Không có route xoá. Mọi thân ghi là strict. Địa điểm của **đơn vị khác** (`COUNTERPARTY_SITE`) —
+tạo, đổi tên, tắt, bật — đòi **thêm** `transport.counterparty.manage`, kiểm trong mã trên chính
+người gọi; thiếu → `403 PLACE_SITE_REQUIRES_COUNTERPARTY_MANAGE`.
+
+Thân tạo:
+
+```text
+{ kind: "DEPOT" | "COUNTERPARTY_SITE", name (1..200), address? (1..500 hoặc null),
+  point: { latitude, longitude }, radiusMetres (số nguyên, trong khoảng bán kính của chính sách khách),
+  note? (≤ 500), owner?, siteId? }
+```
+
+`owner` là **một** trong `{ counterpartyId }`, `{ customerId }`,
+`{ newCounterparty: { name, taxCode? } }`; `siteId` gắn vị trí vào một địa điểm pháp nhân có sẵn
+chưa có hàng rào. Bãi xe không nhận `owner`/`siteId`; máy chủ sinh mã `DEPOT-<CHỮ-KHÔNG-DẤU>` (thêm
+`-2`, `-3`… khi trùng). Đã có bãi đang bật thì bãi mới được tạo **tắt** (bãi dự phòng).
+
+`PlaceAdminView`:
+
+```text
+{ id, kind: DEPOT | COUNTERPARTY_SITE | CUSTOMER, displayKind, kindLabel, name, address,
+  point: { latitude, longitude }, radiusMetres, status, effectiveStatus: ACTIVE | INACTIVE | OWNER_INACTIVE,
+  note, owner: { counterpartyId, counterpartyName, customerId?, customerName?, siteId, siteName } | null,
+  depot: { code, plannerStatus: IN_USE | STANDBY | AMBIGUOUS | NOT_IN_USE, source: MANAGED | TENANT_CONFIG } | null,
+  conflicts: string[], updatedAt }
+```
+
+`kindLabel` là nhãn hiển thị: `Bãi xe` · `Địa điểm khách hàng` (pháp nhân chủ có liên kết khách
+hàng) · `Nhà máy / kho đối tác` · `Điểm khách hàng (kiểu cũ)` (hàng rào `CUSTOMER` trước `#395`).
+`conflicts` = tên các địa điểm đang hiệu lực khác trùng tên sau chuẩn hoá (dữ liệu cũ).
+
+| `reason` | Mã | Khi nào |
+|---|---|---|
+| `PLACE_NOT_FOUND` | 404 | Không có hàng rào mang id đó, hoặc đó là loại không quản lý ở đây (cây xăng, điểm tạm). Chủ / địa điểm được chọn không tồn tại: `COUNTERPARTY_NOT_FOUND`, `CUSTOMER_NOT_FOUND`, `COUNTERPARTY_SITE_NOT_FOUND` (404) |
+| `PLACE_OWNER_REQUIRED` · `PLACE_OWNER_INVALID` · `PLACE_SITE_OWNER_MISMATCH` · `PLACE_NOT_A_DEPOT` | 400 | Thiếu / sai chủ; địa điểm có sẵn không thuộc đơn vị đã chọn; "đổi bãi chính" trên một địa điểm không phải bãi |
+| `GEOFENCE_COORDINATE_REJECTED` · `PLACE_OUTSIDE_SERVICE_AREA` · `GEOFENCE_RADIUS_OUT_OF_RANGE` | 400 | Toạ độ hỏng; ngoài vùng phục vụ; bán kính ngoài khoảng của chính sách khách |
+| `PLACE_SITE_REQUIRES_COUNTERPARTY_MANAGE` | 403 | Xem trên |
+| `PLACE_NAME_TAKEN` | 409 | Trùng tên (sau chuẩn hoá) với một địa điểm đang hiệu lực; `detail: { conflictName, conflictKindLabel, ownerName? }` |
+| `DEPOT_CHANGE_AFFECTS_OPEN_WORK` | 409 | Đổi tên / tắt bãi đang bật, hoặc đổi bãi chính, khi còn vòng xe / đơn đang mở dùng bãi đó; `detail: { runs: [{ id, code }], orders: [{ id, code }], idleHours }`. Gửi lại với `acknowledgeOpenWork: true` để tiếp tục |
+| `DEPOT_ALREADY_ACTIVE` · `DEPOT_CODE_TAKEN` | 409 | Bật một bãi khi bãi khác đang bật (dùng `make-primary-depot`); mã bãi trùng — cả hai cũng là chỉ mục unique của DB |
+| `PLACE_OWNER_INACTIVE` · `PLACE_SITE_ALREADY_FENCED` · `COUNTERPARTY_SITE_NAME_TAKEN` · `COUNTERPARTY_TAX_CODE_TAKEN` | 409 | Chủ đã ngừng; địa điểm có sẵn đã có hàng rào; trùng tên địa điểm trong cùng pháp nhân; mã số thuế đã thuộc pháp nhân khác |
+
+**Đường cũ đổi theo:**
+
+- `POST /transport/geofences` đi qua **cùng** khoá ghi và luật trùng tên với mọi loại hàng rào
+  (→ `409 PLACE_NAME_TAKEN`; va chạm chỉ mục bãi xe → `DEPOT_ALREADY_ACTIVE` / `DEPOT_CODE_TAKEN`),
+  vẫn nhận mã bãi tuỳ ý, và nay ghi kiểm toán `transport.geofence.register`. Hàng rào cho địa điểm
+  của đơn vị khác (`COUNTERPARTY_SITE`, `CUSTOMER`) qua đường này cũng cần thêm
+  `transport.counterparty.manage` như màn quản trị → thiếu thì
+  `403 PLACE_SITE_REQUIRES_COUNTERPARTY_MANAGE`.
+- `PATCH /transport/counterparties/:counterpartyId/sites/:siteId` đổi **tên** hoặc **trạng thái** của
+  một địa điểm đã có hàng rào (mọi trạng thái) → `409 COUNTERPARTY_SITE_MANAGED_AS_PLACE`; địa chỉ,
+  ghi chú vẫn sửa được ở đây.
+- `GET /transport/places/known` chỉ trả hàng rào **còn hiệu lực thật** (hàng rào, địa điểm, pháp
+  nhân, khách đều đang hoạt động). Mỗi địa điểm thêm hai trường: **`kindLabel`** — cùng nhãn với
+  `PlaceAdminView.kindLabel` (cùng hàm `fenceKindLabel()`), nên một kho của pháp nhân có liên kết
+  khách hàng là "Địa điểm khách hàng" ở cả Tạo đơn lẫn màn quản trị — và **`address`** (`null` khi
+  chưa nhập). `detail` = tên chủ (pháp nhân của `COUNTERPARTY_SITE`, khách của `CUSTOMER` cũ; bãi xe
+  để trống).
+- `GET /transport/planning/policy` trả thêm `depot.source` (`MANAGED` | `TENANT_CONFIG`).
 
 ---
 

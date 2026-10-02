@@ -17,11 +17,13 @@ import {
   type StatusTone,
 } from '../customer-view';
 import type {
+  DriverFieldWork,
   DriverFuelSlipView,
   DriverFundStatement,
   DriverTripView,
   FuelReconciliationStatus,
 } from '../transport-types';
+import { toFieldScreen, type FieldLegCard } from './driver-field';
 import { toFundBalance, type FundBalanceModel } from './driver-fund';
 
 /**
@@ -275,40 +277,269 @@ export const EVIDENCE_UPLOAD_HINT =
   'Chụp rõ phiếu, đủ số lít và số tiền. Ảnh gắn vào đúng phiếu này và kế toán xem được khi đối soát.';
 
 /* ------------------------------------------------------------------ *
- * Trang chu
+ * Trang chu — `#340`: viec DUOC DIEU (vong chay) truoc, chuyen cu la loi phu
  * ------------------------------------------------------------------ */
 
+/**
+ * MOT LAN DOC nhin tu trang chu — hinh dang toi thieu cua `SectionQuery`, khong phu thuoc vao no.
+ *
+ * `data` di TRUOC `errorMessage`: mot lan lam moi hong sau mot lan doc tot giu lai lan doc tot,
+ * cung luat voi man Hien truong (`#333`). Con CHUA TUNG doc duoc ma da hong thi la HONG — khong bao
+ * gio la "rong". Gop hai thu do chinh la loi `#340` sinh ra de sua.
+ */
+export interface DriverHomeRead<T> {
+  readonly data: T | undefined;
+  /** Query bi chan tu dau (`enabled: false`) — khach/vai khong co nguon nay. */
+  readonly isBlocked: boolean;
+  readonly errorMessage: string | null;
+}
+
+type ReadOutcome<T> =
+  | { readonly status: 'READY'; readonly data: T }
+  | { readonly status: 'FAILED'; readonly message: string }
+  | { readonly status: 'BLOCKED' }
+  | { readonly status: 'LOADING' };
+
+const outcomeOf = <T>(read: DriverHomeRead<T>): ReadOutcome<T> => {
+  if (read.data !== undefined) return { status: 'READY', data: read.data };
+  if (read.errorMessage !== null) return { status: 'FAILED', message: read.errorMessage };
+  return read.isBlocked ? { status: 'BLOCKED' } : { status: 'LOADING' };
+};
+
+/**
+ * CHANG DANG LAM, nhin tu trang chu.
+ *
+ * Chon bang `toFieldScreen()` — DUNG luat cua man Hien truong — chu khong suy lai o day. Hai man
+ * chi vao hai chang khac nhau la hai cau tra loi cho cung mot cau hoi "bay gio toi lam gi".
+ */
+export interface DriverHomeRunCard {
+  readonly runCode: string;
+  readonly legTitle: string;
+  readonly route: string;
+  readonly phaseLabel: string;
+  readonly orderCode: string | null;
+  /** Nhan cua viec DAU TIEN may chu da tinh — chi de DOC; nut bam nam o man Hien truong. */
+  readonly nextStepLabel: string | null;
+}
+
+/**
+ * THE CHINH cua trang chu — dung mot, va no tra loi "bay gio toi phai lam gi".
+ *
+ * `FAILED` va `LOADING` khong bao gio duoc doc thanh `NO_WORK`. `RUN_IDLE` cung khong: vong chay
+ * con mo nghia la viec VAN con, chi chua co gi de bam ngay.
+ */
+export type DriverHomePrimary =
+  | { readonly kind: 'LOADING'; readonly label: string }
+  | { readonly kind: 'FAILED'; readonly message: string }
+  | { readonly kind: 'NO_WORK'; readonly headline: string; readonly detail: string | null }
+  | { readonly kind: 'RUN_CURRENT'; readonly headline: string; readonly card: DriverHomeRunCard }
+  | { readonly kind: 'RUN_IDLE'; readonly headline: string; readonly runCodes: readonly string[] }
+  /** CHI khi nguon la `TRIP` — khach/vai chua co man Hien truong. */
+  | {
+      readonly kind: 'TRIP';
+      readonly headline: string;
+      readonly card: DriverTripCard;
+      readonly actions: readonly DriverTripAction[];
+    };
+
+/**
+ * Nguon quyet dinh "co viec hay khong".
+ *
+ * `RUN` bat cu khi nao man Hien truong mo — va khi do Trip KHONG bao gio duoc quyet dinh dieu do
+ * (`#340` yeu cau 3). `TRIP` chi con cho khach chua bat `transport-checkpoint`: voi ho tuyen
+ * `/transport/me/field-work` khong duoc gan, va chuyen la nguon viec duy nhat doc duoc.
+ */
+export type DriverHomeSource = 'RUN' | 'TRIP';
+
 export interface DriverHomeModel {
-  readonly currentTrip: DriverTripCard | null;
-  readonly actions: readonly DriverTripAction[];
+  readonly source: DriverHomeSource;
+  /** Tieu de the chinh — hai nguon, hai ten, de khong ai doc nham viec nay thanh viec kia. */
+  readonly heading: string;
+  readonly primary: DriverHomePrimary;
+  /** Chuyen theo cach lam truoc day dang mo — LOI PHU, chi khi nguon la `RUN`, khong mang nut. */
+  readonly legacyTrip: DriverTripCard | null;
+  /** Doc chuyen cu HONG khi nguon la `RUN` — noi ra o loi phu, khong im lang giau di. */
+  readonly legacyNotice: string | null;
+  /** Viec DA duoc dieu thi khong phai "nhan" lai o man Nhan viec (`#340` yeu cau 6). */
+  readonly assignedNote: string | null;
+  /** Loi vao Nhan viec tai diem — CHI khi van phong chua dieu viec nao (`#340` yeu cau 5). */
+  readonly siteIntakeHint: string | null;
+  /*
+   * KHONG co canh bao nhien lieu (`#340` yeu cau 8): tu `#364` o khai phieu cua lai xe doc CHINH
+   * viec duoc dieu (`/transport/me/fuel/runs`). Cau cu "phieu van ghi theo chuyen, chua ghi duoc"
+   * nay la SAI — no day lai xe di bao dieu hanh cho mot phieu ho tu ghi duoc o man Nhien lieu.
+   */
   /** `null` khi khach chua bat `transport-costing` — khong bia so 0. */
   readonly fund: FundBalanceModel | null;
-  readonly openTripCount: number;
-  readonly headline: string;
+  /** So chuyen dang mo theo DUNG nguon dang quyet dinh; `null` khi chua doc duoc — khong bia 0. */
+  readonly openWorkCount: number | null;
+}
+
+export interface DriverHomeInput {
+  /** `/transport/me/field-work` — CUNG khoa, CUNG lan doc voi man Hien truong. */
+  readonly runWork: DriverHomeRead<DriverFieldWork>;
+  /** `/transport/me/trips` — chuyen theo cach lam truoc day. */
+  readonly trips: DriverHomeRead<readonly DriverTripView[]>;
+  readonly fund: DriverFundStatement | null;
+  /** Man Hien truong co mo cho nguoi nay khong — trang chu chi chi vao mot man co that. */
+  readonly canOpenField: boolean;
+  readonly canIntakeAtSite: boolean;
 }
 
 const OPEN_STATUSES = new Set(['PLANNED', 'IN_TRANSIT']);
 
+const RUN_HEADING = 'Việc được điều từ văn phòng';
+const TRIP_HEADING = 'Chuyến hiện tại';
+const ASSIGNED_NOTE = 'Văn phòng đã giao việc này cho bạn — không cần vào Nhận việc để nhận lại.';
+const SITE_INTAKE_HINT =
+  'Nếu bạn đang ở điểm lấy hàng mà văn phòng chưa giao việc, dùng Nhận việc để báo đã đến.';
+const LEGACY_READ_FAILED = 'Chưa đọc được chuyến theo cách làm trước đây.';
+
+/** Phan cua mo hinh do VIEC DUOC DIEU quyet dinh — tach khoi phan chung (loi phu, quy). */
+type RunPart = Pick<
+  DriverHomeModel,
+  'primary' | 'assignedNote' | 'siteIntakeHint' | 'openWorkCount'
+>;
+
+/** Chua doc xong / doc hong: KHONG ket luan gi — ke ca "khong co viec". */
+const NOTHING_KNOWN = {
+  assignedNote: null,
+  siteIntakeHint: null,
+  openWorkCount: null,
+} as const;
+
 /**
- * MOT viec troi nhat, MOT den hai lan bam — #161 §3. Nen trang chu tra ve dung mot chuyen dang lam
- * kem thao tac cua chinh no, chu khong tra ve mot danh sach de nguoi ta tu tim.
+ * MOT viec troi nhat, MOT den hai lan bam — #161 §3 — va `#340`: viec do den tu VONG CHAY da duoc
+ * dieu, khong tu `TransportTrip`.
+ *
+ * Thu tu la mot phan cua hop dong: man Hien truong khong mo (hoac query bi chan) thi moi roi ve
+ * Trip; con mo thi Trip chi con la loi phu, du no la chuyen DANG CHAY.
  */
-export const toDriverHome = (input: {
-  readonly trips: readonly DriverTripView[];
-  readonly fund: DriverFundStatement | null;
-}): DriverHomeModel => {
-  const current = currentDriverTrip(input.trips);
-  const openTripCount = input.trips.filter(
+export const toDriverHome = (input: DriverHomeInput): DriverHomeModel => {
+  const run = outcomeOf(input.runWork);
+  const trips = outcomeOf(input.trips);
+  const fund = input.fund === null ? null : toFundBalance(input.fund);
+  if (!input.canOpenField || run.status === 'BLOCKED') {
+    return {
+      source: 'TRIP',
+      heading: TRIP_HEADING,
+      legacyTrip: null,
+      legacyNotice: null,
+      assignedNote: null,
+      siteIntakeHint: null,
+      fund,
+      ...tripPart(trips),
+    };
+  }
+  const legacy = trips.status === 'READY' ? currentDriverTrip(trips.data) : null;
+  return {
+    source: 'RUN',
+    heading: RUN_HEADING,
+    legacyTrip: legacy === null ? null : toDriverTripCard(legacy),
+    legacyNotice: trips.status === 'FAILED' ? LEGACY_READ_FAILED : null,
+    fund,
+    ...runPart(run, input),
+  };
+};
+
+const runPart = (
+  run: Exclude<ReadOutcome<DriverFieldWork>, { readonly status: 'BLOCKED' }>,
+  input: DriverHomeInput,
+): RunPart => {
+  if (run.status === 'LOADING') {
+    return {
+      ...NOTHING_KNOWN,
+      primary: { kind: 'LOADING', label: 'Đang đọc việc được điều cho bạn…' },
+    };
+  }
+  if (run.status === 'FAILED') {
+    return { ...NOTHING_KNOWN, primary: { kind: 'FAILED', message: run.message } };
+  }
+
+  const field = toFieldScreen(run.data);
+  const cards = field.current === null ? field.others : [field.current, ...field.others];
+  if (cards.length === 0) {
+    return {
+      primary: {
+        kind: 'NO_WORK',
+        headline: 'Hiện chưa có việc nào được điều cho bạn.',
+        detail: 'Việc văn phòng giao sẽ hiện ở đây và ở màn Hiện trường.',
+      },
+      assignedNote: null,
+      siteIntakeHint: input.canIntakeAtSite ? SITE_INTAKE_HINT : null,
+      openWorkCount: 0,
+    };
+  }
+
+  // Dem theo VONG CHAY (`runId`), khong theo so chang: mot vong chay hai chang van la mot viec.
+  const runs = new Map(cards.map((card) => [card.runId, card.runCode]));
+  return {
+    primary:
+      field.current === null
+        ? { kind: 'RUN_IDLE', headline: field.headline, runCodes: [...runs.values()] }
+        : runCurrent(field.current, field.headline),
+    assignedNote: input.canIntakeAtSite ? ASSIGNED_NOTE : null,
+    siteIntakeHint: null,
+    openWorkCount: runs.size,
+  };
+};
+
+/**
+ * `toFieldScreen` chi chon lam `current` mot chang CO it nhat mot nut, nen viec ke tiep luon co.
+ * Neu mot ngay luat do doi, cau dau roi ve dong tieu de cua man Hien truong — khong ve dau ngoac rong.
+ */
+const runCurrent = (current: FieldLegCard, fieldHeadline: string): DriverHomePrimary => {
+  const next = current.actions[0]?.label ?? null;
+  return {
+    kind: 'RUN_CURRENT',
+    headline: next === null ? fieldHeadline : `Việc kế tiếp: bấm “${next}” ở màn Hiện trường.`,
+    card: {
+      runCode: current.runCode,
+      legTitle: current.title,
+      route: current.route,
+      phaseLabel: current.phaseLabel,
+      orderCode: current.orderCode,
+      nextStepLabel: next,
+    },
+  };
+};
+
+/**
+ * KHACH CHUA CO MAN HIEN TRUONG — chuyen la nguon viec duy nhat doc duoc, nen hop dong cu giu
+ * nguyen: the chuyen dang lam kem hai nut cua chinh no (`driverTripActions`).
+ */
+const tripPart = (
+  trips: ReadOutcome<readonly DriverTripView[]>,
+): Pick<DriverHomeModel, 'primary' | 'openWorkCount'> => {
+  if (trips.status === 'LOADING') {
+    return { primary: { kind: 'LOADING', label: 'Đang đọc chuyến của bạn…' }, openWorkCount: null };
+  }
+  if (trips.status === 'FAILED') {
+    return { primary: { kind: 'FAILED', message: trips.message }, openWorkCount: null };
+  }
+
+  const list = trips.status === 'READY' ? trips.data : [];
+  const current = currentDriverTrip(list);
+  const openWorkCount = list.filter(
     (trip) => trip.isCurrentAssignee && OPEN_STATUSES.has(trip.status),
   ).length;
+  if (current === null) {
+    return {
+      primary: {
+        kind: 'NO_WORK',
+        headline: 'Hiện chưa có chuyến nào được phân công cho bạn.',
+        detail: null,
+      },
+      openWorkCount,
+    };
+  }
   return {
-    currentTrip: current === null ? null : toDriverTripCard(current),
-    actions: driverTripActions(current),
-    fund: input.fund === null ? null : toFundBalance(input.fund),
-    openTripCount,
-    headline:
-      current === null
-        ? 'Hiện chưa có chuyến nào được phân công cho bạn.'
-        : `${TRIP_STATUS_LABEL[current.status]} · ${current.originLabel} → ${current.destinationLabel}`,
+    primary: {
+      kind: 'TRIP',
+      headline: `${TRIP_STATUS_LABEL[current.status]} · ${current.originLabel} → ${current.destinationLabel}`,
+      card: toDriverTripCard(current),
+      actions: driverTripActions(current),
+    },
+    openWorkCount,
   };
 };

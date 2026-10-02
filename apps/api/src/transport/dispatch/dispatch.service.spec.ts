@@ -90,6 +90,10 @@ const PLACE_INDEX: readonly PlaceIndexEntry[] = [
   { geofenceId: 'gf-nb', label: 'Bai Ninh Binh', point: NINH_BINH, siteId: null, siteName: null },
 ];
 
+/*
+ * Don mac dinh MANG TOA DO (#379) va nhan KHOP voi toa do — de moi bai cu kiem dung thu no kiem.
+ * Nhung bai kiem rieng thu tu "toa do thang nhan" o cuoi tep co y lam lech hai thu do.
+ */
 const order = (over: Partial<Order> = {}): Order => ({
   id: 'ord-1',
   code: 'ORD-1',
@@ -98,6 +102,8 @@ const order = (over: Partial<Order> = {}): Order => ({
   customerId: null,
   originLabel: 'Kho Hai Phong',
   destinationLabel: 'Bai Ninh Binh',
+  originPoint: HAI_PHONG,
+  destinationPoint: NINH_BINH,
   cargoDescription: null,
   freightAmount: null,
   currencyCode: 'VND',
@@ -222,6 +228,8 @@ class TableRoutingPort extends TransportRoutingPort {
   readonly providerId = 'bang-tay';
   failure: MatrixOutcome | null = null;
   matrixCalls = 0;
+  /** Moi lan dinh tuyen MOT doan (phep chieu chang con lai) — de doc diem den cua tung chang. */
+  routeCalls: RouteRequest[] = [];
 
   constructor(private readonly table: ReadonlyMap<string, { metres: number; seconds: number }>) {
     super();
@@ -239,6 +247,7 @@ class TableRoutingPort extends TransportRoutingPort {
   }
 
   route(request: RouteRequest): Promise<RouteOutcome> {
+    this.routeCalls.push(request);
     const hit = this.lookup(request.origin, request.destination);
     return Promise.resolve({
       ok: true,
@@ -577,14 +586,14 @@ describe('be mat de nghi dieu xe', () => {
     ).rejects.toMatchObject({ reason: 'DISPATCH_ORDER_CANCELLED' });
   });
 
-  it('khong giai duoc diem lay hang -> tu choi CO KIEU, khong lay dai mot toa do', async () => {
-    core.orders = [order({ originLabel: 'Mot cho chua khai hang rao' })];
+  it('don cu KHONG co toa do -> tu choi CO KIEU, khong lay dai mot toa do', async () => {
+    core.orders = [order({ originLabel: 'Mot cho chua khai hang rao', originPoint: null })];
     core.vehicles = [vehicle({ id: 'a' })];
     observe('a', HAI_PHONG);
 
     await expect(
       build(new TableRoutingPort(new Map())).suggest('ord-1', EMPTY_DISPATCH_REQUEST, ADMIN),
-    ).rejects.toMatchObject({ reason: 'DISPATCH_PICKUP_LOCATION_UNRESOLVED' });
+    ).rejects.toMatchObject({ reason: 'DISPATCH_ORDER_PICKUP_COORDINATES_MISSING' });
   });
 
   /**
@@ -918,5 +927,382 @@ describe('cong che do gom nhom', () => {
       reason: 'DISPATCH_MULTI_ORDER_DISABLED',
     });
     expect(planner.calls).toHaveLength(0);
+  });
+});
+
+/**
+ * TOA DO DON LA SU THAT CUA DIEM LAY (#379).
+ *
+ * ===========================================================================
+ * MOI BAI O DAY LAM LECH NHAN CHU VA TOA DO CUA CUNG MOT DON
+ *
+ * Do la cach duy nhat chung minh he thong doc TOA DO chu khong doc NHAN: khi hai thu trung nhau,
+ * mot ban cai dat van suy tu nhan cung xanh. Hoan lai duong cu (`resolvePlaceByLabel(originLabel)`
+ * cho diem lay, hay nhan chang cho chang co don) thi bo nay phai do.
+ */
+describe('toa do don la su that cua diem lay (#379)', () => {
+  let core: FakeCoreFacts;
+  let location: FakeLocationFacts;
+  let planner: RecordingPlanner;
+
+  interface BuildOptions {
+    readonly routing?: TransportRoutingPort;
+    /** `false` = khach khong bat `transport-proof`: khong vi tri xe, khong so tra cuu hang rao. */
+    readonly withLocation?: boolean;
+    readonly maxProjectionRouteCalls?: number;
+  }
+
+  const build = (options: BuildOptions = {}): DispatchService =>
+    new DispatchService(
+      core,
+      options.routing ?? new TableRoutingPort(new Map()),
+      planner,
+      {
+        ...DEFAULT_TRANSPORT_DISPATCH_POLICY,
+        maxProjectionRouteCalls:
+          options.maxProjectionRouteCalls ??
+          DEFAULT_TRANSPORT_DISPATCH_POLICY.maxProjectionRouteCalls,
+      },
+      multiOrderPlanningPolicy(),
+      options.withLocation === false ? undefined : location,
+      undefined,
+      undefined,
+      () => NOW,
+    );
+
+  const observe = (vehicleId: string, point: typeof HA_NOI): void => {
+    location.samples.set(vehicleId, {
+      sessionId: `ses-${vehicleId}`,
+      point,
+      accuracyMetres: 10,
+      source: 'DEVICE_GNSS',
+      receivedAt: new Date(NOW.getTime() - 60_000),
+    });
+  };
+
+  const pickupAt = (point: typeof HA_NOI): DispatchSuggestionRequest => ({
+    ...EMPTY_DISPATCH_REQUEST,
+    pickup: { kind: 'POINT', latitude: point.latitude, longitude: point.longitude },
+  });
+
+  beforeEach(() => {
+    core = new FakeCoreFacts();
+    location = new FakeLocationFacts();
+    planner = new RecordingPlanner();
+    core.vehicles = [vehicle({ id: 'a' })];
+    observe('a', HAI_PHONG);
+  });
+
+  it('toa do THANG nhan: nhan noi Ha Noi, toa do o Hai Phong -> lay hang o Hai Phong', async () => {
+    core.orders = [order({ originLabel: 'Kho Ha Noi', originPoint: HAI_PHONG })];
+    const routing = new TableRoutingPort(
+      distances([
+        [HAI_PHONG.latitude, HAI_PHONG.latitude, 700, 90],
+        [HAI_PHONG.latitude, HA_NOI.latitude, 120_000, 7_200],
+      ]),
+    );
+
+    const view = await build({ routing }).suggest('ord-1', EMPTY_DISPATCH_REQUEST, ADMIN);
+
+    expect(view.pickup.resolution).toBe('PICKUP_FROM_ORDER_COORDINATES');
+    // Nhan di kem de HIEN THI, toa do la cua don — khong phai cua hang rao "Kho Ha Noi".
+    expect(view.pickup.place).toEqual({
+      point: HAI_PHONG,
+      source: 'ORDER_PICKUP_POINT',
+      label: 'Kho Ha Noi',
+      geofenceId: null,
+      siteId: null,
+    });
+    // Va bang xep hang do bang chinh toa do do.
+    expect(view.candidates[0]?.emptyRoadMetresToPickup).toBe(700);
+  });
+
+  it('nhan khong khop hang rao nao van giai duoc nho toa do cua don', async () => {
+    core.orders = [
+      order({ originLabel: 'Bai tap ket moi, chua khai hang rao', originPoint: HAI_PHONG }),
+    ];
+
+    const view = await build().suggest('ord-1', EMPTY_DISPATCH_REQUEST, ADMIN);
+
+    expect(view.pickup.place.point).toEqual(HAI_PHONG);
+    expect(view.candidates.map((candidate) => candidate.vehicleId)).toEqual(['a']);
+  });
+
+  /**
+   * BAI DOT BIEN CUA #379: nhan `Kho Hai Phong` KHOP mot hang rao, nen duong cu se giai ra ngay.
+   * Don nay khong co toa do -> phai tu choi, khong mot lan dinh tuyen nao, khong ghi gi.
+   */
+  it('don cu KHONG roi ve nhan chu, ke ca khi nhan trung ten mot hang rao', async () => {
+    core.orders = [
+      order({ originLabel: 'Kho Hai Phong', originPoint: null, destinationPoint: null }),
+    ];
+    const routing = new TableRoutingPort(new Map());
+
+    await expect(
+      build({ routing }).suggest('ord-1', EMPTY_DISPATCH_REQUEST, ADMIN),
+    ).rejects.toMatchObject({
+      kind: 'INVALID',
+      reason: 'DISPATCH_ORDER_PICKUP_COORDINATES_MISSING',
+    });
+    expect(routing.matrixCalls).toBe(0);
+    expect(planner.calls).toHaveLength(0);
+  });
+
+  it('toa do hong luu tren don cung bi tu choi, khong dung lam diem lay', async () => {
+    core.orders = [order({ originPoint: { latitude: 0, longitude: 0 } })];
+
+    await expect(build().suggest('ord-1', EMPTY_DISPATCH_REQUEST, ADMIN)).rejects.toMatchObject({
+      reason: 'DISPATCH_ORDER_PICKUP_COORDINATES_MISSING',
+    });
+  });
+
+  it('tham chieu tuong minh POINT thang toa do cua don', async () => {
+    const view = await build().suggest('ord-1', pickupAt(HA_NOI), ADMIN);
+
+    expect(view.pickup.resolution).toBe('PICKUP_FROM_EXPLICIT_REQUEST');
+    expect(view.pickup.place.source).toBe('EXPLICIT_REQUEST_POINT');
+    expect(view.pickup.place.point).toEqual(HA_NOI);
+  });
+
+  it('tham chieu tuong minh GEOFENCE thang toa do cua don', async () => {
+    const view = await build().suggest(
+      'ord-1',
+      { ...EMPTY_DISPATCH_REQUEST, pickup: { kind: 'GEOFENCE', geofenceId: 'gf-nb' } },
+      ADMIN,
+    );
+
+    expect(view.pickup.resolution).toBe('PICKUP_FROM_EXPLICIT_REQUEST');
+    expect(view.pickup.place.source).toBe('EXPLICIT_REQUEST_GEOFENCE');
+    expect(view.pickup.place.point).toEqual(NINH_BINH);
+  });
+
+  it('don cu VAN dieu duoc khi nguoi dieu xe chi dinh diem lay tuong minh', async () => {
+    core.orders = [order({ originPoint: null, destinationPoint: null })];
+
+    const view = await build().suggest('ord-1', pickupAt(HAI_PHONG), ADMIN);
+
+    expect(view.pickup.place.point).toEqual(HAI_PHONG);
+    expect(view.candidates.map((candidate) => candidate.vehicleId)).toEqual(['a']);
+  });
+
+  /**
+   * Khong `transport-proof` thi so tra cuu hang rao RONG — duong cu theo nhan se luon
+   * `PICKUP_LABEL_NO_MATCH` va nem. Toa do cua don khong phu thuoc capability do.
+   */
+  it('khach khong bat transport-proof: diem lay VAN giai duoc tu toa do don', async () => {
+    const view = await build({ withLocation: false }).suggest(
+      'ord-1',
+      EMPTY_DISPATCH_REQUEST,
+      ADMIN,
+    );
+
+    expect(view.pickup.resolution).toBe('PICKUP_FROM_ORDER_COORDINATES');
+    expect(view.pickup.place.point).toEqual(HAI_PHONG);
+    expect(view.candidates).toHaveLength(0);
+    expect(view.excluded[0]?.reasons).toEqual(['VEHICLE_HAS_NO_USABLE_ORIGIN']);
+  });
+
+  /**
+   * KHONG `transport-proof`, nhung xe BAN co chang cuoi toi mot don CO toa do: phep chieu "xe se
+   * ranh o dau" lay diem giao cua don — khong can vi tri xe, khong can so hang rao. Xe ranh thi van
+   * bi loai vi khong co diem xuat phat nao. Gio ranh khong tinh duoc (khong biet xe dang o dau) nen
+   * `availableAt` la `null` va nguoi dieu xe thay dung dieu do; do la hanh vi CO Y, khong phai lo.
+   */
+  it('khach khong bat transport-proof: xe ranh bi loai, xe ban hien NEXT_FREE_NEAR khong gio ranh', async () => {
+    core.vehicles = [vehicle({ id: 'a' }), vehicle({ id: 'ban' })];
+    core.orders = [
+      order(),
+      order({ id: 'ord-2', code: 'ORD-2', originPoint: HA_NOI, destinationPoint: NINH_BINH }),
+    ];
+    core.legs = [
+      {
+        run: run({ id: 'r1', vehicleId: 'ban' }),
+        leg: leg({ id: 'l1', runId: 'r1', orderId: 'ord-2', destinationLabel: 'Kho Hai Phong' }),
+      },
+    ];
+
+    const view = await build({ withLocation: false }).suggest(
+      'ord-1',
+      EMPTY_DISPATCH_REQUEST,
+      ADMIN,
+    );
+
+    expect(view.excluded).toEqual([
+      expect.objectContaining({ vehicleId: 'a', reasons: ['VEHICLE_HAS_NO_USABLE_ORIGIN'] }),
+    ]);
+    expect(view.candidates).toHaveLength(1);
+    const [busy] = view.candidates;
+    expect(busy).toMatchObject({
+      vehicleId: 'ban',
+      mode: 'NEXT_FREE_NEAR',
+      availableAt: null,
+      pickupEtaAt: null,
+      currentLocation: null,
+    });
+    // Diem giao cua DON (Ninh Binh), khong phai nhan chang ("Kho Hai Phong") — so hang rao rong.
+    expect(busy?.origin).toMatchObject({ point: NINH_BINH, source: 'ORDER_DELIVERY_POINT' });
+    expect(busy?.nextFree?.gaps).toContain('CURRENT_POSITION_UNKNOWN');
+  });
+
+  it('xac nhan tren don cu bi chan TRUOC bo lap ke hoach', async () => {
+    core.orders = [order({ originPoint: null, destinationPoint: null })];
+
+    await expect(build().commit('ord-1', 'a', EMPTY_DISPATCH_REQUEST, ADMIN)).rejects.toMatchObject(
+      { reason: 'DISPATCH_ORDER_PICKUP_COORDINATES_MISSING' },
+    );
+    expect(planner.calls).toHaveLength(0);
+  });
+
+  it('chang CO TAI di toi diem GIAO cua don, ke ca khi nhan chang trung mot hang rao khac', async () => {
+    core.vehicles = [vehicle({ id: 'ban' })];
+    observe('ban', HA_NOI);
+    core.orders = [
+      order(),
+      order({
+        id: 'ord-2',
+        code: 'ORD-2',
+        originPoint: HA_NOI,
+        destinationPoint: HAI_PHONG,
+        destinationLabel: 'Cang Hai Phong moi',
+      }),
+    ];
+    core.legs = [
+      {
+        run: run({ id: 'r1', vehicleId: 'ban' }),
+        // Nhan chang KHOP hang rao Ninh Binh — duong cu se cho xe "ranh" o Ninh Binh.
+        leg: leg({ id: 'l1', runId: 'r1', orderId: 'ord-2', destinationLabel: 'Bai Ninh Binh' }),
+      },
+    ];
+    const routing = new TableRoutingPort(
+      distances([
+        [HAI_PHONG.latitude, HAI_PHONG.latitude, 500, 120],
+        [NINH_BINH.latitude, HAI_PHONG.latitude, 130_000, 8_000],
+      ]),
+    );
+
+    const view = await build({ routing }).suggest('ord-1', EMPTY_DISPATCH_REQUEST, ADMIN);
+    const afterWork = view.candidates.find((candidate) => candidate.mode === 'NEXT_FREE_NEAR');
+
+    expect(afterWork?.origin).toMatchObject({
+      point: HAI_PHONG,
+      source: 'ORDER_DELIVERY_POINT',
+      label: 'Cang Hai Phong moi',
+    });
+    expect(afterWork?.emptyRoadMetresToPickup).toBe(500);
+  });
+
+  it('chang RONG ngay truoc chang co tai di toi diem LAY cua don ke tiep', async () => {
+    core.vehicles = [vehicle({ id: 'ban' })];
+    observe('ban', HA_NOI);
+    core.orders = [
+      order(),
+      order({ id: 'ord-3', code: 'ORD-3', originPoint: NINH_BINH, destinationPoint: HAI_PHONG }),
+    ];
+    const r1 = run({ id: 'r1', vehicleId: 'ban' });
+    core.legs = [
+      {
+        run: r1,
+        // Nhan chang rong KHOP hang rao Ha Noi — duong cu se tinh chang rong la "dung tai cho".
+        leg: leg({
+          id: 'l-rong',
+          runId: 'r1',
+          sequence: 1,
+          kind: 'EMPTY',
+          status: 'PLANNED',
+          destinationLabel: 'Kho Ha Noi',
+        }),
+      },
+      {
+        run: r1,
+        leg: leg({
+          id: 'l-tai',
+          runId: 'r1',
+          sequence: 2,
+          status: 'PLANNED',
+          orderId: 'ord-3',
+          destinationLabel: 'Kho Ha Noi',
+        }),
+      },
+    ];
+    const routing = new TableRoutingPort(new Map());
+
+    await build({ routing }).suggest('ord-1', EMPTY_DISPATCH_REQUEST, ADMIN);
+
+    expect(routing.routeCalls.map((call) => [call.origin, call.destination])).toEqual([
+      [HA_NOI, NINH_BINH],
+      [NINH_BINH, HAI_PHONG],
+    ]);
+  });
+
+  it('chang cua don cu (khong toa do) VAN giai theo nhan chang — phep chieu, khong phai diem lay', async () => {
+    core.vehicles = [vehicle({ id: 'ban' })];
+    observe('ban', HA_NOI);
+    core.orders = [
+      order(),
+      order({ id: 'ord-cu', code: 'ORD-CU', originPoint: null, destinationPoint: null }),
+    ];
+    core.legs = [
+      {
+        run: run({ id: 'r1', vehicleId: 'ban' }),
+        leg: leg({ id: 'l1', runId: 'r1', orderId: 'ord-cu', destinationLabel: 'Kho Hai Phong' }),
+      },
+    ];
+
+    const view = await build().suggest('ord-1', EMPTY_DISPATCH_REQUEST, ADMIN);
+    const afterWork = view.candidates.find((candidate) => candidate.mode === 'NEXT_FREE_NEAR');
+
+    expect(afterWork?.origin).toMatchObject({ point: HAI_PHONG, source: 'GEOFENCE_LABEL_EXACT' });
+  });
+
+  it('moi don doc DUNG MOT lan moi luot tinh, ke ca don dang dieu', async () => {
+    core.vehicles = [vehicle({ id: 'x1' }), vehicle({ id: 'x2' })];
+    observe('x1', HA_NOI);
+    observe('x2', HA_NOI);
+    core.orders = [
+      order(),
+      order({ id: 'ord-2', code: 'ORD-2', originPoint: HA_NOI, destinationPoint: NINH_BINH }),
+    ];
+    const r1 = run({ id: 'r1', vehicleId: 'x1' });
+    core.legs = [
+      // Chang rong + chang co tai cua CUNG don `ord-2` — hai lan hoi, mot lan doc.
+      { run: r1, leg: leg({ id: 'l1', runId: 'r1', sequence: 1, kind: 'EMPTY' }) },
+      { run: r1, leg: leg({ id: 'l2', runId: 'r1', sequence: 2, orderId: 'ord-2' }) },
+      // Chang tro toi chinh don dang dieu — da doc o dau luot, khong doc lai.
+      {
+        run: run({ id: 'r2', vehicleId: 'x2' }),
+        leg: leg({ id: 'l3', runId: 'r2', orderId: 'ord-1' }),
+      },
+    ];
+
+    await build().suggest('ord-1', EMPTY_DISPATCH_REQUEST, ADMIN);
+
+    expect([...core.orderReads].sort()).toEqual(['ord-1', 'ord-2']);
+  });
+
+  it('ngan sach dinh tuyen giu nguyen nghia: doc don khong ton lan goi nao', async () => {
+    core.vehicles = [vehicle({ id: 'ban' })];
+    observe('ban', HA_NOI);
+    core.orders = [
+      order(),
+      order({ id: 'ord-3', code: 'ORD-3', originPoint: NINH_BINH, destinationPoint: HAI_PHONG }),
+    ];
+    const r1 = run({ id: 'r1', vehicleId: 'ban' });
+    core.legs = [
+      { run: r1, leg: leg({ id: 'l1', runId: 'r1', sequence: 1, kind: 'EMPTY' }) },
+      { run: r1, leg: leg({ id: 'l2', runId: 'r1', sequence: 2, orderId: 'ord-3' }) },
+    ];
+    const routing = new TableRoutingPort(new Map());
+
+    const view = await build({ routing, maxProjectionRouteCalls: 1 }).suggest(
+      'ord-1',
+      EMPTY_DISPATCH_REQUEST,
+      ADMIN,
+    );
+
+    // Hai chang, ngan sach MOT: dung mot doan duoc dinh tuyen, doan kia thanh mot khoang trong co ten.
+    expect(routing.routeCalls).toHaveLength(1);
+    const afterWork = view.candidates.find((candidate) => candidate.mode === 'NEXT_FREE_NEAR');
+    expect(afterWork?.nextFree?.gaps).toContain('ROUTING_UNAVAILABLE_FOR_REMAINING_LEG');
+    expect(afterWork?.origin.point).toEqual(HAI_PHONG);
   });
 });

@@ -10,6 +10,7 @@ import {
   PageHeader,
   StatusBadge,
 } from '../components/primitives';
+import { PermissionGate, PermissionNote } from '../components/PermissionGate';
 import { EmptyState, ErrorState, LoadingState } from '../components/SectionState';
 import {
   toSectionQuery,
@@ -23,6 +24,7 @@ import {
   useVehicles,
   useWorkOrders,
 } from '../hooks/useTransportWorkspace';
+import { canPerform } from '../transport-actions';
 import {
   toAssetDirectory,
   toComplianceAlertRows,
@@ -88,6 +90,14 @@ export function MaintenanceComplianceView() {
   const openOrderCount = orderRows.filter((row) => row.isOpen).length;
   const firstError = due.errorMessage ?? documents.errorMessage ?? fleetStatus.errorMessage ?? null;
   const isLoading = due.isLoading || documents.isLoading || fleetStatus.isLoading;
+  /**
+   * `#395` — ba khoi PHU cua man nay, moi khoi mot ma XEM rieng trong nhom "Bảo dưỡng / giấy tờ".
+   * Thieu ma nao thi khoi do noi "Bạn chưa được cấp quyền xem …" — khong con "Không có giấy tờ nào
+   * sắp hết hạn." (mot cau sai: chua doc thi chua biet) hay mot the "0" dau trang.
+   */
+  const canReadDocuments = canPerform(navigation, 'transport.compliance.document.read');
+  const canReadAlerts = canPerform(navigation, 'transport.alerts.read');
+  const canReadFleetStatus = canPerform(navigation, 'transport.fleet_status.read');
 
   return (
     <>
@@ -98,44 +108,60 @@ export function MaintenanceComplianceView() {
 
       {firstError === null ? null : <ErrorState message={firstError} onRetry={due.refetch} />}
       {isLoading ? <LoadingState label="Đang đọc tình trạng đội xe…" /> : null}
+      {/* Bien so va ten lai xe la danh ba cua nhom "Đội xe & lái xe" — quyen kem theo. */}
+      <PermissionNote
+        viewer={navigation}
+        actions={['transport.vehicle.read', 'transport.driver.read']}
+      />
 
       <section className="tx-cards" aria-label="Tình trạng đội xe">
         <MetricCard label="Kế hoạch quá hạn" value={String(overdueCount)} />
         <MetricCard label="Lệnh sửa đang mở" value={String(openOrderCount)} />
-        <MetricCard label="Giấy tờ đã hết hạn" value={String(expiredCount)} />
-        <MetricCard label="Cảnh báo cần xử lý ngay" value={String(alerts.criticalCount)} />
+        {canReadDocuments ? (
+          <MetricCard label="Giấy tờ đã hết hạn" value={String(expiredCount)} />
+        ) : null}
+        {canReadAlerts ? (
+          <MetricCard label="Cảnh báo cần xử lý ngay" value={String(alerts.criticalCount)} />
+        ) : null}
       </section>
 
       {/* BANG CANH BAO GOM CHUNG — cau ve nguon thieu phai hien TRUOC bang, khong o duoi. */}
       <section className="tx-panel" aria-label="Cảnh báo vận hành">
         <h2>Cảnh báo vận hành</h2>
-        <p className="tx-panel__lead">{alerts.headline}</p>
-        {alerts.unavailableNote === null ? null : (
-          <p className="tx-note tx-note--warn" role="note">
-            {alerts.unavailableNote}
-          </p>
-        )}
-        {alerts.rows.length === 0 ? (
-          <EmptyState title="Không có cảnh báo nào đang mở." />
+        {!canReadAlerts ? (
+          <PermissionGate viewer={navigation} action="transport.alerts.read" />
         ) : (
-          <ul className="tx-worklist">
-            {alerts.rows.map((row) => (
-              <li key={row.key}>
-                <div>
-                  <strong>{row.kindLabel}</strong>
-                  <span>{row.subjectLabel}</span>
-                  {row.details.length === 0 ? null : <span>{row.details.join(' · ')}</span>}
-                </div>
-                <StatusBadge label={row.severityLabel} tone={row.tone} />
-              </li>
-            ))}
-          </ul>
+          <>
+            <p className="tx-panel__lead">{alerts.headline}</p>
+            {alerts.unavailableNote === null ? null : (
+              <p className="tx-note tx-note--warn" role="note">
+                {alerts.unavailableNote}
+              </p>
+            )}
+            {alerts.rows.length === 0 ? (
+              <EmptyState title="Không có cảnh báo nào đang mở." />
+            ) : (
+              <ul className="tx-worklist">
+                {alerts.rows.map((row) => (
+                  <li key={row.key}>
+                    <div>
+                      <strong>{row.kindLabel}</strong>
+                      <span>{row.subjectLabel}</span>
+                      {row.details.length === 0 ? null : <span>{row.details.join(' · ')}</span>}
+                    </div>
+                    <StatusBadge label={row.severityLabel} tone={row.tone} />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </>
         )}
       </section>
 
       <section className="tx-panel" aria-label="Bảo dưỡng đến hạn">
         <h2>Bảo dưỡng đến hạn</h2>
-        {dueRows.length === 0 ? (
+        {/* Doc LOI (loi da noi dau trang) khong phai "chua co ke hoach nao" (`#395`). */}
+        {due.errorMessage !== null ? null : dueRows.length === 0 ? (
           <EmptyState title="Chưa có kế hoạch bảo dưỡng nào đến hạn." />
         ) : (
           <DataTable
@@ -192,7 +218,7 @@ export function MaintenanceComplianceView() {
         >
           <WorkOrderCommands
             vehicles={vehicles.data ?? []}
-            role={navigation.role}
+            viewer={navigation}
             onChanged={refreshAssets}
           />
         </CommandPanel>
@@ -206,11 +232,13 @@ export function MaintenanceComplianceView() {
                 (vehicles.data ?? []).find((v) => v.id === row.vehicleId)?.registrationPlate ??
                 'Xe chưa đọc được biển số'
               }
-              role={navigation.role}
+              viewer={navigation}
               onChanged={refreshAssets}
             />
           ))}
-        {orderRows.length === 0 ? (
+        {workOrders.errorMessage !== null ? (
+          <ErrorState message={workOrders.errorMessage} onRetry={workOrders.refetch} />
+        ) : orderRows.length === 0 ? (
           <EmptyState title="Chưa có lệnh sửa chữa nào." />
         ) : (
           <DataTable
@@ -240,7 +268,9 @@ export function MaintenanceComplianceView() {
 
       <section className="tx-panel" aria-label="Giấy tờ sắp hết hạn">
         <h2>Giấy tờ sắp hết hạn</h2>
-        {alertRows.length === 0 ? (
+        {!canReadDocuments ? (
+          <PermissionGate viewer={navigation} action="transport.compliance.document.read" />
+        ) : alertRows.length === 0 ? (
           <EmptyState title="Không có giấy tờ nào sắp hoặc đã hết hạn." />
         ) : (
           <DataTable
@@ -278,11 +308,13 @@ export function MaintenanceComplianceView() {
           <ComplianceDocumentForm
             vehicles={vehicles.data ?? []}
             drivers={drivers.data ?? []}
-            role={navigation.role}
+            viewer={navigation}
             onChanged={refreshAssets}
           />
         </CommandPanel>
-        {documentRows.length === 0 ? (
+        {!canReadDocuments ? (
+          <PermissionGate viewer={navigation} action="transport.compliance.document.read" />
+        ) : documentRows.length === 0 ? (
           <EmptyState title="Chưa có giấy tờ nào được ghi nhận." />
         ) : (
           <DataTable
@@ -313,7 +345,9 @@ export function MaintenanceComplianceView() {
           với trạng thái ghi trong hồ sơ, đó là một mâu thuẫn cần kiểm tra chứ không phải một con số
           để chọn.
         </p>
-        {statusRows.length === 0 ? (
+        {!canReadFleetStatus ? (
+          <PermissionGate viewer={navigation} action="transport.fleet_status.read" />
+        ) : statusRows.length === 0 ? (
           <EmptyState title="Chưa đọc được trạng thái đội xe." />
         ) : (
           <DataTable

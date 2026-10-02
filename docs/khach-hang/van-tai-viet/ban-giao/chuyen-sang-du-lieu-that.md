@@ -58,6 +58,8 @@ Theo thứ tự này, vì cái sau tham chiếu cái trước:
 - [ ] **Khách hàng** — tên, mã số thuế, địa chỉ, **hạn thanh toán**, **hạn mức công nợ**
 - [ ] **Đối tác** — kèm vai: nhà xe, nguồn đơn, hoặc cả hai
 - [ ] **Cây xăng** — tên, mã, mã số thuế
+- [ ] **Địa điểm vận hành** — bãi xe (đúng **một** bãi đang dùng), kho của khách, nhà máy của đối
+      tác: nhập ở _Quản trị → Địa điểm vận hành_, sau khi đã có khách hàng và đối tác
 
 > Hạn thanh toán của khách hàng quyết định toàn bộ bảng tuổi nợ. Điền sai ở đây thì báo cáo công
 > nợ sai từ ngày đầu, và sai một cách trông rất hợp lý.
@@ -67,9 +69,11 @@ Theo thứ tự này, vì cái sau tham chiếu cái trước:
 - [ ] Một tài khoản **Giám đốc** (`ADMIN`)
 - [ ] Tài khoản **Kế toán** (`ACCOUNTING`) — nhớ ba việc kế toán **không** làm được: huỷ chuyến,
       mở lại kỳ quỹ, mở lại kỳ đối soát
-- [ ] Một tài khoản cho **mỗi lái xe**, nối với đúng hồ sơ lái xe
-- [ ] Đã đổi mật khẩu khởi tạo và bàn giao cho từng người
-- [ ] **Đã quyết** vai _Quản lý_ làm được gì (mặc định hiện tại: **không quyền vận tải nào**)
+- [ ] Một tài khoản cho **mỗi lái xe**, nối với đúng hồ sơ lái xe (_Quản trị → Tài khoản & quyền_)
+- [ ] Đã chuyển mật khẩu tạm (hạn 72 giờ) cho từng người, và mỗi người đã tự đổi ở lần đăng nhập
+      đầu
+- [ ] Người **Điều hành / Quản lý**: Giám đốc đã chọn nhóm việc cho từng người (vai này bắt đầu
+      **trống** — xem [README](README.md#tài-khoản--quyền))
 
 ### Bước 4 — Chính sách
 

@@ -44,3 +44,29 @@
   .login-brief dl { display: none; }
   .login-brief h1 { font-size: clamp(2.3rem, 12vw, 4rem); }
 }
+
+/*
+ * #395 — DOI MAT KHAU BAT BUOC va loi nhan het phien. Mot cot, can giua: man nay thuong mo tren
+ * dien thoai cua lai xe ngay lan dang nhap dau, nen o nhap to va nut rong het be ngang.
+ */
+.login-shell--single {
+  grid-template-columns: minmax(0, 34rem);
+  justify-content: center;
+  background: radial-gradient(circle at 20% 10%, var(--accent-soft), transparent 40%), var(--bg);
+}
+.login-card--change h1 { margin: 0.75rem 0 0.9rem; font: 500 clamp(1.7rem, 5vw, 2.1rem)/1.1 var(--font-display); }
+.login-card__lead { margin: 0 0 0.6rem; color: var(--text-dim); line-height: 1.55; }
+.login-card__expiry { margin: 0 0 1rem; padding: 0.55rem 0.7rem; border-left: 3px solid var(--warn); background: var(--warn-soft); font-weight: 650; }
+.login-card__hint { margin: 0.35rem 0 0; font-size: 0.86rem; color: var(--text-dim); }
+.login-card .login-card__toggle { display: flex; gap: 0.5rem; align-items: center; margin-top: 0.4rem; font-weight: 500; }
+.login-card .login-card__toggle input { width: auto; }
+.login-card .login-card__secondary { width: 100%; margin-top: 0.75rem; background: transparent; color: var(--text); border: 1px solid var(--line-strong); }
+.login-error p { margin: 0; }
+.login-error ul { margin: 0; padding-left: 1.1rem; }
+.login-notice { margin: 0 0 1.2rem; padding: 0.7rem; border-left: 3px solid var(--warn); background: var(--warn-soft); color: var(--text); }
+
+@media (max-width: 760px) {
+  .login-shell--single { padding: 1rem; align-items: start; }
+  .login-card--change { padding: 1.35rem 1.1rem; }
+  .login-card--change input { font-size: 1.05rem; padding: 0.95rem 0.9rem; }
+}

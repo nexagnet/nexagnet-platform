@@ -1,19 +1,28 @@
-import type { GeoPoint } from '../geo/geo-point.js';
-import type { PlaceResolution, ResolvedPlace } from './dispatch.types.js';
+import { parseGeoPoint, type GeoPoint } from '../geo/geo-point.js';
+import type { Order } from '../movement/movement.types.js';
+import type { DispatchPlaceSource, PlaceResolution, ResolvedPlace } from './dispatch.types.js';
 
 /**
- * TU MOT CAI TEN RA MOT TOA DO — ham THUAN, va la cho de nhat de noi doi trong ca Lane M.
+ * TU MOT CAI TEN, HOAC TU MOT DON, RA MOT TOA DO — ham THUAN, va la cho de nhat de noi doi trong
+ * ca Lane M.
  *
  * ===========================================================================
- * VI SAO TANG NAY PHAI TON TAI
+ * DON MANG TOA DO (#379) — VA VI SAO PHEP SO KHOP NHAN VAN CON
  *
- * `TransportOrder.originLabel` la mot CHUOI do nguoi go: *"Kho Hai Phong"*. Khong mot cot toa do
- * nao ton tai tren don, tren chang, hay tren dia diem phap nhan. Toa do trong he nay chi song o
- * MOT cho: `TransportGeofence` (`latitude`/`longitude` + `radiusMetres`), duoc khai bao boi nguoi
- * van hanh cho kho/bai/cay xang.
+ * Tu #379 `TransportOrder` luu toa do diem lay/giao (`originPoint`/`destinationPoint`) do nguoi
+ * nhap don chon tren ban do; `originLabel`/`destinationLabel` chi con de HIEN THI. Nen cau hoi
+ * "don nay lay hang o dau" duoc tra loi bang `orderPickupPlace()` — doc thang toa do cua don,
+ * khong so khop chuoi nao. Don cu (toa do NULL) bi tu choi CO KIEU chu khong roi ve nhan: mot nhan
+ * trung ten mot hang rao la mot su trung hop chinh ta, khong phai mot lan khao sat.
  *
- * Nen cau hoi "don nay lay hang o dau" chi co MOT duong tra loi trung thuc: noi cai ten do voi
- * mot hang rao da khai. Va khi khong noi duoc, cau tra loi la NOI RANG KHONG NOI DUOC.
+ * Phep so khop NHAN van can cho dung hai viec:
+ *   · diem den cua CHANG — `RunLeg` chua co cot toa do, nen chang cua don cu, chang rong khong
+ *     dung truoc chang co tai dau tien cua mot don, va chang giua cua mot don nhieu chang van chi
+ *     co nhan (`remaining-leg-plan.ts`);
+ *   · tham chieu TUONG MINH theo ma hang rao / ma dia diem phap nhan.
+ * Toa do cua hai duong do song o `TransportGeofence` (`latitude`/`longitude` + `radiusMetres`), do
+ * nguoi van hanh khai cho kho/bai/cay xang. Va khi khong noi duoc, cau tra loi la NOI RANG KHONG
+ * NOI DUOC.
  *
  * ===========================================================================
  * BA LUAT CUA TANG NAY
@@ -72,7 +81,7 @@ export const normalizePlaceLabel = (value: string | null | undefined): string =>
  *
  * `siteName` tach khoi `label` vi hai chuoi tra loi hai cau hoi khac nhau: `label` la ten NGUOI
  * VAN HANH dat cho hang rao (*"Hang rao kho HP"*), `siteName` la ten cua CHO (*"Kho Hai Phong"*)
- * ma nguoi nhap don go vao `originLabel`. Ca hai deu duoc so khop.
+ * ma nguoi lap ke hoach go vao nhan chang. Ca hai deu duoc so khop.
  */
 export interface PlaceIndexEntry {
   readonly geofenceId: string;
@@ -184,4 +193,50 @@ export function explicitPointPlace(point: GeoPoint, label: string): ResolvedPlac
     geofenceId: null,
     siteId: null,
   };
+}
+
+/** Hai nguon toa do DON — mot cho diem lay, mot cho diem giao. */
+export type OrderPointSource = Extract<
+  DispatchPlaceSource,
+  'ORDER_PICKUP_POINT' | 'ORDER_DELIVERY_POINT'
+>;
+
+/**
+ * MOT TOA DO LUU TREN DON -> mot cho da giai, hoac `null`.
+ *
+ * Kiem LAI bang `parseGeoPoint` du tang ghi da kiem: rang buoc CHECK cua bang chan duoc du lieu
+ * hong, nhung mot ban sao du lieu cu, mot lan sua tay, hay mot kho trong bo nho cua bai kiem thu
+ * thi khong. Mot toa do hong di tiep qua phep dinh tuyen se cho ra mot con so km trong nhu that.
+ *
+ * `undefined` duoc coi nhu `null` (khong co toa do) chu khong phai mot loi: kieu `Order` bat buoc
+ * truong nay, nhung mot doi tuong den tu mot tang cu chua biet truong do van phai ra "khong co"
+ * thay vi mot ngoai le giua duong dieu xe.
+ */
+export function orderPointPlace(
+  point: GeoPoint | null | undefined,
+  label: string,
+  source: OrderPointSource,
+): ResolvedPlace | null {
+  if (point === null || point === undefined) return null;
+  const parsed = parseGeoPoint(point.latitude, point.longitude);
+  if (!parsed.ok) return null;
+  return { point: parsed.point, source, label, geofenceId: null, siteId: null };
+}
+
+/**
+ * DIEM LAY HANG CUA MOT DON — duong mac dinh cua dieu xe khi nguoi goi khong chi dinh gi.
+ *
+ * Ba ket cuc, tach rieng de nguoi doc trace biet vi sao: co toa do -> dung no; khong co (don cu)
+ * -> `PICKUP_ORDER_COORDINATES_MISSING`; co nhung hong -> `PICKUP_ORDER_COORDINATES_REJECTED`.
+ * KHONG co nhanh thu tu "thu nhan chu" — do chinh la duong #379 go bo. Nhan chi di kem de hien thi.
+ */
+export function orderPickupPlace(
+  order: Pick<Order, 'originPoint' | 'originLabel'>,
+): PlaceResolution {
+  if (order.originPoint === null || order.originPoint === undefined) {
+    return { ok: false, reason: 'PICKUP_ORDER_COORDINATES_MISSING' };
+  }
+  const place = orderPointPlace(order.originPoint, order.originLabel, 'ORDER_PICKUP_POINT');
+  if (place === null) return { ok: false, reason: 'PICKUP_ORDER_COORDINATES_REJECTED' };
+  return { ok: true, reason: 'PICKUP_FROM_ORDER_COORDINATES', place };
 }

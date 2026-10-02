@@ -81,6 +81,10 @@ export function planOrderProjection(trip: Trip): OrderProjectionOutcome {
       businessDate: trip.businessDate,
       originLabel: trip.originLabel,
       destinationLabel: trip.destinationLabel,
+      // `null` TUONG MINH (#379): chuyen v1 khong mang toa do, va phep chieu KHONG duoc geocode
+      // nhan cua no thanh mot diem. Dieu xe se tu choi co kieu thay vi tin mot toa do doan.
+      originPoint: null,
+      destinationPoint: null,
       customerId: trip.customerId,
       cargoDescription: trip.cargoDescription,
       freightAmount: trip.freightAmount,

@@ -1,5 +1,14 @@
 # Vận hành bản demo
 
+> **Tài liệu demo/legacy** — xem [“Giới thiệu hệ thống cho lãnh đạo”](gioi-thieu-he-thong-cho-lanh-dao.md) để biết luồng hiện tại.
+>
+> Áp dụng cho stack **máy ảo cũ**; bản demo hiện tại chạy ở nơi khác. Mục sao lưu/phục hồi giữ để
+> tra cứu.
+>
+> **Không chạy lệnh làm lại dữ liệu** (`reset-transport-demo.mjs`) trên bản demo hiện tại: lệnh
+> này không xoá được dữ liệu đơn hàng và vòng xe nên dừng giữa chừng, và bản demo hiện tại không
+> chạy trên máy ảo mô tả ở đây.
+
 Ba việc người vận hành cần làm được mà không cần lập trình viên: **sao lưu**, **phục hồi**, và
 **đưa bản demo về trạng thái đầu**.
 
@@ -77,6 +86,8 @@ công. `pg_restore` kết thúc không lỗi trên một bản dump rỗng cũng
 ---
 
 ## 3. Đưa bản demo về trạng thái đầu
+
+> ⛔ **Không dùng mục này cho bản demo hiện tại** — xem cảnh báo ở đầu tài liệu.
 
 Sau một buổi demo, dữ liệu đã có thêm chuyến, phiếu, kỳ lương do người xem tạo ra. Lệnh này xoá
 sạch dữ liệu vận tải rồi gieo lại đúng tháng vận hành mẫu:

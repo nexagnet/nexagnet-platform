@@ -2,12 +2,18 @@ import { Module } from '@nestjs/common';
 import { loadFoundationEnv } from '../../config/foundation-env.js';
 import { PrismaModule } from '../../config/prisma.module.js';
 import { PrismaService } from '../../config/prisma.service.js';
+import { CounterpartyRepository } from '../counterparty/counterparty.repository.js';
+import { CounterpartySiteRepository } from '../counterparty/site.repository.js';
+import { FleetRepository } from '../fleet/fleet.repository.js';
+import { PlaceAdminService } from '../places/admin/place-admin.service.js';
+import { TransportPlacesRegistrar } from '../places/admin/place-registrations.js';
 import { TRANSPORT_CORE_POLICY, tenantTransportCorePolicy } from '../transport-policy.js';
 import { TransportModule } from '../transport.module.js';
 import {
   GeofenceRepository,
   InMemoryGeofenceRepository,
   PrismaGeofenceRepository,
+  RepositoryGeofenceOwnerLookup,
 } from './geofence.repository.js';
 import { GeofenceService } from './geofence.service.js';
 import { LocationHealthService } from './location-health.service.js';
@@ -19,6 +25,11 @@ import {
 } from './operational-proof.repository.js';
 import { PrismaProofChallengeRepository } from './prisma-proof-challenge.repository.js';
 import { OperationalProofService } from './operational-proof.service.js';
+import {
+  InMemoryPlaceWriteStore,
+  PlaceWriteStore,
+  PrismaPlaceWriteStore,
+} from './place-write.store.js';
 import { PrismaOperationalProofRepository } from './prisma-operational-proof.repository.js';
 import { PrismaTrackingRepository } from './prisma-tracking.repository.js';
 import {
@@ -98,18 +109,60 @@ import {
       inject: [PrismaService],
     },
     {
+      /*
+       * Ban trong bo nho hoi trang thai CHU THE (dia diem, phap nhan, khach) qua ba kho da export
+       * cua `transport-core` — de "con hieu luc that" (`#395`) cung mot nghia o ca hai che do.
+       */
       provide: GeofenceRepository,
-      useFactory: (prisma: PrismaService): GeofenceRepository =>
+      useFactory: (
+        prisma: PrismaService,
+        sites: CounterpartySiteRepository,
+        counterparties: CounterpartyRepository,
+        fleet: FleetRepository,
+      ): GeofenceRepository =>
         loadFoundationEnv().PERSISTENCE === 'prisma'
           ? new PrismaGeofenceRepository(prisma)
-          : new InMemoryGeofenceRepository(),
-      inject: [PrismaService],
+          : new InMemoryGeofenceRepository(
+              new RepositoryGeofenceOwnerLookup(sites, counterparties, fleet),
+            ),
+      inject: [PrismaService, CounterpartySiteRepository, CounterpartyRepository, FleetRepository],
+    },
+    /*
+     * `#395` — DUONG GHI DUY NHAT cua dia diem van hanh: mot giao dich, mot khoa. Ban trong bo nho
+     * dung CHINH cac kho ma phan con lai cua ung dung doc.
+     */
+    {
+      provide: PlaceWriteStore,
+      useFactory: (
+        prisma: PrismaService,
+        geofences: GeofenceRepository,
+        sites: CounterpartySiteRepository,
+        counterparties: CounterpartyRepository,
+        fleet: FleetRepository,
+      ): PlaceWriteStore =>
+        loadFoundationEnv().PERSISTENCE === 'prisma'
+          ? new PrismaPlaceWriteStore(prisma)
+          : new InMemoryPlaceWriteStore({ geofences, sites, counterparties, customers: fleet }),
+      inject: [
+        PrismaService,
+        GeofenceRepository,
+        CounterpartySiteRepository,
+        CounterpartyRepository,
+        FleetRepository,
+      ],
     },
     TrackingService,
     OperationalProofService,
     GeofenceService,
     LocationHealthService,
     TelematicsIngressService,
+    PlaceAdminService,
+    /*
+     * `#395` — dang ky bai xe duoc quan ly vao `DepotDirectoryHub` va cong chan sua dia diem cu vao
+     * `CounterpartySitePlaceGuardHub` (hai cho noi cua `transport-core`), TRONG HAM DUNG — xem
+     * `place-registrations.ts`. Khong ai tiem provider nay; Nest van dung no vi no nam trong module.
+     */
+    TransportPlacesRegistrar,
   ],
   exports: [
     TrackingService,
@@ -125,6 +178,8 @@ import {
     // `TelematicsIngressController` dang ky o GOC, nen no CHI thay danh sach nay — cung cai bay da
     // lam chet mot lan deploy o `ProofReviewController`. Xem chu thich ngay tren.
     TelematicsIngressService,
+    // `PlaceAdminController` (`#395`) dang ky o GOC — cung ly do.
+    PlaceAdminService,
   ],
 })
 export class TransportProofModule {}

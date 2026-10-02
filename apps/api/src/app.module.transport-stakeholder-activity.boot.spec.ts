@@ -54,6 +54,7 @@ describe('stakeholder activity process boot contract', () => {
       const { AssetComplianceService } = await import('./src/transport/asset-compliance/asset-compliance.service.ts');
       const { MovementService } = await import('./src/transport/movement/movement.service.ts');
       const { FleetService } = await import('./src/transport/fleet/fleet.service.ts');
+      const { UserRepository } = await import('./src/auth/user.repository.ts');
 
       const context = await NestFactory.createApplicationContext(await AppModule.forRoot(), { logger: ['error'] });
       const has = (token) => { try { context.get(token, { strict: false }); return true; } catch { return false; } };
@@ -70,8 +71,13 @@ describe('stakeholder activity process boot contract', () => {
       // HAI ho so, de phep loc pham vi co cai gi that de loc.
       const me = await ownership.createStakeholder({ kind: 'INDIVIDUAL', displayName: 'Co dong A' }, 'boot');
       const them = await ownership.createStakeholder({ kind: 'INDIVIDUAL', displayName: 'Co dong B' }, 'boot');
-      await ownership.setStakeholderAccount(me.id, 'boot-stakeholder-a', 'boot');
-      await ownership.setStakeholderAccount(them.id, 'boot-stakeholder-b', 'boot');
+      // #395: noi tai khoan doi tai khoan CO THAT va dang hoat dong — tao hai tai khoan that (vai
+      // Dieu hanh khong quyen rieng = "Chu xe / ben gop von") thay cho hai ma tu dat.
+      const users = context.get(UserRepository, { strict: false });
+      const accountA = await users.create({ username: 'boot-stakeholder-a', name: 'Co dong A', email: null, phone: null, passwordHash: 'x', role: 'MANAGER' });
+      const accountB = await users.create({ username: 'boot-stakeholder-b', name: 'Co dong B', email: null, phone: null, passwordHash: 'x', role: 'MANAGER' });
+      await ownership.setStakeholderAccount(me.id, accountA.id, 'boot');
+      await ownership.setStakeholderAccount(them.id, accountB.id, 'boot');
       await ownership.recordInterest(mine.id, { stakeholderId: me.id, ownershipBasisPoints: 3000, effectiveFrom: new Date('2026-01-01T00:00:00.000Z') }, 'boot');
       await ownership.recordInterest(other.id, { stakeholderId: them.id, ownershipBasisPoints: 10000, effectiveFrom: new Date('2026-01-01T00:00:00.000Z') }, 'boot');
 
@@ -92,7 +98,7 @@ describe('stakeholder activity process boot contract', () => {
       });
       await compliance.completeWorkOrder(workOrder.id, { completedDate: today, completedOdoKm: 1000, completedBy: 'boot', completedAt: new Date() });
 
-      const view = await activity.activity('boot-stakeholder-a');
+      const view = await activity.activity(accountA.id);
       const row = view.vehicles[0];
 
       const proof = {

@@ -3,6 +3,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
 import { EmptyState, ErrorState, LoadingState } from '../components/SectionState';
+import { useNavigationInput } from '../hooks/useTransportWorkspace';
+import { canPerform } from '../transport-actions';
 import { newCorrelationKey, transportApi } from '../transport-api';
 import type { DriverFieldAction } from '../transport-types';
 import { toFieldScreen, type FieldLegCard } from '../workspace/driver-field';
@@ -98,6 +100,7 @@ const slotOf = (card: FieldLegCard, action: DriverFieldAction): string =>
 
 export function DriverFieldWork() {
   const queryClient = useQueryClient();
+  const navigation = useNavigationInput();
   const [failure, setFailure] = useState<string | null>(null);
   const eventKeys = useRef(new Map<string, string>());
   /** Chung cu vi tri DA LAM cho tung nut — giu qua moi lan render va moi lan bam lai. */
@@ -108,6 +111,8 @@ export function DriverFieldWork() {
   const work = useQuery({
     queryKey: ['transport', 'me', 'field-work'],
     queryFn: () => transportApi.me.fieldWork(),
+    // Cung cong voi man `field` (`DRIVER_SCREENS`) — `#395`: moi query gac bang dung ma cua route.
+    enabled: canPerform(navigation, 'transport.driver.self.checkpoint.record'),
     // Xem khoi `MOT MO HINH CU LA MOT NUT SAI` dau tep — `#333`.
     refetchOnWindowFocus: true,
     refetchInterval: FIELD_WORK_REFRESH_MS,

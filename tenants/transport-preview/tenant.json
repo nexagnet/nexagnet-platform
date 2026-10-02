@@ -35,12 +35,6 @@
     },
     "transportPlanning": {
       "runGrouping": "ONE_ORDER_PER_RUN",
-      "depots": [
-        {
-          "code": "DEPOT-HN",
-          "label": "Bãi xe Hà Nội"
-        }
-      ],
       "closure": {
         "idleHours": 12
       }

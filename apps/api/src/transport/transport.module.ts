@@ -14,6 +14,7 @@ import { AssetOwnershipService } from './asset-ownership/asset-ownership.service
 import { FleetVehicleOwnershipAdapter } from './asset-ownership/fleet-vehicle-ownership.adapter.js';
 import { PrismaAssetOwnershipRepository } from './asset-ownership/prisma-asset-ownership.repository.js';
 import { VehicleOwnershipPort } from './asset-ownership/vehicle-ownership.port.js';
+import { CounterpartySitePlaceGuardHub } from './counterparty/counterparty-site-place-guard.js';
 import { CounterpartySubjectPort } from './counterparty/counterparty-subject.port.js';
 import {
   CounterpartyRepository,
@@ -30,6 +31,8 @@ import { MovementRepository, InMemoryMovementRepository } from './movement/movem
 import { MovementService } from './movement/movement.service.js';
 import { PrismaMovementRepository } from './movement/prisma-movement.repository.js';
 import { MovementRunWriteGuard, RunWriteGuard } from './movement/run-write-guard.port.js';
+import { DepotDirectoryHub } from './planning/depot-directory.js';
+import { DepotOpenWorkReader, MovementDepotOpenWorkReader } from './planning/depot-open-work.js';
 import {
   TRANSPORT_PLANNING_POLICY,
   tenantTransportPlanningPolicy,
@@ -39,9 +42,12 @@ import { PlanningService } from './planning/planning.service.js';
 import { PrismaRunPlanRepository } from './planning/prisma-planning.repository.js';
 import { FleetCounterpartySubjectAdapter } from './counterparty/fleet-counterparty-subject.adapter.js';
 import { PrismaCounterpartyRepository } from './counterparty/prisma-counterparty.repository.js';
+import { TransportAccountLinkDirectory } from './fleet/account-link-directory.js';
+import { DriverAccountLinkService } from './fleet/driver-account-link.service.js';
 import { FleetRepository, InMemoryFleetRepository } from './fleet/fleet.repository.js';
 import { FleetService } from './fleet/fleet.service.js';
 import { PrismaFleetRepository } from './fleet/prisma-fleet.repository.js';
+import { TransportPermissionDomainRegistrar } from './permissions/transport-permission-domain.js';
 import { TransportActionGuard } from './transport-action.guard.js';
 import { TRANSPORT_CORE_POLICY, tenantTransportCorePolicy } from './transport-policy.js';
 import { PrismaTripRepository } from './trips/prisma-trip.repository.js';
@@ -197,6 +203,29 @@ import { TripService } from './trips/trip.service.js';
     AssetOwnershipService,
     AssetOwnershipScopeService,
     TransportActionGuard,
+    /*
+     * `#395` — ba cho NOI cua `transport-core`, KHONG doi hanh vi nao o S0:
+     *   · `DepotDirectoryHub`              — danh ba bai xe; mac dinh doc cau hinh goi khach,
+     *                                        `transport-proof` dang ky nguon quan ly;
+     *   · `CounterpartySitePlaceGuardHub`  — cong chan sua dia diem qua duong cu; mac dinh khong
+     *                                        chan, `transport-proof` dang ky cong that;
+     *   · `TransportPermissionDomainRegistrar` — dang ky mien `transport` vao so phan quyen cua
+     *                                        nen tang (`AuthModule`, `@Global`).
+     * Hai cho dang ky nam o CORE de module capability khac tiem duoc, khong nguoc lai.
+     */
+    DepotDirectoryHub,
+    CounterpartySitePlaceGuardHub,
+    TransportPermissionDomainRegistrar,
+    /*
+     * `#395` §1.8 — NOI TAI KHOAN. Danh ba lien ket (chi doc) phuc vu CA route quan tri lan mien
+     * phan quyen (`describeScopes`, `checkAccessChange`); dich vu noi la duong ghi duy nhat cua
+     * `TransportDriver.authUserId` tu man hinh. Ca hai tiem `UserRepository` / doc kho cua CHINH
+     * `transport-core` — khong mot canh phu thuoc moi nao sang capability khac.
+     */
+    TransportAccountLinkDirectory,
+    DriverAccountLinkService,
+    // `#395` S3 — cong DOC "viec dang mo tai mot bai xe" cho man Dia diem van hanh (transport-proof).
+    { provide: DepotOpenWorkReader, useClass: MovementDepotOpenWorkReader },
   ],
   /*
    * `AuditLogService` va `TRANSPORT_CORE_POLICY` duoc export tu T3 tro di cho `transport-costing`.
@@ -242,6 +271,16 @@ import { TripService } from './trips/trip.service.js';
     AuditLogService,
     TRANSPORT_CORE_POLICY,
     TRANSPORT_PLANNING_POLICY,
+    DepotDirectoryHub,
+    CounterpartySitePlaceGuardHub,
+    /*
+     * `FleetController` dang ky o GOC nen chi thay provider duoc EXPORT — thieu hai dong nay thi Nest
+     * khong giai duoc controller va tien trinh API chet luc khoi dong (xem
+     * `app.module.transport-core.boot.spec.ts`).
+     */
+    TransportAccountLinkDirectory,
+    DriverAccountLinkService,
+    DepotOpenWorkReader,
   ],
 })
 export class TransportModule {}

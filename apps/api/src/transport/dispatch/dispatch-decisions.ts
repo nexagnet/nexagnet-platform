@@ -12,12 +12,33 @@ import { defineDecisionVocabulary } from '../../observability/decision-vocabular
 /* ------------------------------------------------------------------ *
  * dispatch.pickup_resolution -- diem lay hang cua don nam o dau
  * ------------------------------------------------------------------ */
+/*
+ * THU TU GIAI DIEM LAY HANG (#379): tham chieu TUONG MINH cua nguoi goi > toa do luu tren DON >
+ * tu choi co kieu. Khong con buoc nao doc `originLabel` de doan toa do — nhan chu chi de hien thi.
+ *
+ * Bon ma theo NHAN (`PICKUP_FROM_GEOFENCE_LABEL` ... `PICKUP_LABEL_AMBIGUOUS`) van ton tai vi ham
+ * giai nhan van phuc vu diem den cua CHANG (chang chua mang toa do) va `resolvePlaceBySiteId` van
+ * tra `PICKUP_LABEL_AMBIGUOUS` khi mot dia diem co hai hang rao. Chung khong con xuat hien o diem
+ * quyet dinh `dispatch.pickup_resolution` cho duong mac dinh nua.
+ */
 export const DISPATCH_PICKUP_RESOLUTION_REASONS = [
-  /** Nguoi goi gui thang mot toa do / ma dia diem. Khong phai doan gi. */
+  /** Nguoi goi gui thang mot toa do / ma dia diem. Khong phai doan gi, va THANG toa do cua don. */
   'PICKUP_FROM_EXPLICIT_REQUEST',
-  /** `originLabel` cua don trung KHIT ten mot hang rao dang hoat dong. */
+  /** Duong MAC DINH: toa do diem lay do nguoi nhap don chon, luu tren chinh don. */
+  'PICKUP_FROM_ORDER_COORDINATES',
+  /**
+   * DON CU — tao truoc khi don mang toa do. KHONG roi ve nhan chu: mot nhan trung ten mot hang rao
+   * chi la mot su trung hop chinh ta, va #379 chot toa do la su that duy nhat cua diem lay.
+   */
+  'PICKUP_ORDER_COORDINATES_MISSING',
+  /**
+   * Toa do luu tren don khong qua `parseGeoPoint` (du lieu hong/ghi tay). Rang buoc CHECK cua bang
+   * da chan duong nay; ma nay la lop phong thu thu hai, khong phai mot duong nghiep vu.
+   */
+  'PICKUP_ORDER_COORDINATES_REJECTED',
+  /** Nhan chang trung KHIT ten mot hang rao dang hoat dong. */
   'PICKUP_FROM_GEOFENCE_LABEL',
-  /** `originLabel` trung KHIT ten mot dia diem phap nhan CO hang rao. */
+  /** Nhan chang trung KHIT ten mot dia diem phap nhan CO hang rao. */
   'PICKUP_FROM_COUNTERPARTY_SITE',
   /** Khong cho nao trong he thong mang cai ten do. KHONG lay dai mot toa do gan gan. */
   'PICKUP_LABEL_NO_MATCH',
@@ -158,9 +179,13 @@ export const TRANSPORT_DISPATCH_DECISIONS = defineDecisionVocabulary({
   ],
   labels: {
     PICKUP_FROM_EXPLICIT_REQUEST: 'Diem lay hang do nguoi dieu xe chi dinh',
-    PICKUP_FROM_GEOFENCE_LABEL: 'Diem lay hang khop ten mot hang rao dang hoat dong',
-    PICKUP_FROM_COUNTERPARTY_SITE: 'Diem lay hang khop mot dia diem phap nhan co hang rao',
-    PICKUP_LABEL_NO_MATCH: 'Khong cho nao trong he thong mang ten diem lay hang cua don',
+    PICKUP_FROM_ORDER_COORDINATES: 'Diem lay hang lay tu toa do luu tren don',
+    PICKUP_ORDER_COORDINATES_MISSING:
+      'Don cu chua co toa do diem lay — khong suy tu nhan chu, can chi dinh tuong minh',
+    PICKUP_ORDER_COORDINATES_REJECTED: 'Toa do diem lay luu tren don khong hop le',
+    PICKUP_FROM_GEOFENCE_LABEL: 'Nhan dia diem khop ten mot hang rao dang hoat dong',
+    PICKUP_FROM_COUNTERPARTY_SITE: 'Nhan dia diem khop mot dia diem phap nhan co hang rao',
+    PICKUP_LABEL_NO_MATCH: 'Khong cho nao trong he thong mang nhan dia diem nay',
     PICKUP_LABEL_AMBIGUOUS: 'Nhieu cho cung mang ten do — khong chon thay nguoi dung',
     PICKUP_REQUEST_POINT_REJECTED: 'Toa do gui len khong hop le',
     PICKUP_REQUEST_REF_NOT_FOUND: 'Ma dia diem gui len khong ton tai hoac da ngung',

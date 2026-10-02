@@ -13,6 +13,48 @@ import { expect, test, type Page, type Route } from '@playwright/test';
 
 type Grouping = 'ONE_ORDER_PER_RUN' | 'MULTI_ORDER_RUN';
 
+interface Point {
+  readonly latitude: number;
+  readonly longitude: number;
+}
+
+/*
+ * `#379` — toa do la SU THAT cua hai dau tuyen. Hai diem nay la dia diem DA BIET cua doanh nghiep
+ * (mock `GET /transport/places/known`), nen bai tao don chon chung tu danh sach — khong go chu.
+ */
+const KHO_HAI_PHONG: Point = { latitude: 20.8449, longitude: 106.6881 };
+const NINH_BINH: Point = { latitude: 20.2506, longitude: 105.9745 };
+
+const KNOWN_PLACES = {
+  available: true,
+  places: [
+    {
+      id: 'gf-depot-hp',
+      kind: 'DEPOT',
+      name: 'Bãi xe Hải Phòng',
+      detail: null,
+      point: { latitude: 20.8612, longitude: 106.6503 },
+      radiusMetres: 250,
+    },
+    {
+      id: 'gf-kho-hp',
+      kind: 'COUNTERPARTY_SITE',
+      name: 'Kho Hải Phòng',
+      detail: 'Công ty Nam Phong',
+      point: KHO_HAI_PHONG,
+      radiusMetres: 300,
+    },
+    {
+      id: 'gf-ninh-binh',
+      kind: 'CUSTOMER',
+      name: 'Ninh Bình',
+      detail: null,
+      point: NINH_BINH,
+      radiusMetres: 300,
+    },
+  ],
+};
+
 interface OrderRow {
   readonly id: string;
   readonly code: string;
@@ -21,6 +63,8 @@ interface OrderRow {
   readonly customerId: string | null;
   readonly originLabel: string;
   readonly destinationLabel: string;
+  readonly originPoint: Point | null;
+  readonly destinationPoint: Point | null;
   readonly cargoDescription: string | null;
   readonly freightAmount: number | null;
   readonly currencyCode: 'VND';
@@ -64,6 +108,8 @@ const order = (id: string, code: string): OrderRow => ({
   customerId: 'cus-nam-phong',
   originLabel: 'Kho Hải Phòng',
   destinationLabel: 'Ninh Bình',
+  originPoint: KHO_HAI_PHONG,
+  destinationPoint: NINH_BINH,
   cargoDescription: 'Hàng tổng hợp synthetic',
   freightAmount: 5_000_000,
   currencyCode: 'VND',
@@ -193,6 +239,7 @@ async function mockOwner(
   );
   await page.route('**/transport/runs', (route) => json(route, []));
   await page.route('**/transport/customers', (route) => json(route, CUSTOMERS));
+  await page.route('**/transport/places/known', (route) => json(route, KNOWN_PLACES));
 
   await page.route('**/transport/orders', async (route) => {
     if (route.request().method() === 'GET') return json(route, state.orders);
@@ -205,6 +252,8 @@ async function mockOwner(
       businessDate: String(body.businessDate ?? created.businessDate),
       originLabel: String(body.originLabel),
       destinationLabel: String(body.destinationLabel),
+      originPoint: (body.originPoint as Point | undefined) ?? null,
+      destinationPoint: (body.destinationPoint as Point | undefined) ?? null,
       // Khach + cuoc di theo DUNG than yeu cau: mot ban mock tu dap hai truong nay vao se giau
       // mat dung lo hong ma `lane-w-customer-ar.spec.ts` sinh ra de chan.
       customerId: typeof body.customerId === 'string' ? body.customerId : null,
@@ -243,7 +292,18 @@ async function mockOwner(
     await json(route, {
       orderId: found.id,
       orderCode: found.code,
-      pickup: { place: place(found.originLabel), resolution: 'PICKUP_FROM_GEOFENCE_LABEL' },
+      /* `#379` — diem lay hang la TOA DO cua don, khong suy tu nhan. */
+      pickup: {
+        place: {
+          point: found.originPoint,
+          pointRedacted: false,
+          source: 'ORDER_PICKUP_POINT',
+          label: found.originLabel,
+          geofenceId: null,
+          siteId: null,
+        },
+        resolution: 'PICKUP_FROM_ORDER_COORDINATES',
+      },
       requiredPickupAt: null,
       generatedAt: '2026-09-19T03:00:00.000Z',
       orderingKeys: ['DEADLINE_FEASIBILITY', 'NO_WORK_INTERRUPTION', 'EMPTY_ROAD_DISTANCE'],
@@ -280,17 +340,28 @@ test.describe('Lane W — duong order-first cua chu doanh nghiep', () => {
     });
 
     await page.goto('/?section=movement');
+    await page.getByRole('button', { name: 'Tạo đơn mới' }).click();
+
+    /*
+     * `#379` — hai diem la TOA DO chon tu dia diem da biet, khong phai hai o go chu. Ten nut mang
+     * TEN dia diem: moi nut "Chọn làm …" mot ten rieng.
+     */
+    const known = page.getByRole('tabpanel');
+    await known
+      .getByRole('button', { name: 'Chọn làm điểm lấy hàng: Kho Hải Phòng', exact: true })
+      .click();
+    await known
+      .getByRole('button', { name: 'Chọn làm điểm giao hàng: Ninh Bình', exact: true })
+      .click();
 
     const create = page.getByRole('form', { name: 'Tạo đơn hàng' });
-    await expect(create).toBeVisible();
     await create.getByLabel('Mã đơn').fill('W-ONE-UI-01');
     await create.getByLabel('Khách hàng').selectOption({ label: 'Công ty Nam Phong' });
-    await create.getByLabel('Điểm lấy hàng').fill('Kho Hải Phòng');
-    await create.getByLabel('Điểm giao hàng').fill('Ninh Bình');
     await create.getByLabel('Ngày vận hành').fill('2026-09-19');
     await create.getByLabel('Cước (đ)').fill('5000000');
-    await create.getByRole('button', { name: 'Tạo đơn' }).click();
+    await page.getByRole('button', { name: 'Tạo đơn', exact: true }).click();
 
+    await expect(page.getByText('Đã tạo đơn W-ONE-UI-01')).toBeVisible();
     await expect(page.getByRole('rowheader', { name: 'W-ONE-UI-01' })).toBeVisible();
     expect(state.createBodies).toHaveLength(1);
     /*
@@ -300,10 +371,14 @@ test.describe('Lane W — duong order-first cua chu doanh nghiep', () => {
     expect(state.createBodies[0]).toMatchObject({
       customerId: 'cus-nam-phong',
       freightAmount: 5_000_000,
+      originLabel: 'Kho Hải Phòng',
+      destinationLabel: 'Ninh Bình',
+      originPoint: KHO_HAI_PHONG,
+      destinationPoint: NINH_BINH,
     });
     expect(state.suggestionBodies).toEqual([]);
 
-    await page.getByRole('rowheader', { name: 'W-ONE-UI-01' }).click();
+    // Don vua tao duoc MO SAN — khong bam lai dong (bam lai la dong no).
     const planning = page.getByRole('form', {
       name: 'Lập kế hoạch và giao xe cho đơn W-ONE-UI-01',
     });

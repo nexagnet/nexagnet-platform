@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { PermissionNote } from '../components/PermissionGate';
 import { DataTable, MetricCard, PageHeader, StatusBadge } from '../components/primitives';
 import { EmptyState, ErrorState, LoadingState } from '../components/SectionState';
 import { formatCount } from '../customer-view';
@@ -93,16 +94,16 @@ export function TollView() {
   const imports = toSectionQuery(useTollImports(navigation));
   const vehicles = toSectionQuery(useVehicles(navigation));
 
-  if (!hasOperationsScope(navigation.role)) {
+  if (!hasOperationsScope(navigation)) {
     return (
       <>
         <PageHeader title="Phí đường bộ (ETC)" />
-        <ErrorState message={operationsEmptyMessage(navigation.role)} />
+        <ErrorState message={operationsEmptyMessage(navigation)} />
       </>
     );
   }
 
-  const capabilities = tollCapabilities(navigation.role);
+  const capabilities = tollCapabilities(navigation);
   const providerRows = providers.data ? toTollProviderRows(providers.data) : [];
   const readyCount = providerRows.filter((row) => row.statementReady).length;
   const visibleTabs = TABS.filter((entry) => tabVisible(entry.id, capabilities));
@@ -155,6 +156,16 @@ export function TollView() {
         isLoading={providers.isLoading}
         errorMessage={providers.errorMessage}
         onRetry={providers.refetch}
+      />
+
+      {/*
+        `#395` — hang cho doi soat (va bao cao chi phi theo xe) doi ma XEM DONG PHI; bien so doi danh
+        sach xe. Thieu ma nao thi the tuong ung khong hien — cau nay noi VI SAO, thay vi de nguoi
+        duoc cap "Phí đường bộ" tu hoi hang cho di dau.
+      */}
+      <PermissionNote
+        viewer={navigation}
+        actions={['transport.toll.review.read', 'transport.vehicle.read']}
       />
 
       <div className="tx-tabs" role="tablist" aria-label="Việc phí đường bộ">

@@ -71,7 +71,7 @@ chọn thành **điều kiện boot** cho mọi khách vận tải đang chạy 
 ```jsonc
 "transportPlanning": {
   "runGrouping": "MULTI_ORDER_RUN",              // mặc định: ONE_ORDER_PER_RUN
-  "depots": [{ "code": "DEPOT-HN", "label": "Bãi xe Hà Nội" }],
+  "depots": [{ "code": "DEPOT-HN", "label": "Bãi xe Hà Nội" }], // từ #395: cấu hình khởi đầu CŨ (§2.2)
   "closure": { "idleHours": 12 }                 // mặc định: null = không đóng vì hết giờ
 }
 ```
@@ -104,6 +104,64 @@ quy tắc "đúng một bãi đang hoạt động" sống ở tầng miền (`re
 
 Bãi xe là **cơ sở vận hành của B**, không phải một `TransportCounterparty`. Khách hàng A có địa điểm
 riêng (`TransportCounterpartySite`, #267 H1); hai thứ không được trộn.
+
+#### Từ `#395` (25/09/2026): bãi xe là hàng rào `DEPOT` do Giám đốc quản lý
+
+Bãi xe nay được khai trên màn **"Địa điểm vận hành"** — một hàng rào `DEPOT`, capability
+`transport-proof` ([transport-geospatial.md](transport-geospatial.md) §7.2) — và **cùng một** bãi đó
+là bãi của màn quản trị, của địa điểm đã biết khi Tạo đơn, của chặng RỖNG, của đóng vòng chạy và
+của điều xe. `transport-core` không được phụ thuộc `transport-proof`, nên chiều phụ thuộc bị đảo
+(cùng khuôn `RunClosureBlockerSource`):
+
+- **Cổng `DepotDirectory`** (`planning/depot-directory.ts`, `transport-core`): `list()` trả các
+  `DepotEntry` — `code`, `label`, `active`, `source` (`MANAGED` | `TENANT_CONFIG`), và chỉ với nguồn
+  quản lý: `geofenceId`, `point`, `radiusMetres`. Mặc định của core đọc cấu hình gói khách
+  (`ConfigDepotDirectory`) — đúng hành vi trước `#395`. `DepotDirectoryHub` do `TransportModule` cung
+  cấp và export; `transport-proof` đăng ký nguồn được quản lý (`GeofenceDepotDirectory`) **trong hàm
+  dựng** của `TransportPlacesRegistrar`, không ở `onModuleInit` — để lượt quét đầu tiên (chạy trong
+  `onModuleInit` của `RunClosureSweepScheduler`) đã đọc đúng nguồn. Đăng ký lần hai thì ném lúc boot.
+- **Luật ưu tiên:** có **bất kỳ** hàng rào `DEPOT` nào (kể cả đã tắt) → nguồn `MANAGED` là sự thật:
+  chỉ bãi đang bật được dùng, và **không bao giờ** lùi về cấu hình. Chưa có hàng rào `DEPOT` nào →
+  `TENANT_CONFIG` (`transportPlanning.depots`). Hệ quả có chủ đích: Giám đốc tắt bãi cuối cùng thì
+  khâu lập kế hoạch nói `NOT_CONFIGURED` (không sinh chặng rỗng đầu tiên), không lặng lẽ hồi sinh một
+  bãi trong tệp cấu hình mà màn hình không hiện.
+- **Một bãi đang bật** là bất biến của DB (chỉ mục unique một phần `TransportGeofence_one_active_depot`)
+  nên với nguồn quản lý không thể ra `AMBIGUOUS`; bảng ba kết quả ở trên giữ nguyên
+  (`resolveDepotFrom()` — hàm thuần trên danh bạ đã đọc; `resolveDepot(policy)` còn cho spec cũ). Bãi
+  mới tạo khi đã có bãi đang bật là bãi dự phòng (tắt). **Đổi bãi chính**
+  (`POST /transport/places/admin/:id/make-primary-depot`) là một giao dịch: tắt bãi cũ rồi bật bãi mới
+  — khâu lập kế hoạch không bao giờ thấy khoảnh khắc "chưa khai bãi".
+- **Đọc một lần, trước khoá vòng chạy.** `PlanningService` đọc danh bạ **một** lần cho mỗi thao tác
+  (đề xuất, chiếu xe, phán xử đóng) và dùng lại cho cả hai lần phán xử của `settleRunClosure()`;
+  `RunClosureService.sweep()` đọc **một** lần cho cả lượt quét rồi truyền cho mọi ứng viên. Khoá hàng
+  vòng chạy không khoá hàng rào nào — đọc lại bên trong chỉ tốn thêm một kết nối lúc đang giữ khoá.
+  Phụ thuộc mới là tham số **cuối, tuỳ chọn**; vắng mặt thì đọc cấu hình.
+- Quyết định `planning.depot` giữ nguyên ba lý do (`DEPOT_RESOLVED` / `DEPOT_NOT_CONFIGURED` /
+  `DEPOT_AMBIGUOUS`), `detail` thêm `{ source, code }`. `GET /transport/planning/policy` trả thêm
+  `depot.source`.
+
+**Cổng việc đang mở.** Chặng rỗng và đóng vòng chạy **so nhãn** (§3), nên đổi tên bãi đang bật, tắt
+bãi đang bật, hay đổi bãi chính đổi câu trả lời cho việc đang chạy: một vòng chạy có chặng về bãi theo
+nhãn cũ không còn đóng được bằng `DEPOT_RETURN` (chỉ còn `IDLE_TIMEOUT`, hoặc nằm `holding` mãi khi
+khách không khai `idleHours`), và một đơn mang nhãn cũ bị coi là một chỗ khác bãi. Cổng đọc
+`DepotOpenWorkReader` (`planning/depot-open-work.ts`, `transport-core`, chỉ một phương thức đọc) đếm
+việc theo **loại thay đổi**: tắt bãi đang bật hay đổi bãi chính (`RELOCATE`) đếm vòng chạy
+`PLANNED`/`ACTIVE` có chặng chưa huỷ đi từ / về nhãn bãi (`sameSite()`); **đổi tên** (`RENAME`) chỉ
+đếm vòng chạy có chặng chưa huỷ **về** bãi — chặng đã rời bãi không bị tên mới ảnh hưởng. Cả hai đều
+đếm đơn chưa `CANCELLED`/`FULFILLED` có điểm lấy / giao mang nhãn đó. Đổi tên chỉ khác chữ hoa/thường
+hay khoảng trắng thì không qua cổng (so nhãn vẫn khớp). Có việc mà chưa xác nhận →
+`409 DEPOT_CHANGE_AFFECTS_OPEN_WORK` `detail: { runs, orders, idleHours }`; gửi lại với
+`acknowledgeOpenWork: true` thì ghi, và danh sách việc đi vào dấu vết kiểm toán. Đổi **vị trí / bán
+kính** của bãi không qua cổng này — hai khâu trên không so toạ độ. Tạo đơn khoá ô tên khi chọn một bãi
+xe đã biết ("Tên bãi xe lấy từ Địa điểm vận hành.").
+
+**Khách còn dùng cấu hình — không phải di chuyển gì.** Khách chưa có hàng rào `DEPOT` nào tiếp tục đọc
+`transportPlanning.depots` y như trước; `tenant.schema.ts` giữ khối này, ghi rõ là cấu hình khởi đầu
+cũ cho khách chưa có bãi được quản lý (vd chỉ bật `transport-core`). Gói `tenants/transport-preview`
+đã bỏ `depots`: bãi của nó là hàng rào `DEPOT-HN` "Bãi xe Hà Nội" do máy gieo dữ liệu mẫu tạo — **cùng
+mã** với cấu hình cũ, nên lịch sử chặng rỗng giữ một danh tính; máy gieo bỏ qua bãi mẫu khi đã có bất
+kỳ hàng rào `DEPOT` nào (`DEPOT_ALREADY_MANAGED`). Một DB của gói này chưa có hàng rào `DEPOT` nào thì
+khâu lập kế hoạch nói `NOT_CONFIGURED` cho tới khi có người khai bãi.
 
 ### 2.3. `closure.idleHours` — KHÔNG có mặc định, và đó là câu trả lời trung thực
 
@@ -143,6 +201,18 @@ biệt hoa/thường). **Không bỏ dấu**: bỏ dấu sẽ gộp "Ha Noi" và
 địa lý mà lane này không có nguồn. Sai theo hướng _không gộp_ an toàn hơn: nó sinh một chặng rỗng
 thừa mà người đọc nhìn thấy và sửa được, thay vì nuốt mất một di chuyển thật. Khi Lane M mang về
 khoá địa điểm/toạ độ thật, `sameSite()` đổi hiện thực — không đổi chữ ký.
+
+> **Ghi chú #379 (23/09/2026):** đơn hàng nay **mang toạ độ** điểm lấy/giao
+> (`Order.originPoint`/`destinationPoint`), và điều xe dùng toạ độ đó
+> ([transport-dispatch-intelligence.md](transport-dispatch-intelligence.md) `D-01`). **Lập kế hoạch
+> vẫn so nhãn**: `sameSite()` và `planOrderAssignment()` không đổi trong #379, vì một phía của phép
+> so — điểm cuối chặng trước (`RunLeg`) và bãi xe (`TransportPlanningPolicy.depots`) — vẫn chỉ có
+> nhãn, không có toạ độ. So toạ độ của đơn với nhãn của chặng sẽ là một phép so lệch hệ; đổi hiện
+> thực khi chặng/bãi có toạ độ. `plannedDistanceKm` cũng **không** được lấp tự động từ toạ độ đơn:
+> một ước lượng tổng hợp ghi vào cột số nguyên sẽ mất nhãn `SYNTHETIC` (`#277 M5`).
+>
+> _Từ `#395`: bãi được quản lý mang toạ độ (`DepotEntry.point`), nhưng chặng vẫn chỉ có nhãn — lập
+> kế hoạch và đóng vòng chạy vẫn so nhãn bãi (§2.2)._
 
 ---
 
@@ -520,7 +590,7 @@ không ràng buộc nào bị gỡ. Đường lui nằm ở `README-rollback.sql
 | `CARGO_STILL_CARRIED` chưa có nguồn                  | **ĐÃ ĐÓNG.** `CheckpointRunClosureBlockerSource` suy ra nó từ `buildRunTimeline()` của `#243` F6 (giai đoạn `LOADING`/`IN_TRANSIT`/`ARRIVED` = hàng còn trên thùng). `transport-core` vẫn không phụ thuộc ngược: cổng `RunClosureBlockerSource` do `transport-core` khai, `transport-checkpoint` ghi đè ở tầng composition |
 | `OPEN_WAITING_SESSION` chưa có nguồn                 | **CHỜ LANE O.** Cổng đã có và đã kiểm bằng adapter giả; `TransportDeliveryWaitingSession` (#243 F3) vẫn chưa vào `main`, và lane này **không** dựng một bảng giả. Xem `WAITING_SESSION_BINDING` ở báo cáo cuối lane                                                                                                        |
 | `IDLE_TIMEOUT` cần một lần quét                      | **ĐÃ ĐÓNG.** `RunClosureSweepScheduler` + `RunClosureService.sweep()` — bền vững, có trần, khôi phục được sau khi tiến trình chết, và không đóng hai lần dưới hai worker                                                                                                                                                   |
-| So sánh địa điểm bằng nhãn chữ                       | **CÒN.** Chưa có khoá địa điểm/toạ độ ở grain chặng. Lane M sở hữu phần đó                                                                                                                                                                                                                                                 |
+| So sánh địa điểm bằng nhãn chữ                       | **CÒN.** Chưa có khoá địa điểm/toạ độ ở grain chặng. Lane M sở hữu phần đó. #379 đưa toạ độ vào **đơn** (điều xe dùng), nhưng lập kế hoạch vẫn so nhãn — xem ghi chú ở §3                                                                                                                                                  |
 | Vòng chạy mồ côi khi hai yêu cầu song song cùng thua | **CÒN.** Bản thua ở `plans.create` để lại một vòng chạy `PLANNED` rỗng việc; nó được dọn bằng đường huỷ bình thường. Cùng khuôn với `SiteIntakeService`                                                                                                                                                                    |
 
 ### Nguồn sự thật bên ngoài — cổng, không phải một DI tuỳ nghi

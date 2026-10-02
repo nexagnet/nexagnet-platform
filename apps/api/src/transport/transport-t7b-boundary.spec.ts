@@ -1,7 +1,7 @@
 import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { describe, expect, it } from 'vitest';
 import { transportErrorBody, transportErrorToHttp } from './transport-action.guard.js';
-import { roleCanPerform } from './transport-actions.js';
+import { presetIncludes } from './transport-actions.js';
 import { TransportDomainError } from './transport.errors.js';
 import { transitionTripSchema } from './transport.schemas.js';
 import { isPublishableToDriver } from './workforce/payslip-lifecycle.js';
@@ -23,10 +23,10 @@ describe('#168 B6 — huy chuyen khong di vong qua duong chuyen trang thai chung
    * quyen kia chi la mot loi khuyen.
    */
   it('Ke toan co quyen chuyen trang thai NHUNG khong co quyen huy', () => {
-    expect(roleCanPerform('ACCOUNTING', 'transport.trip.transition')).toBe(true);
-    expect(roleCanPerform('ACCOUNTING', 'transport.trip.cancel')).toBe(false);
+    expect(presetIncludes('ACCOUNTING', 'transport.trip.transition')).toBe(true);
+    expect(presetIncludes('ACCOUNTING', 'transport.trip.cancel')).toBe(false);
     // Giam doc co ca hai — nen phep thu tren dung la mot phep CAT quyen, khong phai mot bang rong.
-    expect(roleCanPerform('ADMIN', 'transport.trip.cancel')).toBe(true);
+    expect(presetIncludes('ADMIN', 'transport.trip.cancel')).toBe(true);
   });
 
   it('than yeu cau `{to:"CANCELLED"}` bi tu choi ngay o schema', () => {
@@ -112,9 +112,9 @@ describe('#168 B5 — nop lai mot phieu dau bi tu choi', () => {
   it('duong VAN HANH doi quyen duyet, khong phai quyen nop cua lai xe', () => {
     // Dua mot phieu tro lai hang doi duyet la mot thao tac DUYET: no dao nguoc dung ket qua ma
     // `.verify`/`.reject` vua tao ra.
-    expect(roleCanPerform('ACCOUNTING', 'transport.fuel.entry.verify')).toBe(true);
-    expect(roleCanPerform('SALE', 'transport.fuel.entry.verify')).toBe(false);
-    expect(roleCanPerform('SALE', 'transport.driver.self.fuel.submit')).toBe(true);
+    expect(presetIncludes('ACCOUNTING', 'transport.fuel.entry.verify')).toBe(true);
+    expect(presetIncludes('SALE', 'transport.fuel.entry.verify')).toBe(false);
+    expect(presetIncludes('SALE', 'transport.driver.self.fuel.submit')).toBe(true);
   });
 });
 
@@ -288,7 +288,7 @@ describe('#168 B8 — quy tac cong bo phieu luong ra be mat lai xe', () => {
    * Bon ma con lai la duong ghi tai chinh.
    */
   it('lai xe khong nhan duoc mot ma luong van hanh nao', () => {
-    expect(roleCanPerform('SALE', 'transport.driver.self.payslip.read')).toBe(true);
+    expect(presetIncludes('SALE', 'transport.driver.self.payslip.read')).toBe(true);
     for (const action of [
       'transport.payroll.period.read',
       'transport.payroll.period.manage',
@@ -297,9 +297,9 @@ describe('#168 B8 — quy tac cong bo phieu luong ra be mat lai xe', () => {
       'transport.payslip.pay',
       'transport.payslip.correct',
     ] as const) {
-      expect(roleCanPerform('SALE', action), action).toBe(false);
-      expect(roleCanPerform('MANAGER', action), action).toBe(false);
+      expect(presetIncludes('SALE', action), action).toBe(false);
+      expect(presetIncludes('MANAGER', action), action).toBe(false);
     }
-    expect(roleCanPerform('MANAGER', 'transport.driver.self.payslip.read')).toBe(false);
+    expect(presetIncludes('MANAGER', 'transport.driver.self.payslip.read')).toBe(false);
   });
 });

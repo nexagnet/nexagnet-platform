@@ -3,6 +3,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import { formatVnd } from '../../../lib/format';
+import { PermissionNote } from '../components/PermissionGate';
 import { DataTable, MetricCard, PageHeader, StatusBadge } from '../components/primitives';
 import { ConfirmAction, EmptyState, ErrorState, LoadingState } from '../components/SectionState';
 import {
@@ -73,8 +74,8 @@ export function PayrollView() {
   const payslipRows = toPayslipRows(payslips.data ?? [], directory);
   const detailModel = toPayslipDetail(detail.data ?? null, directory);
 
-  const canApprove = canPerform(navigation.role, 'transport.payslip.approve');
-  const canPay = canPerform(navigation.role, 'transport.payslip.pay');
+  const canApprove = canPerform(navigation, 'transport.payslip.approve');
+  const canPay = canPerform(navigation, 'transport.payslip.pay');
 
   const mutation = useMutation({
     mutationFn: (input: { readonly id: string; readonly action: 'approve' | 'pay' }) =>
@@ -106,15 +107,21 @@ export function PayrollView() {
         <ErrorState message={periods.errorMessage} onRetry={periods.refetch} />
       )}
       {periods.isLoading ? <LoadingState label="Đang đọc kỳ lương…" /> : null}
+      {/* `#395` — ten lai xe va bien so tren phieu luong la danh ba RIENG: thieu quyen thi noi ra. */}
+      <PermissionNote
+        viewer={navigation}
+        actions={['transport.driver.read', 'transport.vehicle.read']}
+      />
 
       <section className="tx-panel" aria-label="Kỳ lương">
         <h2>Kỳ lương</h2>
         <PayrollPeriodCommands
           periods={periods.data ?? []}
-          role={navigation.role}
+          viewer={navigation}
           onChanged={refreshPayroll}
         />
-        {periodRows.length === 0 && !periods.isLoading ? (
+        {/* Mot lan doc LOI (vd `403`) khong phai "chua co ky nao" — loi da noi o tren (`#395`). */}
+        {periods.errorMessage !== null ? null : periodRows.length === 0 && !periods.isLoading ? (
           <EmptyState title="Chưa có kỳ lương nào được mở." />
         ) : (
           <DataTable
@@ -149,7 +156,7 @@ export function PayrollView() {
             periodStatus={
               (periods.data ?? []).find((row) => row.id === periodId)?.status ?? 'CLOSED'
             }
-            role={navigation.role}
+            viewer={navigation}
             onChanged={refreshPayroll}
           />
           {runs.isLoading ? <LoadingState label="Đang đọc các lần chạy…" /> : null}
@@ -291,7 +298,7 @@ export function PayrollView() {
           <PayslipCorrection
             payslipId={detailModel.row.id}
             canCorrect={detailModel.row.canCorrect}
-            role={navigation.role}
+            viewer={navigation}
             onChanged={refreshPayroll}
           />
           <div className="tx-cards">

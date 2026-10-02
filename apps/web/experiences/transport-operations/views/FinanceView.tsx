@@ -10,9 +10,11 @@ import {
 import { buildSectionUrl } from '../navigation';
 import { hasOperationsScope, operationsEmptyMessage } from '../transport-actions';
 import { toFinance } from '../workspace/finance';
+import { MarginNotes, MarginSourceSplit } from './CompanyMarginParts';
 
 /**
- * BANG TAI CHINH — sau dong tien canh nhau, va KHONG mot o tong nao (#244 G5).
+ * TONG HOP TAI CHINH (ten cu: Bang tai chinh) — sau dong tien canh nhau, va KHONG mot o tong nao
+ * (#244 G5).
  *
  * ===========================================================================
  * CAU CONG BO DI CUNG CON SO, khong xuong chan trang.
@@ -28,11 +30,11 @@ export function FinanceView() {
   const navigation = useNavigationInput();
   const summary = toSectionQuery(useFinanceSummary(navigation));
 
-  if (!hasOperationsScope(navigation.role)) {
+  if (!hasOperationsScope(navigation)) {
     return (
       <>
-        <PageHeader title="Bảng tài chính" />
-        <ErrorState message={operationsEmptyMessage(navigation.role)} />
+        <PageHeader title="Tổng hợp tài chính" />
+        <ErrorState message={operationsEmptyMessage(navigation)} />
       </>
     );
   }
@@ -42,8 +44,9 @@ export function FinanceView() {
   return (
     <>
       <PageHeader
-        title="Bảng tài chính"
-        summary="Doanh thu, biên trực tiếp, và sáu dòng tiền giữ riêng — không cộng chung."
+        /* Ten trang = nhan o danh muc (#341) — ten cu `Bảng tài chính`. */
+        title="Tổng hợp tài chính"
+        summary="Chỉ phần tiền, cho cả công ty: doanh thu, biên trực tiếp và sáu dòng phải thu/phải trả đặt cạnh nhau — không cộng chung, mỗi dòng mở sang mục chi tiết."
         context={model === null ? undefined : `Số liệu ngày ${model.generatedFor}`}
       />
 
@@ -60,7 +63,7 @@ export function FinanceView() {
 
           <section className="tx-panel" aria-label="Biên trực tiếp">
             <h2>Doanh thu và biên trực tiếp</h2>
-            <div className="tx-cards">
+            <div className="tx-cards tx-cards--lead">
               <MetricCard label="Doanh thu" value={model.margin.revenue} />
               <MetricCard label="Chi phí trực tiếp" value={model.margin.deduction} />
               <MetricCard
@@ -74,7 +77,16 @@ export function FinanceView() {
                 hint={model.margin.disclosure}
               />
             </div>
-            <p className="tx-panel__lead">{model.margin.coverage}</p>
+            <p className="tx-note">{model.margin.coverage}</p>
+            {/*
+              `#385` — nguon cua con so ngay duoi con so: bao nhieu den tu don theo vong xe, bao nhieu
+              tu chuyen cu, va dieu gi lam tong chua du. Tong con la cua MAY CHU.
+            */}
+            <MarginSourceSplit sources={model.margin.sources} />
+            <MarginNotes notes={model.margin.notes} />
+            <p className="tx-split__more">
+              <a href={buildSectionUrl('margin')}>Xem từng đơn và chuyến →</a>
+            </p>
           </section>
 
           <section className="tx-panel" aria-label="Sáu dòng tiền">
@@ -99,10 +111,11 @@ export function FinanceView() {
           <section className="tx-panel" aria-label="Công nợ quá hạn">
             <h2>Trong đó, quá hạn</h2>
             <div className="tx-cards">
+              {/* Tien KHACH no — nen mo `Phải thu khách hàng`, khong phai man phai tra (#341). */}
               <MetricCard
                 label="Khách hàng nợ quá hạn"
                 value={model.receivableOverdue}
-                href={buildSectionUrl('ar-ap')}
+                href={buildSectionUrl('settlement')}
               />
             </div>
           </section>

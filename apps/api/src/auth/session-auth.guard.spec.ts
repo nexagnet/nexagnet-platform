@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AuthService } from './auth.service.js';
 import { RolesGuard } from './roles.guard.js';
 import { SessionAuthGuard } from './session-auth.guard.js';
+import { ALLOW_DURING_PASSWORD_CHANGE_KEY } from './password-change.decorator.js';
 
 function context(request: Record<string, unknown>): ExecutionContext {
   return {
@@ -69,6 +70,35 @@ describe('session authorization guards', () => {
 
     auth.validateSession = vi.fn(async () => null);
     await expect(guard.canActivate(context(request))).rejects.toThrow(UnauthorizedException);
+  });
+
+  /*
+   * #395: tai khoan dang dung MAT KHAU TAM chi lam duoc ba viec (xem minh, doi mat khau, dang xuat).
+   * Moi route khac — REST, SSE, tai tep — deu qua guard nay nen deu bi chan o day.
+   */
+  it('mat khau tam: route thuong -> 403 PASSWORD_CHANGE_REQUIRED; route co dau -> qua', async () => {
+    const pending = { ...user, mustChangePassword: true };
+    auth.validateSession = vi.fn(async () => pending);
+    const guard = new SessionAuthGuard(reflector, auth);
+    const request = { session: { user: { userId: user.id, credentialVersion: 1 } } };
+
+    reflector.getAllAndOverride = vi.fn(() => false);
+    const denied = guard.canActivate(context(request));
+    await expect(denied).rejects.toThrow(ForbiddenException);
+    await denied.catch((error: { getResponse: () => unknown }) => {
+      expect(error.getResponse()).toMatchObject({
+        statusCode: 403,
+        reason: 'PASSWORD_CHANGE_REQUIRED',
+        message: 'Bạn cần đổi mật khẩu tạm trước khi tiếp tục.',
+      });
+    });
+    expect(request).not.toHaveProperty('authUser');
+
+    reflector.getAllAndOverride = vi.fn(
+      (key: unknown) => key === ALLOW_DURING_PASSWORD_CHANGE_KEY,
+    ) as unknown as Reflector['getAllAndOverride'];
+    await expect(guard.canActivate(context(request))).resolves.toBe(true);
+    expect(request).toHaveProperty('authUser', pending);
   });
 
   it('allows api-key mode to retain backwards compatibility', async () => {

@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Req,
   UseGuards,
 } from '@nestjs/common';
@@ -26,11 +27,14 @@ import {
   createPartnerSchema,
   createVehicleSchema,
   firstIssue,
+  linkDriverAccountSchema,
   updateCustomerSchema,
   updateDriverSchema,
   updatePartnerSchema,
   updateVehicleSchema,
 } from '../transport.schemas.js';
+import { TransportAccountLinkDirectory, type AccountLinksView } from './account-link-directory.js';
+import { DriverAccountLinkService } from './driver-account-link.service.js';
 import { FleetService } from './fleet.service.js';
 
 /**
@@ -43,7 +47,16 @@ import { FleetService } from './fleet.service.js';
 @Controller('transport')
 @UseGuards(TransportActionGuard)
 export class FleetController {
-  constructor(private readonly fleet: FleetService) {}
+  constructor(
+    private readonly fleet: FleetService,
+    /**
+     * Hai provider nay phai nam trong `exports` cua `TransportModule`: controller dang ky o GOC
+     * (`app-composition.ts`) chi thay danh sach export — tiem mot provider noi bo qua duoc `tsc` va
+     * test don vi roi chet luc boot. `app.module.transport-core.boot.spec.ts` bat dieu do.
+     */
+    private readonly driverAccountLinks: DriverAccountLinkService,
+    private readonly linkDirectory: TransportAccountLinkDirectory,
+  ) {}
 
   /* ----------------------------- Xe ----------------------------- */
 
@@ -133,6 +146,45 @@ export class FleetController {
   ) {
     const patch = this.parse(updateDriverSchema, body);
     return this.guard(() => this.fleet.updateDriver(id, patch, transportActorOf(request)));
+  }
+
+  /* ----------------------- Noi tai khoan (#395) ----------------------- */
+
+  /**
+   * NOI / GO tai khoan dang nhap voi ho so lai xe — duong ghi DUY NHAT cua `Driver.authUserId`.
+   *
+   * Chi Giam doc: `transport.account_link.manage` nam trong `DIRECTOR_ONLY_ACTIONS` — cap pham vi
+   * "viec cua chinh lai xe" cho mot con nguoi la mot thao tac phan quyen, khong phai sua ho so.
+   * `@Roles('ADMIN')` noi cung mot dieu cho `roles-coverage.spec.ts` va cho truong hop route mat
+   * guard mien (fail-closed).
+   */
+  @Put('drivers/:driverId/account')
+  @Roles('ADMIN')
+  @RequiresTransportAction('transport.account_link.manage')
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  setDriverAccount(
+    @Param('driverId') driverId: string,
+    @Body() body: unknown,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    const { authUserId } = this.parse(linkDriverAccountSchema, body);
+    return this.guard(() =>
+      this.driverAccountLinks.setDriverAccount(driverId, authUserId, transportActorOf(request)),
+    );
+  }
+
+  /**
+   * Tai khoan nay DANG la ai trong mien van tai: ho so lai xe va/hoac ho so ben gop von.
+   *
+   * Cung ma quyen voi lan noi — chi nguoi noi duoc moi can biet ai dang noi voi ai. Cung nguon voi
+   * mien phan quyen (`describeScopes`), nen man hinh quan tri va cau "Nguoi nay lam duoc gi?" khong
+   * lech nhau duoc.
+   */
+  @Get('account-links/:authUserId')
+  @Roles('ADMIN')
+  @RequiresTransportAction('transport.account_link.manage')
+  accountLinksOf(@Param('authUserId') authUserId: string): Promise<AccountLinksView> {
+    return this.guard(() => this.linkDirectory.forUser(authUserId));
   }
 
   /* ------------------------ Khach hang -------------------------- */

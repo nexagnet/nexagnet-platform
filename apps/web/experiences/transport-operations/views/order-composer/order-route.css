@@ -1,0 +1,172 @@
+/*
+ * DANH SACH DON + KHOI "TUYẾN" (#379) — cung ngon ngu voi phieu tuyen: the "Lấy"/"Giao", duong ray
+ * dut, ten bang chu serif, toa do nho mo. Moi selector `.tx-`. Chu nho dung `--tx-ink-soft`:
+ * `--tx-ink-faint` duoi 4,5:1 (WCAG AA) o co chu nay.
+ */
+
+/* ---------------------------------------------------------------- *
+ * CAU "Đã tạo đơn …" — vung `role="status"` LUON co mat
+ * ---------------------------------------------------------------- */
+
+/*
+ * Rong thi ra khoi dong chay (khong de lai mot khe `gap` trong danh sach) nhung van trong cay truy
+ * cap: chu dat vao SAU moi la mot thay doi duoc doc — xem `useComposerHandoff`.
+ */
+.tx-created-notice:empty {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  border: 0;
+}
+
+.tx-created-notice:focus-visible {
+  outline: 2px solid var(--tx-accent);
+  outline-offset: 2px;
+}
+
+/* Bo loc dang giau don dang mo: noi ro, va mot nut lay lai. */
+.tx-orderfilter__hidden {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.75rem;
+}
+
+/* ---------------------------------------------------------------- *
+ * DANH SACH DON — o tim + loc trang thai (phia may khach)
+ * ---------------------------------------------------------------- */
+
+.tx-orderfilter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.6rem 0.9rem;
+}
+
+.tx-orderfilter .tx-field {
+  flex: 1 1 15rem;
+  max-width: 26rem;
+}
+
+.tx-orderfilter .tx-orderfilter__status {
+  flex: 0 1 12rem;
+}
+
+.tx-orderfilter__count {
+  margin: 0 0 0.45rem auto;
+  font-size: 0.8rem;
+  color: var(--tx-ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------------------------------------------------------------- *
+ * KHOI "TUYẾN" cua don dang chon — cung ngon ngu voi phieu tuyen
+ * ---------------------------------------------------------------- */
+
+.tx-routecard {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1rem 1.4rem;
+}
+
+@media (min-width: 1100px) {
+  .tx-routecard:has(.tx-routecard__map) {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);
+    align-items: stretch;
+  }
+}
+
+.tx-routecard__ends {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Cung duong ray dut voi phieu tuyen, noi dau Lay voi dau Giao. */
+.tx-routecard__ends::before {
+  content: '';
+  position: absolute;
+  top: 1.6rem;
+  bottom: 1.9rem;
+  left: calc(1.2rem - 1px);
+  border-left: 2px dashed var(--tx-line-strong);
+}
+
+.tx-routecard__end {
+  --tx-routecard-mark: var(--tx-go);
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.tx-routecard__end[data-endpoint='DESTINATION'] {
+  --tx-routecard-mark: var(--tx-done);
+}
+
+.tx-routecard__tag {
+  z-index: 1;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.4rem;
+  height: 1.5rem;
+  margin-top: 0.1rem;
+  border-radius: var(--tx-radius-sm);
+  background: var(--tx-routecard-mark);
+  color: var(--tx-paper);
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.tx-routecard__text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.08rem;
+  min-width: 0;
+}
+
+.tx-routecard__role {
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--tx-routecard-mark);
+}
+
+.tx-routecard__name {
+  font-family: var(--font-display);
+  font-size: 1.12rem;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.tx-routecard__coords {
+  font-size: 0.72rem;
+  color: var(--tx-ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+.tx-routecard__distance {
+  margin: 0.8rem 0 0;
+  font-size: 0.82rem;
+  color: var(--tx-ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+.tx-routecard__facts > .tx-note {
+  margin-top: 0.8rem;
+  color: var(--tx-ink-soft);
+}
+
+.tx-routecard__map {
+  height: 240px;
+  min-width: 0;
+}

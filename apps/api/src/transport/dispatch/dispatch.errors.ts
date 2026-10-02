@@ -16,14 +16,24 @@ export const TRANSPORT_DISPATCH_ERROR_REASONS = [
    */
   'DISPATCH_ORDER_CANCELLED',
   /**
-   * KHONG BIET DIEM LAY HANG O DAU — va day la ma quan trong nhat cua tep nay.
+   * KHONG BIET DIEM LAY HANG O DAU — tu mot tham chieu TUONG MINH ma he thong khong giai duoc thanh
+   * mot cho duy nhat (vd mot dia diem co hai hang rao).
    *
-   * `TransportOrder.originLabel` la mot CHUOI ("Kho Hai Phong"), khong phai mot toa do. Khi chuoi
-   * do khong noi duoc ve mot cho co that trong he thong, cau tra loi dung la NOI RA dieu do. Lay
-   * dai mot toa do — kho gan nhat, tam cua tinh, hay bai xe — se cho ra mot bang xep hang trong
-   * y het mot bang xep hang that, va khong ai doc duoc no la gia.
+   * Lay dai mot toa do — kho gan nhat, tam cua tinh, hay bai xe — se cho ra mot bang xep hang
+   * trong y het mot bang xep hang that, va khong ai doc duoc no la gia. Nen cau tra loi dung la
+   * NOI RA rang khong giai duoc.
    */
   'DISPATCH_PICKUP_LOCATION_UNRESOLVED',
+  /**
+   * DON CU KHONG MANG TOA DO DIEM LAY — va he thong CO Y khong doan.
+   *
+   * Tu #379, toa do tren don la su that cua diem lay; `originLabel` chi de hien thi. Mot don tao
+   * truoc do co toa do NULL, va duong cu "noi nhan voi ten hang rao" da bi go: mot nhan trung ten
+   * mot hang rao la mot su trung hop chinh ta, khong phai mot lan khao sat. Tach ma rieng khoi
+   * `DISPATCH_PICKUP_LOCATION_UNRESOLVED` de man hinh biet chinh xac viec can lam: chi dinh diem lay
+   * tuong minh khi dieu xe (POINT/SITE/GEOFENCE), chu khong phai "thu lai".
+   */
+  'DISPATCH_ORDER_PICKUP_COORDINATES_MISSING',
   /** Toa do nguoi goi gui khong qua duoc `parseGeoPoint` (ngoai bien, NaN, hoac Null Island). */
   'DISPATCH_POINT_INVALID',
   /** Ma dia diem/hang rao nguoi goi gui khong ton tai hoac da ngung hoat dong. */

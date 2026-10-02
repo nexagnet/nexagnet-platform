@@ -309,6 +309,12 @@ export const DRIVER_FUND_ENTRY_KINDS = [
   'REVERSAL',
   /** `TX-07b` — cong ty tra lai lai xe khoan ho da bo tui. KHONG phai luong, khong phai tam ung. */
   'REIMBURSEMENT',
+  /**
+   * `#369` R-4 — lai xe chi tien cua quy cho mot khoan gan VONG XE (Run-first), vd phieu dau
+   * `DRIVER_CASH` da duyet. AM. Chi la chan tien mat: gia thanh cua no nam o lop phan bo Run-first,
+   * nen dong nay KHONG BAO GIO la gia thanh chuyen va khong vao cong no cay xang.
+   */
+  'RUN_EXPENSE',
 ] as const;
 export type DriverFundEntryKind = (typeof DRIVER_FUND_ENTRY_KINDS)[number];
 
@@ -1879,14 +1885,94 @@ export interface TransportOrder {
   readonly status: TransportOrderStatus;
   readonly businessDate: BusinessDate;
   readonly customerId: string | null;
+  /** Chi de HIEN THI. Su that cua diem lay la `originPoint` (#379). */
   readonly originLabel: string;
+  /** Chi de HIEN THI. Su that cua diem giao la `destinationPoint` (#379). */
   readonly destinationLabel: string;
+  /**
+   * TOA DO diem lay hang (#379). `null` = don tao truoc khi he thong luu toa do (don cu, don chieu
+   * tu chuyen v1, du lieu mau) — man hinh noi dung dieu do va KHONG BAO GIO bia mot diem.
+   *
+   * TUY CHON o phia web (khac may chu): bo mock e2e cu khong co truong nay, nen `undefined` phai
+   * doc ra y het `null`. Dung `orderPointOf()` thay vi doc truc tiep.
+   */
+  readonly originPoint?: GeoPoint | null;
+  /** Toa do diem giao hang (#379) — cung quy uoc voi `originPoint`. */
+  readonly destinationPoint?: GeoPoint | null;
   readonly cargoDescription: string | null;
   readonly freightAmount: number | null;
   readonly currencyCode: string;
   readonly note: string | null;
   readonly cancelledAt: string | null;
   readonly cancellationReason: string | null;
+}
+
+/* ------------------------------------------------------------------ *
+ * DIA DIEM — tim kiem, tim nguoc va dia diem da biet (#379)
+ *
+ * Ban guong cua `apps/api/src/transport/places/place-search.types.ts`. Ket qua tim kiem la mot GOI
+ * Y: no chi thanh toa do cua don khi nguoi dung bam chon. That bai la mot TRANG THAI co kieu trong
+ * than 200, khong phai mot loi HTTP — man hinh tao don van chay khi tim kiem tat hay hong.
+ * ------------------------------------------------------------------ */
+
+export type PlaceLookupStatus = 'OK' | 'DISABLED' | 'BUSY' | 'UNAVAILABLE';
+
+export type PlaceLookupFailureReason =
+  | 'PROVIDER_UNCONFIGURED'
+  | 'PROVIDER_NOT_APPROVED_FOR_CUSTOMER_DATA'
+  | 'PROVIDER_BUSY'
+  | 'PROVIDER_RATE_LIMITED'
+  | 'PROVIDER_UNAVAILABLE';
+
+export interface PlaceCandidate {
+  readonly label: string;
+  readonly address: string | null;
+  readonly point: GeoPoint;
+}
+
+export interface PlaceSearchResponse {
+  readonly status: PlaceLookupStatus;
+  readonly reason: PlaceLookupFailureReason | null;
+  readonly results: readonly PlaceCandidate[];
+  readonly attribution: string | null;
+  readonly fromCache: boolean;
+}
+
+export interface PlaceReverseResponse {
+  readonly status: PlaceLookupStatus;
+  readonly reason: PlaceLookupFailureReason | null;
+  readonly result: PlaceCandidate | null;
+  readonly attribution: string | null;
+  readonly fromCache: boolean;
+}
+
+/** Ba loai hang rao la "cho ta hay lay/giao hang". Cay xang va hang rao tam CO Y vang mat. */
+export type KnownPlaceKind = 'DEPOT' | 'COUNTERPARTY_SITE' | 'CUSTOMER';
+
+export interface KnownPlace {
+  /** `TransportGeofence.id` — hang rao LA dia diem da biet, khong co kho thu hai. */
+  readonly id: string;
+  readonly kind: KnownPlaceKind;
+  readonly name: string;
+  /**
+   * Ten CHU cua dia diem — phap nhan / khach hang (`#395`: moi loai, khong chi `COUNTERPARTY_SITE`).
+   * `null` khi khong co (bai xe cua chinh cong ty).
+   */
+  readonly detail: string | null;
+  /**
+   * NHAN LOAI do may chu tinh (`#395` §2.1): "Bãi xe" · "Địa điểm khách hàng" · "Nhà máy / kho đối
+   * tác". TUY CHON: may chu cu khong tra, man hinh suy tu `kind`. Chi may chu biet mot nha may co
+   * thuoc mot khach hang hay khong.
+   */
+  readonly kindLabel?: string | null;
+  readonly point: GeoPoint;
+  readonly radiusMetres: number;
+}
+
+export interface KnownPlacesResponse {
+  /** `false` = khach khong co so hang rao; KHAC voi `true` kem danh sach rong. */
+  readonly available: boolean;
+  readonly places: readonly KnownPlace[];
 }
 
 export interface VehicleRun {
@@ -2619,10 +2705,102 @@ export interface FinanceReceivableSummary {
 
 export type FinanceSource = 'DRIVER_SETTLEMENT';
 
+/* ------------------------------------------------------------------ *
+ * `#381`/`#385` — BIEN CA CONG TY: chuyen cu CONG don giao theo vong xe
+ * ------------------------------------------------------------------ */
+
+/** Hai nguon cua mot dong hieu qua — `company-margin.ts` o may chu. */
+export const MARGIN_ROW_SOURCES = ['LEGACY_TRIP', 'RUN_FIRST_ORDER'] as const;
+export type MarginRowSource = (typeof MARGIN_ROW_SOURCES)[number];
+
+/** Vi sao mot dong KHONG vao tong. Chi phi chua biet KHONG BAO GIO duoc hien thanh 0. */
+export const MARGIN_EXCLUSIONS = [
+  'FREIGHT_MISSING',
+  'NO_RUN_YET',
+  'SHARED_RUN',
+  'COST_SOURCE_UNAVAILABLE',
+] as const;
+export type MarginExclusion = (typeof MARGIN_EXCLUSIONS)[number];
+
+export interface MarginCostBreakdown {
+  /** `TX-03` — chi phi truc tiep cua chuyen cu. */
+  readonly tripExpense: number;
+  readonly carrierPayable: number;
+  readonly commission: number;
+  /** `#364` — phan bo gia thanh nhien lieu theo vong xe. */
+  readonly fuelAttribution: number;
+}
+
+export interface PendingFuelCost {
+  readonly amount: number;
+  readonly entryCount: number;
+}
+
+export interface CompanyMarginRow {
+  readonly key: string;
+  readonly source: MarginRowSource;
+  /** Ma DON (luong moi) hoac ma CHUYEN (chuyen cu). */
+  readonly code: string;
+  /** Boi canh van hanh — ma vong xe. */
+  readonly runCodes: readonly string[];
+  readonly tripId: string | null;
+  readonly orderId: string | null;
+  readonly runIds: readonly string[];
+  readonly tripKind: TripKind | null;
+  readonly orderStatus: TransportOrderStatus | null;
+  readonly businessDate: BusinessDate;
+  readonly originLabel: string;
+  readonly destinationLabel: string;
+  readonly customerId: string | null;
+  readonly revenueAmount: number | null;
+  /** `null` = CHUA BIET, khong phai 0 — `exclusion` noi vi sao. */
+  readonly costs: MarginCostBreakdown | null;
+  readonly deductionAmount: number | null;
+  readonly marginAmount: number | null;
+  readonly marginBasisPoints: number | null;
+  readonly counted: boolean;
+  readonly exclusion: MarginExclusion | null;
+  readonly pendingFuelCost: PendingFuelCost;
+  readonly unexpectedInternalCost: boolean;
+  readonly currencyCode: string;
+}
+
+export interface MarginSubtotal {
+  readonly revenueAmount: number;
+  readonly deductionAmount: number;
+  readonly marginAmount: number;
+}
+
+export interface CompanyMarginBasis {
+  readonly legacyTrips: MarginSubtotal & { readonly counted: number; readonly skipped: number };
+  readonly runFirstOrders: MarginSubtotal & {
+    readonly counted: number;
+    readonly excluded: Readonly<Record<MarginExclusion, number>>;
+    /** Don DA vao tong nhung chua co mot dong chi phi nao — bien 100% cua chung chua phan anh gi. */
+    readonly withoutRecordedCost: number;
+  };
+  /** Don CHIEU tu chuyen cu — da tinh qua chuyen, khong tinh lai. */
+  readonly projectedOrderCount: number;
+  readonly pendingFuelCost: PendingFuelCost & { readonly rowCount: number };
+  readonly unassignedRunFirstCost: { readonly amount: number; readonly runCount: number };
+}
+
+/** Tong CUA MAY CHU. `tripCount`/`skippedTripCount` giu nghia CHUYEN CU. */
+export interface CompanyMarginRollup extends DirectMarginRollup {
+  readonly basis: CompanyMarginBasis;
+}
+
+export interface FinanceMarginView {
+  readonly generatedFor: BusinessDate;
+  readonly totals: CompanyMarginRollup;
+  readonly rows: readonly CompanyMarginRow[];
+}
+
 export interface FinanceSummaryView {
   readonly generatedFor: BusinessDate;
   readonly buckets: SettlementBuckets;
-  readonly directMargin: DirectMarginRollup;
+  /** `#385` — tong CA CONG TY (chuyen cu + don theo vong xe), cung ham gop voi `FinanceMarginView`. */
+  readonly directMargin: CompanyMarginRollup;
   readonly receivable: FinanceReceivableSummary;
   readonly currency: FinanceCurrencyCoverage;
   readonly unavailableSources: readonly FinanceSource[];

@@ -1,19 +1,13 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Body,
-  Req,
-  Res,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { Controller, Get, Post, Body, Req, Res, UnauthorizedException } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { loadFoundationEnv } from '../config/foundation-env.js';
 import type { Response } from 'express';
+import type { CurrentAccessResponse } from './account.types.js';
 import { AuthService } from './auth.service.js';
 import type { ChangePasswordInput, LoginInput } from './auth.schemas.js';
-import { USER_ROLES, type AuthenticatedUser } from './auth.types.js';
+import type { AuthenticatedUser } from './auth.types.js';
 import { generateCsrfToken, revokeCsrfToken } from './csrf.guard.js';
+import { AllowDuringPasswordChange } from './password-change.decorator.js';
 import { Public } from './public.decorator.js';
 import type { AuthenticatedRequest } from './session.types.js';
 
@@ -35,6 +29,7 @@ export class AuthController {
     return { mode: loadFoundationEnv().AUTH_MODE };
   }
 
+  /** `user.mustChangePassword = true` → man hinh dua thang sang doi mat khau tam (`#395`). */
   @Post('login')
   @Public()
   @Throttle({ default: { limit: 5, ttl: 60_000 } })
@@ -50,12 +45,20 @@ export class AuthController {
     return { user, csrfToken };
   }
 
+  /**
+   * Nguoi dung hien tai + tap quyen HIEU LUC (`#395`): quyen nen tang (`platform.*`) va moi quyen
+   * cua moi mien da tinh ca vai khoi diem lan quyen rieng. May chu la noi DUY NHAT tinh quyen — man
+   * hinh chi hien lai.
+   */
   @Get('me')
-  me(@Req() request: AuthenticatedRequest) {
-    return { user: currentUser(request), roles: USER_ROLES };
+  @AllowDuringPasswordChange()
+  me(@Req() request: AuthenticatedRequest): CurrentAccessResponse {
+    return this.auth.currentAccess(currentUser(request));
   }
 
+  /** Tra `csrfToken` MOI (phien duoc tao lai) — man hinh phai thay token cu bang token nay. */
   @Post('credentials/change')
+  @AllowDuringPasswordChange()
   async changePassword(
     @Body() body: ChangePasswordInput,
     @Req() request: AuthenticatedRequest,
@@ -69,6 +72,7 @@ export class AuthController {
   }
 
   @Post('logout')
+  @AllowDuringPasswordChange()
   async logout(
     @Req() request: AuthenticatedRequest,
     @Res({ passthrough: true }) response: Response,

@@ -2,25 +2,18 @@ import { describe, expect, it } from 'vitest';
 import type {
   ApByCounterpartyRow,
   ArAgingReport,
-  DirectMargin,
-  DirectMarginRollup,
   PartnerPosition,
   SettlementDocument,
   SettlementDocumentChain,
 } from '../../transport-types';
 import {
-  batchTripIds,
   DOCUMENT_CHAIN_NOTE,
   NET_DISPLAY_DISCLOSURE,
-  ROLLUP_BATCH_LIMIT,
   toApFlow,
   toArAging,
-  toDirectMargin,
-  toDirectMarginRollup,
   toDocumentChain,
   toPartnerPosition,
   toSettlementDirectory,
-  UNEXPECTED_INTERNAL_COST_NOTE,
 } from '../settlement';
 import { customer, partner } from './fixtures';
 
@@ -134,85 +127,6 @@ describe('vi the doi tac — hai chieu, khong bu tru', () => {
   it('cau "chi de xem" di kem so rong va KHONG duoc bo', () => {
     expect(toPartnerPosition(position, directory)?.netDisclosure).toBe(NET_DISPLAY_DISCLOSURE);
     expect(NET_DISPLAY_DISCLOSURE).toContain('không bù trừ');
-  });
-});
-
-describe('bien truc tiep', () => {
-  const margin = (over: Partial<DirectMargin> = {}): DirectMargin => ({
-    tripId: 'trip-1',
-    tripKind: 'OWN_DIRECT',
-    revenueAmount: 10_000_000,
-    directCostAmount: 6_000_000,
-    carrierPayableAmount: 0,
-    commissionAmount: 0,
-    deductionAmount: 6_000_000,
-    marginAmount: 4_000_000,
-    marginBasisPoints: 4000,
-    currencyCode: 'VND',
-    fixedCostsIncluded: false,
-    disclosure: 'Chưa gồm chi phí cố định',
-    unexpectedInternalCost: false,
-    ...over,
-  });
-
-  it('cau "chua gom chi phi co dinh" LUON di kem con so', () => {
-    expect(toDirectMargin(margin())?.disclosure).toBe('Chưa gồm chi phí cố định');
-  });
-
-  it('may chu quen gui cau do thi van co mot cau — khong de trong', () => {
-    expect(toDirectMargin(margin({ disclosure: '' }))?.disclosure).toBe('Chưa gồm chi phí cố định');
-  });
-
-  it('CHUA NHAP gia cuoc khac han bien bang 0', () => {
-    const model = toDirectMargin(margin({ revenueAmount: null, marginAmount: null }));
-    expect(model?.isRevenueMissing).toBe(true);
-    expect(model?.marginLabel).toBe('—');
-  });
-
-  it('ty suat doc tu DIEM CO BAN: 4000 = 40,00%', () => {
-    expect(toDirectMargin(margin())?.marginRateLabel).toBe('40,00%');
-  });
-
-  it('MAU THUAN du lieu duoc noi ra, khong lang le cong vao', () => {
-    const model = toDirectMargin(margin({ unexpectedInternalCost: true }));
-    expect(model?.inconsistencyNote).toBe(UNEXPECTED_INTERNAL_COST_NOTE);
-  });
-});
-
-describe('cong don bien truc tiep', () => {
-  const rollup = (over: Partial<DirectMarginRollup> = {}): DirectMarginRollup => ({
-    revenueAmount: 100_000_000,
-    deductionAmount: 60_000_000,
-    marginAmount: 40_000_000,
-    marginBasisPoints: 4000,
-    tripCount: 20,
-    skippedTripCount: 0,
-    fixedCostsIncluded: false,
-    disclosure: 'Chưa gồm chi phí cố định',
-    ...over,
-  });
-
-  it('so chuyen BI BO QUA phai duoc noi ra', () => {
-    const model = toDirectMarginRollup(rollup({ skippedTripCount: 5 }));
-    expect(model?.coverageNote).toContain('5');
-    expect(model?.coverageNote).toContain('chưa nhập giá cước');
-  });
-
-  it('khong bo qua chuyen nao thi cau ngan gon, khong doa nguoi doc', () => {
-    expect(toDirectMarginRollup(rollup())?.coverageNote).not.toContain('chưa nhập');
-  });
-
-  it('chia lo theo tran 200 chuyen cua may chu', () => {
-    const ids = Array.from({ length: 450 }, (_, index) => `trip-${index}`);
-    const batches = batchTripIds(ids);
-    expect(batches).toHaveLength(3);
-    expect(batches[0]).toHaveLength(ROLLUP_BATCH_LIMIT);
-    expect(batches[2]).toHaveLength(50);
-    expect(batches.flat()).toEqual(ids);
-  });
-
-  it('danh sach rong khong sinh mot lo rong', () => {
-    expect(batchTripIds([])).toHaveLength(0);
   });
 });
 

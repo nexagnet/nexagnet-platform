@@ -13,6 +13,8 @@ import { defineDecisionVocabulary } from '../../observability/decision-vocabular
 
 export const FINANCE_SUMMARY_REASONS = [
   'FINANCE_SUMMARY_COMPILED',
+  /** `#385` — bang hieu qua tung viec (chuyen cu + don Run-first) da dung tu ban ghi nguon. */
+  'FINANCE_MARGIN_COMPILED',
   /** Mot nguon vang mat vi capability so huu no dang tat. */
   'FINANCE_SOURCE_UNAVAILABLE',
   /** Nguon co bat nhung doc loi — bang mat dung o do, khong hong ca lan doc. */
@@ -30,9 +32,11 @@ export type FinanceSummaryReason = (typeof FINANCE_SUMMARY_REASONS)[number];
 
 export const FINANCE_DECISIONS = defineDecisionVocabulary({
   owner: 'transport-settlement',
-  points: ['finance.summary'],
+  points: ['finance.summary', 'finance.margin'],
   labels: {
     FINANCE_SUMMARY_COMPILED: 'Đã dựng bảng tài chính từ bản ghi nguồn',
+    FINANCE_MARGIN_COMPILED:
+      'Đã dựng bảng hiệu quả từng việc — chuyến cũ cộng đơn giao theo vòng xe, không đếm trùng',
     FINANCE_SOURCE_UNAVAILABLE: 'Một nguồn của bảng vắng mặt vì capability sở hữu nó đang tắt',
     FINANCE_SOURCE_FAILED: 'Một nguồn của bảng có bật nhưng đọc lỗi — bảng thiếu mục đó',
     FINANCE_CURRENCY_MIXED:

@@ -39,7 +39,7 @@ export function OrderFulfilmentPanel({
 }) {
   const navigation = useNavigationInput();
   const fulfil = useOrderFulfilment();
-  const canManage = canPerform(navigation.role, 'transport.order.manage');
+  const canManage = canPerform(navigation, 'transport.order.manage');
   const [isConfirming, setConfirming] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);

@@ -378,6 +378,9 @@ export const order = (over: Partial<TransportOrder> = {}): TransportOrder => ({
   customerId: 'cus-1',
   originLabel: 'Kho Hải Phòng',
   destinationLabel: 'Ninh Bình',
+  /* `#379` — don hat giong la don CU: khong toa do. Bai nao can toa do thi tu truyen vao. */
+  originPoint: null,
+  destinationPoint: null,
   cargoDescription: null,
   freightAmount: 5_000_000,
   currencyCode: 'VND',

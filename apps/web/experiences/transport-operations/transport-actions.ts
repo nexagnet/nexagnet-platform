@@ -208,6 +208,8 @@ export const TRANSPORT_ACTIONS = [
   'transport.asset_ownership.read',
   'transport.asset_ownership.manage',
   'transport.stakeholder.self.vehicle.read',
+  /* --- `#395` NOI TAI KHOAN DANG NHAP voi ho so lai xe / ben huu quan — chi Giam doc --- */
+  'transport.account_link.manage',
   /* --- `TX-08` mo rong: NAP DU LIEU ETC / PHI DUONG BO (Lane J, Issue #269) --- */
   'transport.toll.account.read',
   'transport.toll.account.manage',
@@ -273,8 +275,9 @@ export const SELF_SCOPE_ACTIONS: readonly TransportAction[] = [
  * mot hang `TransportAssetStakeholder.authUserId`, khong tu mot chuc danh. Xem khoi
  * `STAKEHOLDER_SCOPE_ACTIONS` trong `apps/api/src/transport/transport-actions.ts`.
  *
- * Hau qua o phia man hinh: `canPerform` tra `false` cho moi vai, nen KHONG duoc dung no lam dieu
- * kien hien be mat ben huu quan. Dieu kien dung la API tra ve du lieu hay `403`.
+ * Hau qua o phia man hinh: `canPerform` KHONG doc vai hay tap quyen cho cac ma nay — no chi tra
+ * `true` khi `TransportViewer.stakeholderLinked` noi may chu da tra du lieu cho
+ * `GET /transport/me/vehicles` (`#395`). Dieu kien dung van la API tra du lieu hay `403`.
  */
 export const STAKEHOLDER_SCOPE_ACTIONS: readonly TransportAction[] = [
   'transport.stakeholder.self.vehicle.read',
@@ -322,6 +325,11 @@ const ACCOUNTING_DENIED: readonly TransportAction[] = [
    */
   'transport.operational_document.withdraw',
   /**
+   * GHI BU mot chung tu van hanh (`#279` O1) — `#395` dua vao day tu `@Roles` cua route: ghi bu
+   * la THEM can cu vao ho so ma Ke toan sap duyet tien. Chep nguyen tu API.
+   */
+  'transport.operational_document.record',
+  /**
    * Ke toan DOC duoc chung cu — do la ca cong viec cua ho — nhung RUT mot chung cu la viec khac:
    * go bo mot muc khoi chinh ho so minh dang doi soat.
    */
@@ -340,6 +348,18 @@ const ACCOUNTING_DENIED: readonly TransportAction[] = [
 ];
 
 /**
+ * CHI GIAM DOC (`#395`) — chep nguyen tu API. Khong cap duoc cho vai nao khac, ke ca bang quyen
+ * rieng. Hai ma sau truoc day chi song trong `@Roles` cua route, nen man hinh (doc bang nay) tung
+ * hien nut dao quyet toan cho Ke toan roi nhan 403. Bai drift so tung ma voi API.
+ */
+export const DIRECTOR_ONLY_ACTIONS: readonly TransportAction[] = [
+  'transport.costing.period.reopen',
+  'transport.fuel.reconciliation.reopen',
+  'transport.driver_settlement.reverse',
+  'transport.account_link.manage',
+];
+
+/**
  * Bon vai as-built cua nen tang → hanh dong. Giam doc → `ADMIN` · Ke toan → `ACCOUNTING` ·
  * Lai xe → `SALE` (CHO GIU TAM: nen tang chua co vai `DRIVER`).
  *
@@ -352,7 +372,9 @@ const ACCOUNTING_DENIED: readonly TransportAction[] = [
  */
 const ROLE_ACTIONS: Readonly<Record<AuthRole, readonly TransportAction[]>> = {
   ADMIN: OPERATIONS_ACTIONS,
-  ACCOUNTING: OPERATIONS_ACTIONS.filter((action) => !ACCOUNTING_DENIED.includes(action)),
+  ACCOUNTING: OPERATIONS_ACTIONS.filter(
+    (action) => !ACCOUNTING_DENIED.includes(action) && !DIRECTOR_ONLY_ACTIONS.includes(action),
+  ),
   SALE: SELF_SCOPE_ACTIONS,
   MANAGER: [],
 };
@@ -362,42 +384,135 @@ export const actionsForRole = (role: AuthRole): readonly TransportAction[] => RO
 export const roleCanPerform = (role: AuthRole, action: TransportAction): boolean =>
   ROLE_ACTIONS[role].includes(action);
 
+/* ------------------------------------------------------------------ *
+ * NGUOI DANG XEM — vai + tap quyen HIEU LUC do may chu tinh (`#395`)
+ * ------------------------------------------------------------------ */
+
 /**
- * `role === null` nghia la KHONG BIET vai, khong phai "khong co quyen".
+ * NGUOI DANG XEM man hinh. `permissions` la tap quyen HIEU LUC ma MAY CHU tra trong `/auth/me`
+ * (vai khoi diem + quyen rieng Giam doc cap). Co tap do thi man hinh CHI doc tap do — may chu la
+ * noi DUY NHAT tinh quyen; ban guong `ROLE_ACTIONS` chi con la duong lui khi may chu cu (hoac mock
+ * cu) khong tra truong nay.
+ *
+ * `permissions` TUY CHON o tang kieu, co y: moi `NavigationInput` dung truoc `#395` (va moi bai
+ * test cu) chi co `role`, va chung phai duoc tra loi DUNG nhu hom nay.
+ */
+export interface TransportViewer {
+  readonly role: AuthRole | null;
+  readonly permissions?: ReadonlySet<string> | null;
+  /**
+   * Tai khoan nay DUOC NOI voi mot ho so ben gop von (`TransportAssetStakeholder.authUserId`).
+   *
+   * Pham vi nay KHONG den tu vai hay quyen rieng, nen `/auth/me` khong mang no — CHI may chu biet,
+   * va no noi bang cach TRA DU LIEU (khong phai `403`) cho `GET /transport/me/vehicles`. `true` chi
+   * khi may chu da tra loi nhu vay; thieu/`false` = chua hoi, hoac khong phai ben gop von.
+   */
+  readonly stakeholderLinked?: boolean;
+}
+
+/**
+ * Moi helper duoi day nhan MOT trong ba dang. Chuoi vai tran van nhan (bai test cu, man hinh chua
+ * co tap quyen) — nhung moi cho goi TRONG MAN HINH phai truyen ca `navigation`, khong phai
+ * `navigation.role`: bai `viewer-threading.spec.ts` do lai dieu do.
+ */
+export type TransportViewerInput = AuthRole | null | TransportViewer;
+
+const roleOf = (viewer: TransportViewerInput): AuthRole | null =>
+  viewer === null || typeof viewer === 'string' ? viewer : viewer.role;
+
+const permissionsOf = (viewer: TransportViewerInput): ReadonlySet<string> | null =>
+  viewer === null || typeof viewer === 'string' ? null : (viewer.permissions ?? null);
+
+/**
+ * Nguoi dang xem DA duoc may chu xac nhan la ben gop von. Khong co duong lui theo vai va khong co
+ * "chua biet thi hien": pham vi nay khong vai nao mang, nen mot cau tra loi doan truoc o client chi
+ * co the sai.
+ */
+export const hasStakeholderScope = (viewer: TransportViewerInput): boolean =>
+  viewer !== null && typeof viewer !== 'string' && viewer.stakeholderLinked === true;
+
+/**
+ * `role === null` (va khong co tap quyen) nghia la KHONG BIET vai, khong phai "khong co quyen".
  *
  * Xay ra o hai luc that: (a) `AuthGate` dang doi `/auth/me`, va (b) tenant chay che do khong phien
  * dang nhap, luc do MOI guard cua API tra `true` ngay (`transport-action.guard.ts:50`). Ca hai
  * truong hop, an bot theo vai la noi doi theo huong nguoc lai — man hinh se ke rang khach khong lam
  * duoc viec ma API dang cho phep. Nen o day tra `true`, dung khuon `isSectionEnabled` cua b2b.
  */
-export const canPerform = (role: AuthRole | null, action: TransportAction): boolean =>
-  role === null ? true : roleCanPerform(role, action);
-
-/** Vai co it nhat mot hanh dong van hanh — tuc thay duoc mot man hinh dieu hanh nao do. */
-export const hasOperationsScope = (role: AuthRole | null): boolean =>
-  role === null || OPERATIONS_ACTIONS.some((action) => roleCanPerform(role, action));
-
-/** Vai co pham vi lai xe — dieu kien de be mat lai xe co nghia. */
-export const hasDriverScope = (role: AuthRole | null): boolean =>
-  role === null || SELF_SCOPE_ACTIONS.some((action) => roleCanPerform(role, action));
+export const canPerform = (viewer: TransportViewerInput, action: TransportAction): boolean => {
+  // Pham vi ben gop von: CHI cau tra loi cua may chu (xem `TransportViewer.stakeholderLinked`).
+  if (STAKEHOLDER_SCOPE_ACTIONS.includes(action)) return hasStakeholderScope(viewer);
+  const permissions = permissionsOf(viewer);
+  if (permissions !== null) return permissions.has(action);
+  const role = roleOf(viewer);
+  return role === null ? true : roleCanPerform(role, action);
+};
 
 /**
- * Cau noi that cho `MANAGER`. KHONG duoc thay bang mot anh xa quyen tu phat trong web: neu khach
- * muon vai nay lam duoc viec, cho dung de sua la bang o `apps/api/src/transport/transport-actions.ts`.
+ * Nguoi nay lam duoc MOI viec trong bo (`#395`): mot muc chi mo khi doc duoc DU du lieu chinh. Bo
+ * rong tra `true` — nguoi goi (vd `sectionPermitted`) tu chan mot bo rong, vi voi no mot muc khai
+ * thieu quyen la muc SAI chu khong phai muc ai cung mo.
+ */
+export const canPerformAll = (
+  viewer: TransportViewerInput,
+  actions: readonly TransportAction[],
+): boolean => actions.every((action) => canPerform(viewer, action));
+
+/**
+ * Co it nhat mot hanh dong van hanh — tuc thay duoc mot man hinh dieu hanh nao do. Voi tap quyen
+ * cua may chu, mot `MANAGER` duoc cap nhom "Đội xe & lái xe" CO pham vi van hanh — truoc `#395`
+ * cau nay doc bang vai va tra `false`, nen man hinh chan dung nguoi ma API dang cho phep.
+ */
+export const hasOperationsScope = (viewer: TransportViewerInput): boolean => {
+  const permissions = permissionsOf(viewer);
+  if (permissions !== null) return OPERATIONS_ACTIONS.some((action) => permissions.has(action));
+  const role = roleOf(viewer);
+  return role === null || OPERATIONS_ACTIONS.some((action) => roleCanPerform(role, action));
+};
+
+/** Co pham vi lai xe — dieu kien de be mat lai xe co nghia. */
+export const hasDriverScope = (viewer: TransportViewerInput): boolean => {
+  const permissions = permissionsOf(viewer);
+  if (permissions !== null) return SELF_SCOPE_ACTIONS.some((action) => permissions.has(action));
+  const role = roleOf(viewer);
+  return role === null || SELF_SCOPE_ACTIONS.some((action) => roleCanPerform(role, action));
+};
+
+/**
+ * QUYEN CUA NEN TANG (`platform.*`) — vd quan tri tai khoan. Khong nam trong ban guong van tai:
+ * may chu tra no trong `/auth/me.permissions`. Duong lui khi may chu khong tra tap quyen: CHI
+ * Giam doc (`ADMIN`) co — dung bang `platform-permissions.ts` phia API. Chua biet vai = hien.
+ */
+export const PLATFORM_ACCOUNTS_MANAGE = 'platform.accounts.manage';
+export type PlatformPermission = typeof PLATFORM_ACCOUNTS_MANAGE;
+
+export const hasPlatformPermission = (
+  viewer: TransportViewerInput,
+  permission: PlatformPermission,
+): boolean => {
+  const permissions = permissionsOf(viewer);
+  if (permissions !== null) return permissions.has(permission);
+  const role = roleOf(viewer);
+  return role === null || role === 'ADMIN';
+};
+
+/**
+ * Cau noi that khi tai khoan KHONG co mot quyen van hanh nao. KHONG duoc thay bang mot anh xa quyen
+ * tu phat trong web: tu `#395` Giam doc cap quyen o "Tài khoản & quyền", va may chu tinh tap quyen.
  */
 export const MANAGER_HAS_NO_TRANSPORT_SCOPE =
   'Tài khoản của bạn chưa được cấp quyền dùng phần vận hành vận tải. Hãy liên hệ quản trị viên ' +
   'của doanh nghiệp để được mở quyền.';
 
 /**
- * Cau cho mot vai KHONG co pham vi van hanh — va hai truong hop nay phai noi HAI cau khac nhau.
+ * Cau cho mot tai khoan KHONG co pham vi van hanh — va hai truong hop nay phai noi HAI cau khac nhau.
  *
  * Lai xe (`SALE`) khong thay man hinh van hanh la DUNG THIET KE, va viec can lam cua ho la mo be
- * mat cua chinh minh. Con `MANAGER` khong thay gi la mot khoang trong phan quyen chua ai quyet.
+ * mat cua chinh minh. Con mot tai khoan chua duoc cap quyen nao la mot khoang trong phan quyen.
  * Dung mot cau cho ca hai se noi voi lai xe rang ho la Quan ly — mot cau sai, va sai theo kieu lam
  * nguoi doc mat tin vao ca man hinh.
  */
-export const operationsEmptyMessage = (role: AuthRole | null): string =>
-  hasDriverScope(role) && !hasOperationsScope(role)
+export const operationsEmptyMessage = (viewer: TransportViewerInput): string =>
+  hasDriverScope(viewer) && !hasOperationsScope(viewer)
     ? 'Vai Lái xe chỉ mở màn hình của chính mình, không mở màn hình vận hành. Hãy dùng đường "Mở màn hình lái xe".'
     : MANAGER_HAS_NO_TRANSPORT_SCOPE;

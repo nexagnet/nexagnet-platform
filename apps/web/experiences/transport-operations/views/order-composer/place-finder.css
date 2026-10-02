@@ -1,0 +1,215 @@
+/*
+ * THE TIM DIA DIEM (#379) — rieng cho `PlaceFinder`. Man rong: the noi tren ban do (vi tri do
+ * `order-composer.css` dat); man hep: mot khoi tinh phia tren ban do. Moi selector `.tx-`.
+ *
+ * Chu phu nho dung `--tx-ink-soft`, khong `--tx-ink-faint` (duoi 4,5:1 o co chu nay).
+ */
+
+/* ---------------------------------------------------------------- *
+ * The tim dia diem
+ * ---------------------------------------------------------------- */
+
+.tx-finder {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-height: 0;
+  max-height: 100%;
+  padding: 0.75rem 0.8rem 0.7rem;
+  background: var(--tx-paper);
+  border-radius: var(--tx-radius);
+  box-shadow: var(--tx-lift-strong);
+}
+
+.tx-finder__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.tx-finder__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.02rem;
+}
+
+.tx-finder__form {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.tx-finder__input {
+  flex: 1 1 auto;
+  min-width: 0;
+  font: inherit;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--tx-line-strong);
+  border-radius: var(--tx-radius-sm);
+  background: var(--tx-paper);
+  color: var(--tx-ink);
+}
+
+.tx-finder__input:focus-visible {
+  outline: 2px solid var(--tx-accent);
+  outline-offset: 0;
+}
+
+.tx-finder__submit {
+  flex: none;
+  padding-inline: 1rem;
+}
+
+.tx-finder__status {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--tx-ink-soft);
+}
+
+/*
+ * Rong thi KHONG chiem cho — nhung van nam trong cay truy cap (khong `display: none`): mot vung
+ * `role="status"` hien ra cung luc voi cau dau tien thuong khong duoc doc. Le am bu khoang `gap`.
+ */
+.tx-finder__status:empty {
+  margin-top: -0.5rem;
+}
+
+.tx-finder__status--problem {
+  padding: 0.45rem 0.6rem;
+  border-radius: var(--tx-radius-sm);
+  background: var(--tx-wait-wash);
+  color: var(--tx-wait);
+}
+
+.tx-finder__body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.tx-finder__body[hidden] {
+  display: none;
+}
+
+.tx-finder__tab {
+  font-size: 0.82rem;
+  padding: 0.35rem 0.55rem;
+}
+
+.tx-finder__tab:focus-visible {
+  outline: 2px solid var(--tx-accent);
+  outline-offset: -2px;
+}
+
+.tx-finder__panel {
+  min-height: 0;
+  overflow-y: auto;
+  padding-top: 0.35rem;
+}
+
+.tx-finder__panel > .tx-note {
+  padding: 0.4rem 0.1rem;
+  color: var(--tx-ink-soft);
+}
+
+.tx-finder__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.tx-finder__item {
+  display: grid;
+  grid-template-columns: 1.6rem minmax(0, 1fr);
+  grid-template-areas:
+    'mark text'
+    '. act';
+  align-items: start;
+  gap: 0.3rem 0.55rem;
+  padding: 0.55rem 0.35rem;
+  border-radius: var(--tx-radius-sm);
+}
+
+.tx-finder__item + .tx-finder__item {
+  box-shadow: 0 -1px 0 var(--tx-line);
+}
+
+.tx-finder__item[data-hot] {
+  background: var(--tx-wait-wash);
+}
+
+.tx-finder__num,
+.tx-finder__shape {
+  grid-area: mark;
+  justify-self: center;
+}
+
+.tx-finder__num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.4rem;
+  height: 1.4rem;
+  border-radius: 50%;
+  border: 2px solid var(--tx-wait);
+  color: var(--tx-wait);
+  font-size: 0.72rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.tx-finder__item[data-hot] .tx-finder__num {
+  background: var(--tx-wait);
+  color: var(--tx-paper);
+}
+
+.tx-finder__shape.tx-pin {
+  width: 1.4rem;
+  height: 1.4rem;
+  cursor: default;
+}
+
+.tx-finder__text {
+  grid-area: text;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.tx-finder__name {
+  font-size: 0.88rem;
+  font-weight: 600;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.tx-finder__detail {
+  font-size: 0.76rem;
+  line-height: 1.35;
+  color: var(--tx-ink-soft);
+  overflow-wrap: anywhere;
+}
+
+.tx-finder__choose {
+  grid-area: act;
+  justify-self: start;
+}
+
+.tx-finder__group + .tx-finder__group {
+  margin-top: 0.5rem;
+}
+
+.tx-finder__grouptitle {
+  margin: 0.25rem 0.35rem 0.15rem;
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--tx-ink-soft);
+}
+
+.tx-finder__credit {
+  margin: 0.4rem 0.35rem 0;
+  font-size: 0.72rem;
+  color: var(--tx-ink-soft);
+}

@@ -196,11 +196,11 @@
 /*
  * DANH MUC CUON TRONG THANH BEN, va PHAI NOI RA rang no dang cuon.
  *
- * Voi vai Giam doc, 23 muc + bon nhan nhom cao hon mot khung nhin 900px, nen danh muc co vung cuon
+ * Voi vai Giam doc, 22 muc + sau nhan nhom cao hon mot khung nhin 900px, nen danh muc co vung cuon
  * cua rieng no (thanh ben `position: sticky`, khong troi theo trang nua). Nhung mot vung cuon KHONG
  * co dau hieu gi thi te hon mot trang dai: muc cuoi bi cat ngang chu trong y nhu mot loi ve, va bon
- * muc duoi cung (`Bản đồ vòng chạy`, `Biên trực tiếp`, `AR/AP`, `Xuất dữ liệu`) bien mat ma khong
- * ai biet chung con o do.
+ * muc duoi cung (`Bản đồ vòng chạy`, `Xuất dữ liệu`, `Bảo dưỡng & giấy tờ`, `Sở hữu tài sản`) bien
+ * mat ma khong ai biet chung con o do.
  *
  * Bon lop nen duoi la ky thuat `scroll shadow` cua Roman Komarov: hai lop `local` la mang giay che,
  * hai lop `scroll` la vet do. Khi cuon het co, mang che nam dung tren vet do va khong thay gi; khi
@@ -2586,4 +2586,179 @@
   font-family: var(--font-display);
   font-size: 0.95rem;
   color: var(--tx-ink-soft);
+}
+
+/* ==================================================================================================
+ * HIEU QUA CA CONG TY — nguon cua con so (`#381`/`#385`)
+ * ==================================================================================================
+ *
+ * Giam doc doc tong truoc, roi NGAY DUOI la tong ay den tu dau: thanh ti le doanh thu (hinh), bang hai
+ * dong theo nguon (so that), va nhung dieu lam tong chua du (canh bao mau "cho"). Mau cua nguon la
+ * `--tx-done` cho luong moi va `--tx-line-strong` cho chuyen cu — nguon, khong phai trang thai.
+ */
+.tx-split {
+  display: grid;
+  gap: 0.55rem;
+  margin-top: var(--tx-space-block);
+}
+
+.tx-split__bar {
+  display: flex;
+  height: 0.5rem;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--tx-line);
+}
+
+.tx-split__seg {
+  flex-grow: 0;
+  flex-shrink: 0;
+  min-width: 3px;
+}
+
+.tx-split__seg--run {
+  background: var(--tx-done);
+}
+
+.tx-split__seg--legacy {
+  background: var(--tx-line-strong);
+}
+
+.tx-split__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.86rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.tx-split__table th,
+.tx-split__table td {
+  padding: 0.4rem 0.6rem;
+  text-align: right;
+  border-top: 1px solid var(--tx-line);
+  white-space: nowrap;
+}
+
+.tx-split__table thead th {
+  border-top: none;
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--tx-ink-faint);
+}
+
+.tx-split__table th[scope='row'],
+.tx-split__table thead th:first-child {
+  text-align: left;
+}
+
+.tx-split__table th[scope='row'] {
+  font-weight: 600;
+}
+
+.tx-split__swatch {
+  display: inline-block;
+  width: 0.6rem;
+  height: 0.6rem;
+  margin-right: 0.45rem;
+  border-radius: 2px;
+  vertical-align: baseline;
+}
+
+.tx-split__share {
+  font-weight: 400;
+  color: var(--tx-ink-faint);
+}
+
+.tx-split__more {
+  margin: 0.75rem 0 0;
+  font-size: 0.86rem;
+}
+
+.tx-marginnotes {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.tx-marginnotes li {
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--tx-radius-sm);
+  font-size: 0.84rem;
+  line-height: 1.45;
+  max-width: 88ch;
+}
+
+.tx-marginnotes__warn {
+  background: var(--tx-wait-wash);
+  color: var(--tx-wait);
+}
+
+.tx-marginnotes__info {
+  background: var(--tx-canvas);
+  color: var(--tx-ink-soft);
+}
+
+/* Ma DON la dinh danh; ma vong xe la boi canh — nho hon, nhat hon, cung o. */
+.tx-margin__code {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.tx-margin__context {
+  font-size: 0.74rem;
+  font-weight: 400;
+  color: var(--tx-ink-faint);
+}
+
+/* NGUON CUA CON SO cua mot dong: nhan · so tien · so cai ma no den tu. */
+.tx-costlines {
+  display: grid;
+  margin: 0;
+}
+
+.tx-costlines__row {
+  display: grid;
+  grid-template-columns: minmax(9rem, 1fr) minmax(8rem, auto) minmax(0, 2.2fr);
+  gap: 0.35rem 1rem;
+  align-items: baseline;
+  padding: 0.5rem 0;
+  border-top: 1px solid var(--tx-line);
+}
+
+.tx-costlines__row:last-child {
+  font-weight: 600;
+  border-top: 1px solid var(--tx-line-strong);
+}
+
+.tx-costlines__row dt {
+  color: var(--tx-ink-soft);
+}
+
+.tx-costlines__row dd {
+  margin: 0;
+}
+
+.tx-costlines__value {
+  font-family: var(--font-display);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.tx-costlines__source {
+  font-size: 0.8rem;
+  font-weight: 400;
+  color: var(--tx-ink-faint);
+}
+
+@media (max-width: 640px) {
+  .tx-costlines__row {
+    grid-template-columns: 1fr auto;
+  }
+
+  .tx-costlines__source {
+    grid-column: 1 / -1;
+  }
 }

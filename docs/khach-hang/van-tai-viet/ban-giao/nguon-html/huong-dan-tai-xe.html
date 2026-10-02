@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<title>Hướng dẫn cho lái xe</title>
+<!-- Tệp SINH TỰ ĐỘNG từ ../huong-dan-tai-xe.md bởi tao-pdf.mjs — sửa Markdown, đừng sửa tệp này. -->
+<style>
+  @page { size: A4; margin: 16mm 15mm 18mm 15mm; }
+  :root { --ink: #1f2a30; --muted: #5d666c; --line: #ddd6ca; --paper: #faf8f4; --teal: #1f5566; --accent: #e0662b; }
+  * { box-sizing: border-box; }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { margin: 0; font-family: 'Segoe UI', Arial, sans-serif; font-size: 10.3pt; line-height: 1.55; color: var(--ink); }
+  h1, h2, h3 { font-family: Cambria, Georgia, serif; line-height: 1.25; break-after: avoid; }
+  h2 { font-size: 17pt; margin: 20pt 0 8pt; padding-top: 8pt; border-top: 2px solid var(--teal); color: var(--teal); }
+  h3 { font-size: 12.5pt; margin: 16pt 0 6pt; }
+  p, li { orphans: 3; widows: 3; }
+  ul, ol { padding-left: 18pt; margin: 4pt 0 8pt; }
+  li { margin: 2pt 0; }
+  li > ul, li > ol { margin: 2pt 0; }
+  strong { font-weight: 650; }
+  em { color: var(--muted); }
+  a { color: var(--teal); text-decoration: none; }
+  table { width: 100%; border-collapse: collapse; margin: 8pt 0 12pt; font-size: 9.4pt; line-height: 1.45; }
+  thead { display: table-header-group; }
+  tr { break-inside: avoid; }
+  th { background: #efe9df; text-align: left; font-weight: 650; }
+  th, td { border: 1px solid var(--line); padding: 5pt 7pt; vertical-align: top; }
+  figure { margin: 10pt 0 6pt; break-inside: avoid; }
+  figure img { display: block; width: 100%; border: 1px solid var(--line); border-radius: 6px; }
+  /* Ảnh điện thoại (dọc): giữ vừa nửa trang để chữ hướng dẫn nằm cạnh ảnh của nó. */
+  figure img[src*="/tai-xe/"] { width: auto; max-width: 100%; height: 100mm; margin: 0 auto; }
+  figure:has(img[src*="/tai-xe/"]) figcaption { text-align: center; }
+  figure + ol, figure + ul { break-before: avoid; }
+  figcaption { font-size: 8.6pt; color: var(--muted); margin-top: 4pt; }
+  .cover { min-height: 250mm; display: flex; flex-direction: column; break-after: page; }
+  .cover-band { background: var(--paper); border: 1px solid var(--line); border-left: 8px solid var(--teal); border-radius: 10px; padding: 26pt 26pt 20pt; margin-top: 30mm; }
+  .cover h1 { font-size: 27pt; margin: 0 0 10pt; color: var(--teal); }
+  .cover-band > p:first-of-type { font-size: 11.5pt; color: var(--muted); margin: 0 0 14pt; }
+  .cover .toc { margin-top: 18pt; }
+  .cover .toc h2 { border: 0; padding: 0; margin: 0 0 6pt; font-size: 12pt; color: var(--ink); }
+  .cover .toc ol { columns: 2; column-gap: 18pt; font-size: 10pt; list-style: none; padding-left: 0; }
+  .cover .toc li { break-inside: avoid; }
+</style>
+</head>
+<body>
+<section class="cover">
+  <div class="cover-band"><h1 id="huong-dan-cho-lai-xe">Hướng dẫn cho lái xe</h1>
+<p><strong>Vận tải Việt</strong> · Bản tháng 9/2026 · Đọc trên điện thoại</p>
+<ul>
+<li>Văn phòng <strong>giao việc</strong> cho bạn. Việc hiện ngay trên điện thoại.</li>
+<li>Ở hiện trường, bạn <strong>bấm mốc</strong> và <strong>chụp giấy tờ</strong>. Văn phòng nhìn thấy những gì bạn bấm.</li>
+<li>Điện thoại cần <strong>có sóng</strong> và <strong>bật định vị</strong>.</li>
+</ul>
+<p>Hình trong tài liệu là dữ liệu mẫu, không phải việc thật.</p>
+</div>
+  <nav class="toc" aria-label="Mục lục"><h2>Nội dung</h2><ol><li><a href="#1-trang-chu-xem-viec-duoc-giao">1. Trang chủ: xem việc được giao</a></li><li><a href="#2-hien-truong-chang-cua-ban">2. Hiện trường: chặng của bạn</a></li><li><a href="#3-toi-diem-lay-hang">3. Tới điểm lấy hàng</a></li><li><a href="#4-tren-duong">4. Trên đường</a></li><li><a href="#5-khi-may-chua-bat-dinh-vi">5. Khi máy chưa bật định vị</a></li><li><a href="#6-da-den-noi-cho-nguoi-nhan">6. Đã đến nơi: chờ người nhận</a></li><li><a href="#7-chup-bien-nhan-giao-hang">7. Chụp biên nhận giao hàng</a></li><li><a href="#8-nhien-lieu-ghi-phieu-do-dau">8. Nhiên liệu: ghi phiếu đổ dầu</a></li><li><a href="#9-chi-phi-doc-duong">9. Chi phí dọc đường</a></li><li><a href="#10-quy-va-phieu-luong">10. Quỹ và phiếu lương</a></li><li><a href="#11-khi-mat-song-hoac-bam-khong-duoc">11. Khi mất sóng hoặc bấm không được</a></li><li><a href="#12-nhung-gi-ban-khong-thay">12. Những gì bạn không thấy</a></li></ol></nav>
+</section>
+<main>
+<h2 id="1-trang-chu-xem-viec-duoc-giao">1. Trang chủ: xem việc được giao</h2>
+<figure><img src="../assets/tai-xe/01-trang-chu.jpg" alt="Trang chủ của lái xe"><figcaption>Hình 1. Trang chủ của lái xe</figcaption></figure>
+<ol>
+<li><strong>Việc kế tiếp</strong>: nút nào cần bấm, và bấm ở màn nào.</li>
+<li><strong>Mở Hiện trường</strong>: vào màn bấm mốc.</li>
+<li><strong>Số dư quỹ</strong> của bạn.</li>
+</ol>
+<p>Việc văn phòng đã giao thì bạn <strong>không cần</strong> vào &quot;Nhận việc&quot; để nhận lại. &quot;Nhận việc&quot; chỉ dùng khi bạn đã tới điểm lấy hàng mà văn phòng chưa giao việc.</p>
+<h2 id="2-hien-truong-chang-cua-ban">2. Hiện trường: chặng của bạn</h2>
+<figure><img src="../assets/tai-xe/02-hien-truong.jpg" alt="Màn Hiện trường trước khi đi"><figcaption>Hình 2. Màn Hiện trường trước khi đi</figcaption></figure>
+<ol>
+<li><strong>Chặng đang làm</strong>: tuyến, trạng thái, mã đơn.</li>
+<li><strong>Nút bấm được lúc này</strong>. Màn chỉ hiện những nút đúng bước.</li>
+<li><strong>Chặng khác</strong>: các chặng còn lại của việc đang làm, thường là chặng chạy rỗng.</li>
+</ol>
+<p><strong>Chặng rỗng</strong> là đoạn xe chạy <strong>không chở hàng</strong>, ví dụ từ bãi tới điểm lấy. Chặng này không có nút nào. Văn phòng tự cho chạy và hoàn tất. Dòng của nó có thể vẫn ghi &quot;Chưa bắt đầu&quot;; bạn không cần làm gì.</p>
+<p><strong>Chặng có hàng</strong> là đoạn xe <strong>chở hàng của đơn</strong>, từ điểm lấy tới điểm giao. Mọi nút bạn bấm đều ở chặng này.</p>
+<h2 id="3-toi-diem-lay-hang">3. Tới điểm lấy hàng</h2>
+<p>Bấm <strong>&quot;Đã tới điểm lấy hàng&quot;</strong>. Màn hiện ba nút:</p>
+<figure><img src="../assets/tai-xe/03-tai-diem-lay.jpg" alt="Tại điểm lấy hàng"><figcaption>Hình 3. Tại điểm lấy hàng</figcaption></figure>
+<ol>
+<li><strong>Đã vào cổng</strong>: khi xe vào cổng nhà máy hoặc kho.</li>
+<li><strong>Đang xếp hàng</strong>: khi bắt đầu xếp hàng. Nếu xếp hàng ở điểm thứ hai, ra khỏi màn Hiện trường rồi vào lại mới bấm được lần mới; bấm liền tay chỉ gửi lại mốc cũ.</li>
+<li><strong>Rời điểm lấy hàng</strong>: khi xe đã lên hàng và rời đi.</li>
+</ol>
+<p>Nút chụp giấy hiện <strong>sau</strong> mốc tương ứng: giấy vào cổng sau &quot;Đã vào cổng&quot;, phiếu xếp hàng sau &quot;Đang xếp hàng&quot;, phiếu cân sau &quot;Rời điểm lấy hàng&quot;. Chụp được thì tốt, nhưng <strong>không bắt buộc</strong>.</p>
+<h2 id="4-tren-duong">4. Trên đường</h2>
+<figure><img src="../assets/tai-xe/04-tren-duong.jpg" alt="Đang trên đường"><figcaption>Hình 4. Đang trên đường</figcaption></figure>
+<ol>
+<li>Trạng thái chuyển sang <strong>&quot;Đang trên đường&quot;</strong>.</li>
+<li>Tới nơi giao thì bấm <strong>&quot;Đã đến nơi (cần vị trí)&quot;</strong>.</li>
+</ol>
+<p>Hai nút có chữ <strong>&quot;(cần vị trí)&quot;</strong> lấy vị trí điện thoại đúng lúc bấm: &quot;Đã đến nơi&quot; và &quot;Khách đã nhận hàng&quot;. Các nút khác không cần vị trí. Nếu bấm lại sau lỗi, hệ thống dùng vị trí của lần bấm đầu.</p>
+<h2 id="5-khi-may-chua-bat-dinh-vi">5. Khi máy chưa bật định vị</h2>
+<figure><img src="../assets/tai-xe/05-chua-bat-vi-tri.jpg" alt="Máy chưa cho quyền vị trí"><figcaption>Hình 5. Máy chưa cho quyền vị trí</figcaption></figure>
+<ol>
+<li>Màn báo: <strong>chưa bật quyền vị trí nên mốc chưa được ghi</strong>.</li>
+</ol>
+<p>Bật định vị cho trình duyệt, ra chỗ thoáng, rồi bấm lại. <strong>Mốc chỉ được ghi khi máy lấy được vị trí.</strong></p>
+<h2 id="6-da-den-noi-cho-nguoi-nhan">6. Đã đến nơi: chờ người nhận</h2>
+<figure><img src="../assets/tai-xe/06-da-den-noi.jpg" alt="Đã đến nơi giao"><figcaption>Hình 6. Đã đến nơi giao</figcaption></figure>
+<ol>
+<li><strong>Bắt đầu chờ</strong>: bấm khi phải chờ người nhận.</li>
+<li><strong>Khách đã nhận hàng (cần vị trí)</strong>: bấm khi giao xong.</li>
+</ol>
+<figure><img src="../assets/tai-xe/07-dang-cho.jpg" alt="Đang chờ người nhận"><figcaption>Hình 7. Đang chờ người nhận</figcaption></figure>
+<ol>
+<li>Màn hiện <strong>số phút đã chờ</strong> theo giờ hệ thống, cập nhật khoảng 30 giây một lần.</li>
+</ol>
+<ul>
+<li>&quot;Bắt đầu chờ&quot; chỉ có sau &quot;Đã đến nơi&quot;, và trước khi khách nhận hàng.</li>
+<li><strong>Không có nút dừng chờ.</strong> Thời gian chờ tự dừng khi bạn bấm &quot;Khách đã nhận hàng&quot;.</li>
+</ul>
+<h2 id="7-chup-bien-nhan-giao-hang">7. Chụp biên nhận giao hàng</h2>
+<p>Sau &quot;Khách đã nhận hàng&quot;, màn nhắc chụp biên nhận.</p>
+<figure><img src="../assets/tai-xe/08-chup-bien-nhan.jpg" alt="Chụp biên nhận giao hàng"><figcaption>Hình 8. Chụp biên nhận giao hàng</figcaption></figure>
+<ol>
+<li><strong>Còn thiếu: Biên nhận giao hàng</strong>. Đây là giấy <strong>bắt buộc</strong>.</li>
+<li>Chọn ảnh biên nhận.</li>
+<li>Bấm <strong>&quot;Chụp biên nhận giao hàng&quot;</strong> để gửi.</li>
+</ol>
+<p>Ảnh phải thấy rõ <strong>chữ ký người nhận, số lượng, ngày</strong>. Chụp thẳng, đủ sáng, không mất góc.</p>
+<p>Nếu bạn còn cầm bản giấy, bấm <strong>&quot;Tôi đang giữ biên nhận&quot;</strong>.</p>
+<figure><img src="../assets/tai-xe/09-da-gui-bien-nhan.jpg" alt="Đã gửi biên nhận"><figcaption>Hình 9. Đã gửi biên nhận</figcaption></figure>
+<ol>
+<li><strong>Biên nhận đang ở chỗ bạn</strong>: nhớ nộp bản giấy cho văn phòng.</li>
+<li><strong>Đã chụp: Biên nhận giao hàng</strong>: ảnh đã gửi thành công.</li>
+</ol>
+<h2 id="8-nhien-lieu-ghi-phieu-do-dau">8. Nhiên liệu: ghi phiếu đổ dầu</h2>
+<p>Vào mục <strong>Nhiên liệu</strong> ở thanh dưới.</p>
+<figure><img src="../assets/tai-xe/10-nhien-lieu.jpg" alt="Ghi phiếu đổ nhiên liệu"><figcaption>Hình 10. Ghi phiếu đổ nhiên liệu</figcaption></figure>
+<ol>
+<li><strong>Vòng xe và xe</strong> được điền sẵn theo việc đang làm.</li>
+<li><strong>Thanh toán</strong>: chọn đúng ai trả tiền. Dòng chữ bên dưới nói rõ tiền đi đâu.</li>
+<li>Bấm <strong>&quot;Gửi phiếu&quot;</strong>.</li>
+</ol>
+<table>
+<thead>
+<tr>
+<th>Bạn chọn</th>
+<th>Nghĩa là</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Lái xe trả tiền mặt</strong></td>
+<td>Bạn tự trả. Khi kế toán duyệt, khoản này vào <strong>quỹ của bạn</strong> để công ty hoàn lại. Không ghi nợ cây xăng</td>
+</tr>
+<tr>
+<td><strong>Ghi nợ cây xăng</strong></td>
+<td>Cây xăng cho công ty nợ. Khoản này <strong>chưa</strong> thành công nợ ngay: kế toán <strong>xác thực</strong> phiếu → <strong>đối soát</strong> với bảng kê của cây xăng → <strong>đóng kỳ</strong>. Đóng kỳ xong mới vào công nợ cây xăng. <strong>Không đụng tới quỹ của bạn</strong></td>
+</tr>
+</tbody>
+</table>
+<figure><img src="../assets/tai-xe/11-phieu-da-gui.jpg" alt="Phiếu đã gửi"><figcaption>Hình 11. Phiếu đã gửi</figcaption></figure>
+<ol>
+<li>Phiếu vừa gửi hiện ở <strong>&quot;Phiếu đã gửi&quot;</strong>, trạng thái <strong>&quot;Mới khai&quot;</strong>. Bấm &quot;Đính ảnh chứng từ&quot; để gắn ảnh phiếu nếu chưa gắn.</li>
+</ol>
+<p>Kế toán sẽ <strong>xác thực</strong> hoặc <strong>từ chối kèm lý do</strong>. Phiếu bị từ chối thì bấm <strong>&quot;Nộp lại phiếu&quot;</strong> để gửi lại đúng số đã khai, đính thêm ảnh nếu cần. Nếu bị từ chối vì sai số lít, tiền hay km thì không sửa được trên điện thoại: hỏi kế toán, có thể phải ghi phiếu mới.</p>
+<h2 id="9-chi-phi-doc-duong">9. Chi phí dọc đường</h2>
+<figure><img src="../assets/tai-xe/12-chi-phi.jpg" alt="Ghi khoản chi"><figcaption>Hình 12. Ghi khoản chi</figcaption></figure>
+<ol>
+<li>Hiện <strong>chưa ghi được</strong> khoản chi dọc đường (cầu đường, bốc xếp, bến bãi, sửa xe) cho việc văn phòng giao theo vòng xe.</li>
+</ol>
+<p>Có khoản chi dọc đường thì <strong>báo văn phòng</strong> và giữ hoá đơn.</p>
+<h2 id="10-quy-va-phieu-luong">10. Quỹ và phiếu lương</h2>
+<figure><img src="../assets/tai-xe/13-quy.jpg" alt="Quỹ của bạn"><figcaption>Hình 13. Quỹ của bạn</figcaption></figure>
+<ol>
+<li><strong>Số dư quỹ</strong> và ý nghĩa của nó:
+<ul>
+<li>&quot;Lái xe đang giữ tiền của công ty&quot;;</li>
+<li>&quot;Đã cân bằng&quot;;</li>
+<li>&quot;Công ty đang nợ lái xe&quot;.</li>
+</ul>
+</li>
+<li><strong>Từng khoản</strong>: tạm ứng, chi phí, hoàn quỹ. Bạn chỉ xem, không sửa được.</li>
+</ol>
+<figure><img src="../assets/tai-xe/14-phieu-luong.jpg" alt="Phiếu lương"><figcaption>Hình 14. Phiếu lương</figcaption></figure>
+<ol>
+<li><strong>Bảng quyết toán của tôi</strong>:
+<ul>
+<li>lương đã ghi nhận;</li>
+<li>đã nhận;</li>
+<li>còn lại;</li>
+<li>hoàn ứng công ty còn phải trả bạn.</li>
+</ul>
+</li>
+<li><strong>Phiếu lương</strong>. Chỉ phiếu kế toán đã công bố mới hiện ở đây.</li>
+</ol>
+<blockquote>
+<p><strong>Hạn chế hiện tại.</strong> Phần lương <strong>theo chuyến</strong> và <strong>theo km</strong> hiện <strong>chưa tính</strong> việc văn phòng giao theo vòng xe. Hệ thống chỉ đếm chuyến theo cách cũ: số chuyến và số km trên phiếu (như &quot;4 chuyến · 375 km&quot; trong ảnh) đều là chuyến theo cách cũ. Nếu công ty trả lương theo chuyến hoặc km, kế toán cộng tay phần việc theo vòng xe cho tới khi hệ thống sửa.</p>
+</blockquote>
+<p>Thấy phiếu lương thiếu chuyến hay km, hãy <strong>báo kế toán</strong>.</p>
+<h2 id="11-khi-mat-song-hoac-bam-khong-duoc">11. Khi mất sóng hoặc bấm không được</h2>
+<ul>
+<li>Hệ thống <strong>cần mạng</strong>. Chưa có chế độ làm việc khi mất sóng.</li>
+<li>Mất sóng lúc bấm thì đợi có sóng rồi <strong>bấm lại</strong>. Bấm lại cùng một mốc <strong>không</strong> tạo mốc trùng.</li>
+<li>Màn Hiện trường tự làm mới. Nếu thấy dòng &quot;Chưa làm mới được việc hiện trường&quot;, điện thoại đang yếu sóng; màn vẫn hiện lần đọc trước.</li>
+<li>Nếu một mốc cần vị trí báo lỗi <strong>&quot;Lai xe dang co mot phien mo tren mot chu the khac…&quot;</strong> hoặc <strong>&quot;…tu mot thiet bi khac&quot;</strong> (chữ không dấu), bạn <strong>gọi văn phòng</strong>. Đừng bấm lặp lại nhiều lần.</li>
+</ul>
+<h2 id="12-nhung-gi-ban-khong-thay">12. Những gì bạn không thấy</h2>
+<p>Màn hình lái xe <strong>không có</strong>:</p>
+<ul>
+<li>giá cước;</li>
+<li>doanh thu;</li>
+<li>biên;</li>
+<li>công nợ của khách.</li>
+</ul>
+<p>Máy chủ <strong>không gửi</strong> những số này xuống điện thoại. Đây là phân quyền dữ liệu, không phải chỉ ẩn nút.</p>
+
+</main>
+</body>
+</html>

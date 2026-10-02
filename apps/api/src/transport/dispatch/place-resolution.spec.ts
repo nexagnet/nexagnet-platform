@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   normalizePlaceLabel,
+  orderPickupPlace,
+  orderPointPlace,
   resolvePlaceByGeofenceId,
   resolvePlaceByLabel,
   resolvePlaceBySiteId,
@@ -119,5 +121,54 @@ describe('giai nhan dia diem thanh toa do', () => {
       ok: false,
       reason: 'PICKUP_REQUEST_REF_NOT_FOUND',
     });
+  });
+});
+
+/**
+ * DIEM LAY TU TOA DO CUA DON (#379) — va KHONG co nhanh thu tu "thu nhan chu".
+ *
+ * Nhan trong cac bai duoi day co y trung ten mot hang rao that (`Kho Hai Phong`) hoac noi mot cho
+ * khac han toa do: ket qua KHONG duoc phu thuoc vao nhan.
+ */
+describe('diem lay hang tu toa do cua don', () => {
+  const HAI_PHONG = { latitude: 20.8449, longitude: 106.6881 };
+
+  it('co toa do -> dung toa do; nhan chi di kem de hien thi', () => {
+    expect(orderPickupPlace({ originPoint: HAI_PHONG, originLabel: 'Kho Ha Noi' })).toEqual({
+      ok: true,
+      reason: 'PICKUP_FROM_ORDER_COORDINATES',
+      place: {
+        point: HAI_PHONG,
+        source: 'ORDER_PICKUP_POINT',
+        label: 'Kho Ha Noi',
+        geofenceId: null,
+        siteId: null,
+      },
+    });
+  });
+
+  it('don cu khong co toa do -> MISSING, du nhan trung ten mot hang rao', () => {
+    expect(orderPickupPlace({ originPoint: null, originLabel: 'Kho Hai Phong' })).toEqual({
+      ok: false,
+      reason: 'PICKUP_ORDER_COORDINATES_MISSING',
+    });
+  });
+
+  it.each([
+    ['Null Island', { latitude: 0, longitude: 0 }],
+    ['vi do ngoai bien', { latitude: 91, longitude: 105.8 }],
+    ['kinh do khong phai so huu han', { latitude: 21, longitude: Number.NaN }],
+  ])('toa do hong (%s) -> REJECTED, khong dung lam diem lay', (_name, point) => {
+    expect(orderPickupPlace({ originPoint: point, originLabel: 'Kho Hai Phong' })).toEqual({
+      ok: false,
+      reason: 'PICKUP_ORDER_COORDINATES_REJECTED',
+    });
+  });
+
+  it('toa do vang mat (undefined tu mot tang cu) duoc coi nhu khong co, khong nem', () => {
+    expect(orderPointPlace(undefined, 'Kho X', 'ORDER_DELIVERY_POINT')).toBeNull();
+    expect(orderPointPlace(HAI_PHONG, 'Kho X', 'ORDER_DELIVERY_POINT')?.source).toBe(
+      'ORDER_DELIVERY_POINT',
+    );
   });
 });

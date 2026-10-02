@@ -1,11 +1,14 @@
 'use client';
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import { useTenantRuntime } from '../../../lib/tenant-runtime-context';
+import { PermissionGate, PermissionNote } from '../components/PermissionGate';
 import { DataTable, MetricCard, PageHeader, StatusBadge } from '../components/primitives';
 import { EmptyState, ErrorState, LoadingState } from '../components/SectionState';
 import {
   toSectionQuery,
+  TRANSPORT_QUERY_KEYS,
   useCustomers,
   useNavigationInput,
   useOrderLegs,
@@ -17,6 +20,7 @@ import {
   useVehicles,
 } from '../hooks/useTransportWorkspace';
 import type { RunPlanProposal, RunLeg, TransportOrder, VehicleRun } from '../transport-types';
+import { canPerform } from '../transport-actions';
 import { newCorrelationKey, transportApi } from '../transport-api';
 import {
   LEG_STATUS_LABEL,
@@ -26,8 +30,25 @@ import {
   RUN_STATUS_LABEL,
   runStatusTone,
 } from '../workspace/office-lifecycle';
+import { createdNotice } from '../workspace/order-draft';
+import {
+  EMPTY_ORDER_FILTER,
+  filterOrders,
+  hiddenOpenOrderNote,
+  openOrderFilterState,
+  ORDER_STATUS_FILTER_LABEL,
+  ORDER_STATUS_FILTERS,
+  type OrderListFilter,
+  type OrderStatusFilter,
+} from '../workspace/order-list';
+import { businessTodayIn } from './business-today';
+import { OrderComposer } from './order-composer/OrderComposer';
+import { OrderRouteCard } from './order-composer/OrderRouteCard';
+import { useComposerHandoff } from './order-composer/use-composer-handoff';
+import './order-composer/order-route.css';
 import { OrderFulfilmentPanel } from './OrderFulfilmentPanel';
 import { RunLegWorkflow } from './RunLegWorkflow';
+import { km, RunMovementMetrics } from './RunMovementMetrics';
 
 /**
  * DON HANG & VONG CHAY — man hinh LAY DON LAM TRUNG TAM (#274 / #276 L8).
@@ -57,6 +78,18 @@ import { RunLegWorkflow } from './RunLegWorkflow';
  * `OPEN -> FULFILLED`. Moc lai xe la bang chung, khong tu doi mot trang thai nao trong hai truc do.
  *
  * ============================================================================================
+ * TAO DON LA MOT BE MAT RIENG (`#379`)
+ * ============================================================================================
+ *
+ * Form tao don ngang bay o, luon dinh tren dau bang, da bi thay bang `OrderComposer`: mot be mat mo
+ * tu nut "Tạo đơn mới" o dau trang, THAY cho danh sach (khong chong len), va chot HAI TOA DO truoc
+ * khi co mot don. Tao xong thi quay ve danh sach, noi mot cau xac nhan va MO SAN don vua tao.
+ * Tieu diem va cau xac nhan di theo `useComposerHandoff`.
+ *
+ * Be mat tao don dung TRUOC loi/tai cua danh sach: no khong can danh sach, va mot lan doc lai danh
+ * sach hong (mang chap chon, may chu dang deploy) khong duoc go be mat va xoa ban nhap.
+ *
+ * ============================================================================================
  * MOT CAM TUYET DOI: MAN HINH KHONG TU CONG KM
  * ============================================================================================
  *
@@ -65,21 +98,8 @@ import { RunLegWorkflow } from './RunLegWorkflow';
  * quang duong da di.
  */
 
-/** `null` la CHUA BIET, khong phai 0 — va man hinh phai noi dung the. */
-const km = (value: number | null): string =>
-  value === null ? 'chưa nhập' : `${value.toLocaleString('vi-VN')} km`;
-
 const money = (value: number | null): string =>
   value === null ? '—' : `${value.toLocaleString('vi-VN')} đ`;
-
-/** O tuy chon: chuoi rong la CHUA NHAP, khong phai mot mo ta rong. */
-const cargoOf = (data: FormData): string | null => {
-  const value = String(data.get('cargoDescription') ?? '').trim();
-  return value === '' ? null : value;
-};
-
-const ratio = (value: number | null): string =>
-  value === null ? 'chưa đủ dữ liệu' : `${(value * 100).toFixed(1)}%`;
 
 export function MovementView() {
   const queryClient = useQueryClient();
@@ -88,6 +108,13 @@ export function MovementView() {
   const runs = toSectionQuery(useVehicleRuns(navigation));
   const vehicles = toSectionQuery(useVehicles(navigation));
   const customers = toSectionQuery(useCustomers(navigation));
+  const tenant = useTenantRuntime();
+  const businessToday = useMemo(
+    () => businessTodayIn(tenant.transport?.timeZone),
+    [tenant.transport],
+  );
+  const composer = useComposerHandoff();
+  const [filter, setFilter] = useState<OrderListFilter>(EMPTY_ORDER_FILTER);
 
   const [openOrderId, setOpenOrderId] = useState<string | null>(null);
   const orderLegs = toSectionQuery(useOrderLegs(navigation, openOrderId));
@@ -100,13 +127,6 @@ export function MovementView() {
   const [planKey, setPlanKey] = useState<string | null>(null);
   const [planSuccess, setPlanSuccess] = useState<string | null>(null);
 
-  const createOrder = useMutation({
-    mutationFn: (input: Parameters<typeof transportApi.movement.createOrder>[0]) =>
-      transportApi.movement.createOrder(input),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['transport', 'orders'] });
-    },
-  });
   const previewPlan = useMutation({
     mutationFn: (input: { orderId: string; vehicleId: string }) =>
       transportApi.planning.preview(input.orderId, { vehicleId: input.vehicleId }),
@@ -137,27 +157,35 @@ export function MovementView() {
       <EmptyState title="Doanh nghiệp này chưa bật nghiệp vụ đơn hàng, hoặc vai của bạn không có quyền đọc." />
     );
   }
-  if (orders.errorMessage !== null) {
-    return <ErrorState message={orders.errorMessage} onRetry={orders.refetch} />;
-  }
-  if (orders.isLoading || orders.data === undefined) {
-    return <LoadingState label="Đang tải đơn hàng…" />;
-  }
 
   /** Bien so doc duoc thay cho `vehicleId` — man hinh khong bao gio hien mot `cuid` ra ngoai. */
   const plateOf = (vehicleId: string): string =>
     vehicles.data?.find((vehicle) => vehicle.id === vehicleId)?.registrationPlate ?? '—';
 
-  /** Ma vong chay doc duoc thay cho `runId`. */
+  /**
+   * Ma vong chay doc duoc thay cho `runId`. Chua doc duoc danh sach vong chay (`#395`: nguoi chi
+   * duoc xem don) thi noi dung vay — KHONG bao gio in `runId` (mot `cuid`) ra man hinh.
+   */
   const runCodeOf = (runId: string): string =>
-    runs.data?.find((run) => run.id === runId)?.code ?? runId;
+    runs.data === undefined
+      ? 'Vòng chạy chưa đọc được mã'
+      : (runs.data.find((run) => run.id === runId)?.code ?? runId);
 
-  /** Ten khach doc duoc thay cho `customerId` — man hinh khong hien mot `cuid` bao gio. */
+  /**
+   * Ten khach doc duoc thay cho `customerId` — man hinh khong hien mot `cuid` bao gio. Danh ba CHUA
+   * co trong tay (chua duoc cap quyen xem khach) khac han "khach da go khoi danh muc" (`#395`).
+   */
   const customerNameOf = (customerId: string | null): string =>
     customerId === null
       ? '—'
-      : (customers.data?.find((customer) => customer.id === customerId)?.name ??
-        'khách đã gỡ khỏi danh mục');
+      : customers.data === undefined
+        ? 'Khách hàng chưa đọc được tên'
+        : (customers.data.find((customer) => customer.id === customerId)?.name ??
+          'khách đã gỡ khỏi danh mục');
+
+  /** Lap ke hoach tu don doi biet ke hoach dang co (`run.read`) va quyen giao xe (`run.manage`). */
+  const canPlan =
+    canPerform(navigation, 'transport.run.read') && canPerform(navigation, 'transport.run.manage');
 
   /** Ma don doc duoc thay cho `orderId`. */
   const orderCodeOf = (orderId: string | null): string =>
@@ -165,110 +193,127 @@ export function MovementView() {
       ? '—'
       : (orders.data?.find((order) => order.id === orderId)?.code ?? 'đơn đã gỡ');
 
-  const activePlan = orderPlans.data?.find((plan) => plan.cancelledAt === null) ?? null;
-  const selectedOrder =
-    openOrderId === null ? null : (orders.data.find((order) => order.id === openOrderId) ?? null);
-
   /** Chi khach DANG HOAT DONG moi la mot lua chon hop le cho mot don moi. */
-  const activeCustomers = (customers.data ?? []).filter(
-    (customer) => customer.status === 'ACTIVE',
-  );
+  const activeCustomers = (customers.data ?? []).filter((customer) => customer.status === 'ACTIVE');
+
+  /*
+   * Tao xong: dong be mat, noi MOT cau doi chieu (ma don + hai dau tuyen), va MO SAN don vua tao —
+   * nguoi dung vua tao don de lam viec tiep voi no (lap ke hoach, giao xe), khong de di tim no.
+   * Don moi duoc chen vao bo nho dem NGAY de bang khong nhay; lan doc lai van la su that.
+   */
+  const handleCreated = (order: TransportOrder): void => {
+    queryClient.setQueryData<readonly TransportOrder[]>(TRANSPORT_QUERY_KEYS.orders, (current) =>
+      current === undefined
+        ? current
+        : [...current.filter((entry) => entry.id !== order.id), order],
+    );
+    void queryClient.invalidateQueries({ queryKey: TRANSPORT_QUERY_KEYS.orders });
+    setFilter(EMPTY_ORDER_FILTER);
+    setOpenOrderId(order.id);
+    composer.created(createdNotice(order));
+  };
+
+  if (composer.isComposing) {
+    return (
+      <OrderComposer
+        customers={activeCustomers}
+        isCustomersLoading={customers.isLoading}
+        businessToday={businessToday}
+        onCancel={composer.cancel}
+        onCreated={handleCreated}
+      />
+    );
+  }
+
+  if (orders.errorMessage !== null) {
+    return <ErrorState message={orders.errorMessage} onRetry={orders.refetch} />;
+  }
+  if (orders.isLoading || orders.data === undefined) {
+    return <LoadingState label="Đang tải đơn hàng…" />;
+  }
+
+  const visibleOrders = filterOrders(orders.data, filter, customerNameOf);
+  const canCreate = canPerform(navigation, 'transport.order.manage');
+  const openState = openOrderFilterState(orders.data, visibleOrders, openOrderId);
+  const activePlan = orderPlans.data?.find((plan) => plan.cancelledAt === null) ?? null;
+  /* Bo loc giau don dang mo: chi tiet cua no AN theo (co mot cau + nut bo loc), khong lang le o lai. */
+  const detailOrderId = openState.kind === 'HIDDEN_BY_FILTER' ? null : openOrderId;
+  const selectedOrder =
+    detailOrderId === null
+      ? null
+      : (orders.data.find((order) => order.id === detailOrderId) ?? null);
 
   return (
     <>
       <PageHeader
         title="Đơn hàng & vòng chạy"
         summary="Nghiệp vụ đi từ ĐƠN. Vòng chạy và chặng do hệ thống lập và tự đóng — không ai phải bấm tạo hay đóng vòng chạy."
+        actions={
+          canCreate ? (
+            <button
+              ref={composer.openButtonRef}
+              type="button"
+              className="tx-btn tx-btn--go"
+              onClick={composer.open}
+            >
+              Tạo đơn mới
+            </button>
+          ) : undefined
+        }
       />
 
-      {/*
-       * KHACH HANG va CUOC la BAT BUOC o day, va do khong phai mot lua chon ve giao dien.
-       *
-       * May chu cho phep ca hai truong rong luc tao don — dung, vi mot don noi bo chua chot gia
-       * van phai ghi duoc. Nhung so cong no khach hang chi nhan mot don vao "cho doi soat" khi
-       * don DONG THOI: da `FULFILLED`, ket thuc thuong mai da `APPROVED`, co `customerId` va co
-       * `freightAmount`. Thieu mot trong hai truong nay thi don van chay xong tren duong van hanh
-       * roi DUNG LAI mai mai truoc cua doi soat — khong mot man hinh nao bao loi, va khong ai biet
-       * tai sao tien khong bao gio len so.
-       *
-       * Nen mot don tao tu man hinh nay LUON di duoc het duong: tao -> giao -> doi soat -> phai
-       * thu -> thu tien. Don khong co khach/cuoc van ton tai duoc qua API, chi khong sinh ra tu
-       * day.
-       */}
-      <form
-        className="tx-panel tx-filters"
-        aria-label="Tạo đơn hàng"
-        onSubmit={(event) => {
-          event.preventDefault();
-          const data = new FormData(event.currentTarget);
-          createOrder.mutate({
-            code: String(data.get('code') ?? ''),
-            originLabel: String(data.get('originLabel') ?? ''),
-            destinationLabel: String(data.get('destinationLabel') ?? ''),
-            businessDate: String(data.get('businessDate') ?? ''),
-            customerId: String(data.get('customerId') ?? ''),
-            freightAmount: Number(data.get('freightAmount')),
-            cargoDescription: cargoOf(data),
-          });
-        }}
+      {/* Luon co mat (rong thi an khoi dong chay) — xem `useComposerHandoff`. */}
+      <p
+        ref={composer.noticeRef}
+        className="tx-notice tx-created-notice"
+        role="status"
+        tabIndex={-1}
+        data-testid="tx-created-notice"
       >
-        <h2>Tạo đơn mới</h2>
+        {composer.notice ?? ''}
+      </p>
+
+      {/* `#395` — ten khach va bien so la danh ba RIENG: thieu quyen thi noi, khong de o trong. */}
+      <PermissionNote
+        viewer={navigation}
+        actions={['transport.customer.read', 'transport.vehicle.read']}
+      />
+
+      {/* Loc PHIA MAY KHACH: danh sach da nam het trong bo nho; URL khong doi. */}
+      <div className="tx-orderfilter" role="search" aria-label="Tìm và lọc đơn">
         <label className="tx-field">
-          <span>Mã đơn</span>
-          <input name="code" required />
+          <span>Tìm đơn</span>
+          <input
+            type="search"
+            value={filter.search}
+            placeholder="Mã đơn, khách hàng, điểm lấy hoặc giao"
+            onChange={(event) => setFilter({ ...filter, search: event.target.value })}
+            autoComplete="off"
+          />
         </label>
-        <label className="tx-field">
-          <span>Khách hàng</span>
-          <select name="customerId" required defaultValue="">
-            <option value="">— Chọn khách hàng —</option>
-            {activeCustomers.map((customer) => (
-              <option key={customer.id} value={customer.id}>
-                {customer.name}
+        <label className="tx-field tx-orderfilter__status">
+          <span>Trạng thái</span>
+          <select
+            value={filter.status}
+            onChange={(event) =>
+              setFilter({ ...filter, status: event.target.value as OrderStatusFilter })
+            }
+          >
+            {ORDER_STATUS_FILTERS.map((value) => (
+              <option key={value} value={value}>
+                {ORDER_STATUS_FILTER_LABEL[value]}
               </option>
             ))}
           </select>
         </label>
-        <label className="tx-field">
-          <span>Điểm lấy hàng</span>
-          <input name="originLabel" required />
-        </label>
-        <label className="tx-field">
-          <span>Điểm giao hàng</span>
-          <input name="destinationLabel" required />
-        </label>
-        <label className="tx-field">
-          <span>Ngày vận hành</span>
-          <input name="businessDate" type="date" required />
-        </label>
-        <label className="tx-field">
-          <span>Cước (đ)</span>
-          {/* KHONG dat `step`: moc buoc tinh tu `min`, nen `min=1 step=1000` lam trinh duyet coi
-              5.000.000 la khong hop le va NUOT luon lan bam gui — khong mot thong bao nao cua ta. */}
-          <input name="freightAmount" type="number" min="1" required />
-        </label>
-        <label className="tx-field">
-          <span>Hàng hoá (tuỳ chọn)</span>
-          <input name="cargoDescription" />
-        </label>
-        {activeCustomers.length === 0 ? (
-          <p className="tx-note tx-note--warn">
-            Chưa có khách hàng nào đang hoạt động trong danh mục, nên chưa tạo được đơn thương mại.
-            Thêm khách ở mục Khách hàng trước.
-          </p>
-        ) : null}
-        <button
-          className="tx-btn"
-          type="submit"
-          disabled={createOrder.isPending || activeCustomers.length === 0}
-        >
-          Tạo đơn
-        </button>
-      </form>
-      {createOrder.isError ? <ErrorState message={(createOrder.error as Error).message} /> : null}
+        <p className="tx-orderfilter__count" role="status">
+          Đang hiện {visibleOrders.length} / {orders.data.length} đơn
+        </p>
+      </div>
 
       <DataTable<TransportOrder>
         caption="Nghĩa vụ thương mại"
-        rows={orders.data}
+        rows={visibleOrders}
         rowKey={(order) => order.id}
         selectedKey={openOrderId}
         onSelect={(order) => setOpenOrderId(order.id === openOrderId ? null : order.id)}
@@ -300,19 +345,37 @@ export function MovementView() {
           },
         ]}
       />
+      {visibleOrders.length === 0 && orders.data.length > 0 ? (
+        <p className="tx-note">Không có đơn nào khớp bộ lọc.</p>
+      ) : null}
 
-      {openOrderId !== null && orderLegs.errorMessage !== null && (
+      {openState.kind === 'HIDDEN_BY_FILTER' ? (
+        <div className="tx-orderfilter__hidden" data-testid="tx-open-order-hidden">
+          <p className="tx-note">{hiddenOpenOrderNote(openState.code)}</p>
+          <button
+            type="button"
+            className="tx-btn tx-btn--small"
+            onClick={() => setFilter(EMPTY_ORDER_FILTER)}
+          >
+            Bỏ lọc
+          </button>
+        </div>
+      ) : null}
+
+      {selectedOrder === null ? null : <OrderRouteCard order={selectedOrder} />}
+
+      {detailOrderId !== null && orderLegs.errorMessage !== null && (
         <ErrorState message={orderLegs.errorMessage} onRetry={orderLegs.refetch} />
       )}
-      {openOrderId !== null && orderLegs.isLoading && (
+      {detailOrderId !== null && orderLegs.isLoading && (
         <LoadingState label="Đang tải chặng của đơn…" />
       )}
 
-      {openOrderId !== null && orderLegs.data !== undefined && (
+      {detailOrderId !== null && orderLegs.data !== undefined && (
         <>
           {(() => {
             const selected = orders.data?.find((entry) => entry.id === openOrderId);
-            if (selected === undefined || activePlan !== null) return null;
+            if (selected === undefined || activePlan !== null || !canPlan) return null;
             return (
               <form
                 className="tx-panel tx-filters"
@@ -451,12 +514,21 @@ export function MovementView() {
         </>
       )}
 
-      <PageHeader
-        title="Vòng chạy của xe"
-        summary="Bề mặt vận hành nâng cao — nguồn của báo cáo km rỗng. Quy trình thường ngày không cần mở tới đây."
-      />
+      {/* `#379` — muc PHU cua trang (h2), khong phai mot trang thu hai: bang vong chay la noi xem sau
+          va nguon cua bao cao km rong, khong duoc to ngang khoi don hang. */}
+      <section className="tx-movement-runs" aria-labelledby="tx-movement-runs-title">
+        <h2 id="tx-movement-runs-title">Vòng chạy của xe</h2>
+        <p className="tx-note">
+          Bề mặt vận hành nâng cao — nguồn của báo cáo km rỗng. Quy trình thường ngày không cần mở
+          tới đây.
+        </p>
+      </section>
 
-      {runs.errorMessage !== null ? (
+      {/* `#395` — bang vong chay la PHAN PHU (`transport.run.read`): nguoi chi duoc xem don thay
+          mot cau, khong thay mot bang vong chay rong. */}
+      {!canPerform(navigation, 'transport.run.read') ? (
+        <PermissionGate viewer={navigation} action="transport.run.read" />
+      ) : runs.errorMessage !== null ? (
         <ErrorState message={runs.errorMessage} onRetry={runs.refetch} />
       ) : (
         <DataTable<VehicleRun>
@@ -500,36 +572,7 @@ export function MovementView() {
             showDistance
           />
 
-          {movement.data !== undefined && (
-            <>
-              <MetricCard label="Km có hàng (đã đi)" value={km(movement.data.actual.loadedKm)} />
-              <MetricCard label="Km rỗng (đã đi)" value={km(movement.data.actual.emptyKm)} />
-              <MetricCard
-                label="Tỷ lệ rỗng (đã đi)"
-                value={ratio(movement.data.actual.emptyRatio)}
-                hint={
-                  movement.data.actual.complete
-                    ? null
-                    : `Còn ${
-                        movement.data.actual.legsMissingDistance.loaded +
-                        movement.data.actual.legsMissingDistance.empty
-                      } chặng đã xong chưa nhập km — chưa tính được tỷ lệ.`
-                }
-              />
-              <MetricCard
-                label="Km rỗng (dự kiến)"
-                value={km(movement.data.planned.emptyKm)}
-                hint="Chặng chưa chạy xong. KHÔNG cộng vào km đã đi."
-              />
-              {movement.data.cancelledLegs > 0 && (
-                <MetricCard
-                  label="Chặng đã huỷ"
-                  value={String(movement.data.cancelledLegs)}
-                  hint="Kế hoạch bị bỏ — không tính vào km đã đi lẫn km dự kiến."
-                />
-              )}
-            </>
-          )}
+          {movement.data !== undefined && <RunMovementMetrics movement={movement.data} />}
         </>
       )}
     </>

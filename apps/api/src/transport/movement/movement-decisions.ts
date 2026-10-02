@@ -176,6 +176,33 @@ export const ORDER_PROJECTION_REASONS = [
 ] as const;
 export type OrderProjectionReason = (typeof ORDER_PROJECTION_REASONS)[number];
 
+/* ------------------------------------------------------------------ *
+ * order.location -- MovementService.createOrder() (#379)
+ * ------------------------------------------------------------------ */
+
+/**
+ * TOA DO DIEM LAY / DIEM GIAO cua mot don moi.
+ *
+ * Bon ma, khong mot `boolean`: nguoi doc trace phai tach duoc "don co toa do" voi "don tao qua
+ * duong noi bo khong co toa do" (chieu tu chuyen v1) va voi HAI duong tu choi -- vi dieu xe sau do
+ * hanh xu khac nhau voi tung truong hop. `detail` KHONG mang toa do: vi tri lay/giao hang cua khach
+ * la du lieu nghiep vu, khong phai du lieu quan sat.
+ */
+export const ORDER_LOCATION_REASONS = [
+  /** Ca hai diem da qua `parseGeoPoint` va duoc ghi. */
+  'ORDER_LOCATION_CAPTURED',
+  /**
+   * Tao don THIEU it nhat mot diem -- chi duong noi bo (fixture, cong cu van hanh) di duoc toi day,
+   * vi bien HTTP bat buoc ca hai. Ghi rieng de dem duoc bao nhieu don sinh ra ma dieu xe khong tu
+   * giai duoc diem lay/giao. (Phep chieu tu chuyen v1 ghi don qua repository va co quyet dinh rieng
+   * `order.trip_projection`; toa do cua no luon `null`.)
+   */
+  'ORDER_LOCATION_ABSENT',
+  'ORDER_ORIGIN_POINT_REJECTED',
+  'ORDER_DESTINATION_POINT_REJECTED',
+] as const;
+export type OrderLocationReason = (typeof ORDER_LOCATION_REASONS)[number];
+
 export type TransportMovementDecisionReason =
   | OrderTransitionReason
   | OrderCancelReason
@@ -186,7 +213,8 @@ export type TransportMovementDecisionReason =
   | RunLegTransitionReason
   | RunLegCancelReason
   | TripProjectionReason
-  | OrderProjectionReason;
+  | OrderProjectionReason
+  | OrderLocationReason;
 
 export const TRANSPORT_MOVEMENT_DECISIONS = defineDecisionVocabulary({
   owner: 'transport-core',
@@ -201,6 +229,7 @@ export const TRANSPORT_MOVEMENT_DECISIONS = defineDecisionVocabulary({
     'run.leg_cancel',
     'run.trip_projection',
     'order.trip_projection',
+    'order.location',
   ],
   labels: {
     ORDER_TRANSITION_APPLIED: 'Da doi trang thai nghia vu thuong mai',
@@ -254,5 +283,10 @@ export const TRANSPORT_MOVEMENT_DECISIONS = defineDecisionVocabulary({
     ORDER_PROJECTION_UNCHANGED: 'Chuyen nay da co nghia vu thuong mai, khong sinh ban thu hai',
     ORDER_PROJECTION_TRIP_HAS_NO_CUSTOMER:
       'Chuyen khong gan khach hang nen khong co nghia vu thuong mai nao',
+    ORDER_LOCATION_CAPTURED: 'Da ghi toa do diem lay va diem giao cua don',
+    ORDER_LOCATION_ABSENT:
+      'Don tao thieu toa do diem lay hoac diem giao: dieu xe khong tu suy ra duoc diem do',
+    ORDER_ORIGIN_POINT_REJECTED: 'Toa do diem lay hang khong hop le, tu choi tao don',
+    ORDER_DESTINATION_POINT_REJECTED: 'Toa do diem giao hang khong hop le, tu choi tao don',
   } satisfies Record<TransportMovementDecisionReason, string>,
 });

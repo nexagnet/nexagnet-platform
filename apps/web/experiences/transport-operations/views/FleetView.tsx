@@ -1,7 +1,7 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
+import { PermissionGate } from '../components/PermissionGate';
 import { DataTable, DetailRow, PageHeader, StatusBadge } from '../components/primitives';
 import { EmptyState, ErrorState, LoadingState } from '../components/SectionState';
 import {
@@ -9,10 +9,11 @@ import {
   useDrivers,
   useNavigationInput,
   useVehicleDriverHistory,
+  useVehicleLocationHealth,
   useVehicles,
   type SectionQuery,
 } from '../hooks/useTransportWorkspace';
-import { hasOperationsScope, operationsEmptyMessage } from '../transport-actions';
+import { canPerform, hasOperationsScope, operationsEmptyMessage } from '../transport-actions';
 import {
   LICENCE_NOTE_SCOPE,
   NO_FLEET_WIDE_ASSIGNMENT_NOTE,
@@ -26,7 +27,6 @@ import {
   type VehicleResponsibility,
   type VehicleRow,
 } from '../workspace/fleet';
-import { transportApi } from '../transport-api';
 import type { Driver, VehicleDriverAssignment } from '../transport-types';
 import { toLocationHealthPresentation } from '../workspace/location-health';
 
@@ -150,18 +150,16 @@ export function FleetView() {
   const [tab, setTab] = useState<FleetTab>('vehicles');
   const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
   const driverHistory = toSectionQuery(useVehicleDriverHistory(navigation, selectedVehicleId));
-  const locationHealth = useQuery({
-    queryKey: ['transport', 'vehicles', selectedVehicleId, 'location-health'],
-    queryFn: () => transportApi.fleet.locationHealth(selectedVehicleId ?? ''),
-    enabled: selectedVehicleId !== null,
-  });
+  const locationHealth = useVehicleLocationHealth(navigation, selectedVehicleId);
+  /** `#395` — bang lai xe la phan phu (`transport.driver.read`), khong phai mot bang "0 lai xe". */
+  const canReadDrivers = canPerform(navigation, 'transport.driver.read');
   const today = useMemo(todayBusinessDate, []);
 
-  if (!hasOperationsScope(navigation.role)) {
+  if (!hasOperationsScope(navigation)) {
     return (
       <>
         <PageHeader title="Đội xe & lái xe" />
-        <ErrorState message={operationsEmptyMessage(navigation.role)} />
+        <ErrorState message={operationsEmptyMessage(navigation)} />
       </>
     );
   }
@@ -195,7 +193,7 @@ export function FleetView() {
           className="tx-tab"
           onClick={() => setTab('drivers')}
         >
-          Lái xe ({driverRows.length})
+          {canReadDrivers ? `Lái xe (${driverRows.length})` : 'Lái xe'}
         </button>
       </div>
 
@@ -252,6 +250,9 @@ export function FleetView() {
                   drivers={drivers}
                 />
               )}
+              {selectedVehicle === undefined ? null : (
+                <PermissionGate viewer={navigation} action="transport.tracking.read" />
+              )}
               {locationHealth.isLoading ? <LoadingState label="Đang đọc sức khoẻ vị trí…" /> : null}
               {locationHealth.isError ? (
                 <ErrorState message={(locationHealth.error as Error).message} />
@@ -297,6 +298,10 @@ export function FleetView() {
               <p className="tx-note">{NO_FLEET_WIDE_ASSIGNMENT_NOTE}</p>
             </>
           )}
+        </section>
+      ) : !canReadDrivers ? (
+        <section aria-label="Danh sách lái xe">
+          <PermissionGate viewer={navigation} action="transport.driver.read" />
         </section>
       ) : (
         <section aria-label="Danh sách lái xe">

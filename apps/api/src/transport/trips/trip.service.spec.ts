@@ -35,11 +35,16 @@ describe('TripService', () => {
   const registerVehicle = (plate: string) =>
     fleet.registerVehicle({ registrationPlate: plate, vehicleClass: 'Xe tai' }, ACTOR);
 
-  const registerDriver = (name: string, phone: string, authUserId?: string) =>
-    fleet.registerDriver(
-      { fullName: name, phone, licenceClass: 'C', licenceExpiry: '2029-01-01', authUserId },
+  // `#395`: dich vu doi xe khong con nhan `authUserId` (noi tai khoan co route + luat rieng) —
+  // fixture noi thang qua KHO, dung cho ma kho van giu truong nay.
+  const registerDriver = async (name: string, phone: string, authUserId?: string) => {
+    const driver = await fleet.registerDriver(
+      { fullName: name, phone, licenceClass: 'C', licenceExpiry: '2029-01-01' },
       ACTOR,
     );
+    if (!authUserId) return driver;
+    return (await fleetRepository.updateDriver(driver.id, { authUserId })) ?? driver;
+  };
 
   const planOwnTrip = (code = 'CH-0001') =>
     service.planTrip(

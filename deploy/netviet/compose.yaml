@@ -132,6 +132,11 @@ services:
       AUTH_MODE: ${AUTH_MODE:-session}
       DATA_CLASSIFICATION: ${DATA_CLASSIFICATION:-test}
       SESSION_SECRET: ${SESSION_SECRET}
+      # TAI KHOAN HE THONG (#395): nguoi van hanh ma `bootstrap-auth-user.mjs` tao va moi lan smoke
+      # dang nhap. Man hinh quan tri tai khoan KHONG khoa / ha vai / doi quyen / dat lai mat khau duoc
+      # tai khoan nay — lam vay thi lan deploy SAU chet o `ROLLOUT_AUTH_BOOTSTRAP_FAILED`. Cung mot
+      # bien voi service `bootstrap`, nen hai noi khong the lech ten nhau.
+      PROTECTED_ACCOUNT_USERNAMES: ${PILOT_OPERATOR_USERNAME:-}
       # Kho anh. MAC DINH `none` = khong luu anh nao: link anh Zalo chet trong <=35 ngay nen day
       # la mat vinh vien, PHAI la mot lua chon co y chu khong phai hieu ung phu cua lan deploy.
       # render-secrets.sh dat `gcs` khi biet bucket; khong biet -> `none`.

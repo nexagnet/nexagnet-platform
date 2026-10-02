@@ -1,6 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
+import { canPerform, type TransportViewerInput } from '../transport-actions';
 import { transportApi } from '../transport-api';
 
 /**
@@ -8,14 +9,14 @@ import { transportApi } from '../transport-api';
  *
  * Tep RIENG chu khong them vao `useTransportWorkspace.ts`: tuyen nay thuoc `transport-fuel`, gac bang
  * chinh quyen nop phieu (`transport.driver.self.fuel.submit`), va man Nhien lieu la noi DUY NHAT dung
- * no. `enabled` do ben goi dat — man khai phieu chi goi khi lai xe duoc phep nop.
+ * no. Cong nam NGAY trong hook (`#395`) — `section-access.spec.ts` doc no va so voi ma cua route.
  */
 export const driverFuelRunsQueryKey = ['transport', 'me', 'fuel', 'runs'] as const;
 
-export function useDriverFuelRuns(enabled: boolean) {
+export function useDriverFuelRuns(viewer: TransportViewerInput) {
   return useQuery({
     queryKey: driverFuelRunsQueryKey,
     queryFn: () => transportApi.me.fuelRuns(),
-    enabled,
+    enabled: canPerform(viewer, 'transport.driver.self.fuel.submit'),
   });
 }

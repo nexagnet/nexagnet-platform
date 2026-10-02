@@ -22,12 +22,22 @@ import type { TransportAction } from '../transport-actions';
  * Tep rieng vi `vi.mock` ap cho CA tep: bang quyen o day co y bi cat mot ma, va khong bai nao khac
  * duoc chay tren bang do.
  */
+/**
+ * Ma bi cat la ma CHINH cua `Đơn hàng & vòng chạy` — `transport.order.read` tu `#395` (truoc do la
+ * `transport.run.read`). Cat ca `canPerformAll`: ham do goi `canPerform` BEN TRONG module, nen mot
+ * `vi.mock` chi thay `canPerform` xuat ra se khong cham toi no.
+ */
+const CUT: TransportAction = 'transport.order.read';
+
 vi.mock('../transport-actions', async (importOriginal) => {
   const original = await importOriginal<typeof TransportActions>();
+  const cutCanPerform = (role: AuthRole | null, action: TransportAction): boolean =>
+    action === CUT ? false : original.canPerform(role, action);
   return {
     ...original,
-    canPerform: (role: AuthRole | null, action: TransportAction): boolean =>
-      action === 'transport.run.read' ? false : original.canPerform(role, action),
+    canPerform: cutCanPerform,
+    canPerformAll: (role: AuthRole | null, actions: readonly TransportAction[]): boolean =>
+      actions.every((action) => cutCanPerform(role, action)),
   };
 });
 

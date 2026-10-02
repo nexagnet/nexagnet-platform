@@ -72,6 +72,8 @@ const order = (over: Partial<Order> = {}): Order => ({
   customerId: null,
   originLabel: 'Hà Nội',
   destinationLabel: 'Hải Phòng',
+  originPoint: null,
+  destinationPoint: null,
   cargoDescription: null,
   freightAmount: null,
   currencyCode: 'VND',
@@ -154,7 +156,10 @@ describe('trung vi', () => {
 describe('bang doi xe', () => {
   const input = {
     range: RANGE,
-    vehicles: [vehicle(), vehicle({ id: 'v2', registrationPlate: '29H-222.22', status: 'ON_TRIP' })],
+    vehicles: [
+      vehicle(),
+      vehicle({ id: 'v2', registrationPlate: '29H-222.22', status: 'ON_TRIP' }),
+    ],
     runs: [run()],
     legsByRun: new Map([
       [

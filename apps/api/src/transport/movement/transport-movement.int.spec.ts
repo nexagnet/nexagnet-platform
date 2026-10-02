@@ -308,6 +308,9 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
       expect(first.leg.kind).toBe('LOADED');
       expect(first.leg.distanceKm).toBe(118);
       expect(first.order?.customerId).toBe(customer.id);
+      // #379: chuyen v1 khong co toa do -> don chieu ra mang NULL, khong geocode nhan.
+      expect(first.order?.originPoint).toBeNull();
+      expect(first.order?.destinationPoint).toBeNull();
 
       const second = await service.projectTrip(trip.id, ACTOR);
       expect(second.run.id).toBe(first.run.id);
@@ -353,6 +356,213 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')(
 
       const reason = await reasonOf(() => service.projectTrip(trip.id, ACTOR));
       expect(reason).toBe('PROJECTION_TRIP_HAS_NO_VEHICLE');
+    });
+
+    /* -------------------------------------------------------------------------------------- *
+     * #379 -- TOA DO DIEM LAY / DIEM GIAO cua don
+     * -------------------------------------------------------------------------------------- */
+
+    // Nhieu chu so thap phan hon moi thiet bi GPS dua ra: `DOUBLE PRECISION` phai giu NGUYEN, vi
+    // mot lan lam tron o tang luu tru se lam diem lay troi khoi hang rao ma khong ai thay.
+    const DINH_VU = { latitude: 20.826401234, longitude: 106.775201234 };
+    const TAN_PHU_HUNG = { latitude: 21.617000987, longitude: 105.817000456 };
+
+    it('MV-IT-379-01 -- toa do di qua PrismaMovementRepository KHONG mat chu so nao', async () => {
+      const created = await service.createOrder(
+        {
+          code: nextCode('ORD-TOA-DO'),
+          originLabel: 'Nhà máy thép Đình Vũ',
+          destinationLabel: 'Kho Nhựa Tân Phú Hưng',
+          businessDate: BUSINESS_DATE,
+          originPoint: DINH_VU,
+          destinationPoint: TAN_PHU_HUNG,
+        },
+        ACTOR,
+      );
+
+      expect(created.originPoint).toStrictEqual(DINH_VU);
+      expect(created.destinationPoint).toStrictEqual(TAN_PHU_HUNG);
+
+      // Doc lai qua MOI duong doc cua repository -- ca ba deu di qua `toOrder`.
+      const byId = await movementRepo.findOrder(created.id);
+      const byCode = await movementRepo.findOrderByCode(created.code);
+      const listed = (await movementRepo.listOrders()).find((order) => order.id === created.id);
+      for (const read of [byId, byCode, listed]) {
+        expect(read?.originPoint).toStrictEqual(DINH_VU);
+        expect(read?.destinationPoint).toStrictEqual(TAN_PHU_HUNG);
+      }
+
+      // Va bon cot THO trong DB dung bang tung bit voi so da gui.
+      const row = await prisma.transportOrder.findUniqueOrThrow({ where: { id: created.id } });
+      expect(row.originLatitude).toBe(DINH_VU.latitude);
+      expect(row.originLongitude).toBe(DINH_VU.longitude);
+      expect(row.destinationLatitude).toBe(TAN_PHU_HUNG.latitude);
+      expect(row.destinationLongitude).toBe(TAN_PHU_HUNG.longitude);
+
+      // PATCH chi sua nhan: toa do trong DB khong duoc dong toi (#379 khong mo duong sua diem).
+      const renamed = await service.updateOrder(
+        created.id,
+        { originLabel: 'Bãi xe Hà Nội' },
+        ACTOR,
+      );
+      expect(renamed.originLabel).toBe('Bãi xe Hà Nội');
+      expect(renamed.originPoint).toStrictEqual(DINH_VU);
+      expect(renamed.destinationPoint).toStrictEqual(TAN_PHU_HUNG);
+    });
+
+    it('MV-IT-379-02 -- hang CU (khong toa do) doc ra `null`, khong phai mot diem bia', async () => {
+      // Ghi thang qua Prisma, dung hinh dang cua moi hang co truoc #379.
+      const legacy = await prisma.transportOrder.create({
+        data: {
+          code: nextCode('ORD-CU'),
+          businessDate: BUSINESS_DATE,
+          originLabel: 'Bãi xe Hà Nội',
+          destinationLabel: 'Hai Phong',
+        },
+      });
+      expect(legacy.originLatitude).toBeNull();
+
+      const read = await movementRepo.findOrder(legacy.id);
+      expect(read?.originPoint).toBeNull();
+      expect(read?.destinationPoint).toBeNull();
+      // Nhan trung ten mot dia diem da biet van KHONG sinh ra toa do.
+      expect(read?.originLabel).toBe('Bãi xe Hà Nội');
+    });
+
+    it('MV-IT-379-03 -- diem hong bi tang mien tu choi CO TEN va khong ghi hang nao', async () => {
+      const code = nextCode('ORD-DAO');
+
+      const reason = await reasonOf(() =>
+        service.createOrder(
+          {
+            code,
+            originLabel: 'A',
+            destinationLabel: 'B',
+            businessDate: BUSINESS_DATE,
+            originPoint: DINH_VU,
+            destinationPoint: { latitude: 0, longitude: 0 },
+          },
+          ACTOR,
+        ),
+      );
+
+      expect(reason).toBe('ORDER_DESTINATION_POINT_INVALID');
+      expect(await prisma.transportOrder.count({ where: { code } })).toBe(0);
+    });
+
+    /**
+     * Ghi THANG qua Prisma, bo qua tang mien -- cung tien le voi MV-IT-02. Moi dong la MOT rang
+     * buoc, va bai do ten rang buoc chu khong chi "co nem": neu mot CHECK bi go, bai cua DUNG no do.
+     */
+    it.each([
+      ['TransportOrder_origin_point_paired', { originLatitude: 20.8, originLongitude: null }],
+      [
+        'TransportOrder_destination_point_paired',
+        { destinationLatitude: null, destinationLongitude: 106.7 },
+      ],
+      ['TransportOrder_origin_latitude_range', { originLatitude: 90.5, originLongitude: 106.7 }],
+      ['TransportOrder_origin_longitude_range', { originLatitude: 20.8, originLongitude: 180.5 }],
+      [
+        'TransportOrder_destination_latitude_range',
+        { destinationLatitude: -91, destinationLongitude: 106.7 },
+      ],
+      [
+        'TransportOrder_destination_longitude_range',
+        { destinationLatitude: 20.8, destinationLongitude: -181 },
+      ],
+      ['TransportOrder_origin_not_null_island', { originLatitude: 0, originLongitude: 0 }],
+      [
+        'TransportOrder_destination_not_null_island',
+        { destinationLatitude: 0, destinationLongitude: 0 },
+      ],
+    ] as const)(
+      'MV-IT-379-04 -- `CHECK` %s tu choi lan ghi qua mat tang mien',
+      async (constraint, columns) => {
+        const code = nextCode('ORD-CHECK');
+
+        await expect(
+          prisma.transportOrder.create({
+            data: {
+              code,
+              businessDate: BUSINESS_DATE,
+              originLabel: 'A',
+              destinationLabel: 'B',
+              ...columns,
+            },
+          }),
+        ).rejects.toThrow(new RegExp(constraint));
+        expect(await prisma.transportOrder.count({ where: { code } })).toBe(0);
+      },
+    );
+
+    /**
+     * BIEN NULL ISLAND phai TRUNG giua tang mien va DB. `parseGeoPoint` chi tu choi khi CA HAI
+     * truc `< 1e-9`, nen (1e-9, 0) hop le. Mot CHECK viet bang `>` se tu choi dung diem nay: tang
+     * mien cho qua, DB chan, va nguoi dung nhan mot loi 500 khong ten thay vi mot don da luu.
+     */
+    it('MV-IT-379-05 -- bien (1e-9, 0) duoc CA tang mien lan DB nhan; (0, 0) bi CA HAI tu choi', async () => {
+      const BOUNDARY = { latitude: 1e-9, longitude: 0 };
+
+      // Qua tang mien -> Prisma -> CHECK.
+      const viaDomain = await service.createOrder(
+        {
+          code: nextCode('ORD-BIEN'),
+          originLabel: 'A',
+          destinationLabel: 'B',
+          businessDate: BUSINESS_DATE,
+          originPoint: BOUNDARY,
+          destinationPoint: { latitude: 0, longitude: 1e-9 },
+        },
+        ACTOR,
+      );
+      expect(viaDomain.originPoint).toStrictEqual(BOUNDARY);
+      expect(viaDomain.destinationPoint).toStrictEqual({ latitude: 0, longitude: 1e-9 });
+
+      // Ghi THANG, bo qua tang mien: chinh CHECK cung nhan diem bien.
+      const direct = await prisma.transportOrder.create({
+        data: {
+          code: nextCode('ORD-BIEN-THO'),
+          businessDate: BUSINESS_DATE,
+          originLabel: 'A',
+          destinationLabel: 'B',
+          originLatitude: 1e-9,
+          originLongitude: 0,
+          destinationLatitude: 0,
+          destinationLongitude: 1e-9,
+        },
+      });
+      expect(direct.originLatitude).toBe(1e-9);
+
+      // (0, 0): tang mien tu choi CO TEN, DB tu choi theo TEN rang buoc.
+      const refusedCode = nextCode('ORD-DAO-GOC');
+      expect(
+        await reasonOf(() =>
+          service.createOrder(
+            {
+              code: refusedCode,
+              originLabel: 'A',
+              destinationLabel: 'B',
+              businessDate: BUSINESS_DATE,
+              originPoint: { latitude: 0, longitude: 0 },
+              destinationPoint: BOUNDARY,
+            },
+            ACTOR,
+          ),
+        ),
+      ).toBe('ORDER_ORIGIN_POINT_INVALID');
+      await expect(
+        prisma.transportOrder.create({
+          data: {
+            code: refusedCode,
+            businessDate: BUSINESS_DATE,
+            originLabel: 'A',
+            destinationLabel: 'B',
+            originLatitude: 0,
+            originLongitude: 0,
+          },
+        }),
+      ).rejects.toThrow(/TransportOrder_origin_not_null_island/);
+      expect(await prisma.transportOrder.count({ where: { code: refusedCode } })).toBe(0);
     });
   },
 );

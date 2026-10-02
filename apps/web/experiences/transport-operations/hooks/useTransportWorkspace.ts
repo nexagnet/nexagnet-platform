@@ -3,14 +3,17 @@
 import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { useAuth } from '../../../components/auth/AuthGate';
+import { FORBIDDEN_IS_ANSWER_META } from '../../../components/auth/session-signals';
 import { useTenantRuntime } from '../../../lib/tenant-runtime-context';
 import type { FuelDocumentListQuery } from '../fuel-review-types';
-import type { NavigationInput } from '../navigation';
+import { shouldProbeStakeholderScope, type NavigationInput } from '../navigation';
+import { isActionNotPermitted, SECTION_ACCESS_REVOKED } from '../permission-notes';
 import type { TollSpendReportQuery } from '../toll-report-types';
 import { canPerform, type TransportAction } from '../transport-actions';
 import { transportApi } from '../transport-api';
 import type {
   FuelEntryInboxQuery,
+  GeoPoint,
   LegTransitionTarget,
   SettlementFlow,
   TollCandidateQuery,
@@ -29,18 +32,58 @@ import type {
  * o may chu.
  */
 
+/**
+ * Nguoi dang xem = vai + TAP QUYEN HIEU LUC tu `/auth/me` (`#395`). `permissions` di CUNG vai vao
+ * moi cong cua man hinh (`allowed`, `canPerform(navigation, ...)`): mot `MANAGER` duoc cap nhom
+ * "Đội xe & lái xe" phai THAY man do va du lieu cua no, dung nhu may chu dang cho phep.
+ *
+ * `AuthGate` giu tap quyen ON DINH danh tinh khi noi dung khong doi, nen memo o day khong bi pha
+ * moi lan lam tuoi `/auth/me`.
+ */
 export function useNavigationInput(): NavigationInput {
   const tenant = useTenantRuntime();
-  const { user } = useAuth();
+  const { user, permissions } = useAuth();
   const role = user?.role ?? null;
-  return useMemo(
+  const base = useMemo<NavigationInput>(
     () => ({
       capabilities: tenant.capabilities,
       role,
+      permissions,
       blockedCapabilityKeys: tenant.readiness.blockedCapabilities.map((entry) => entry.key),
     }),
-    [tenant.capabilities, tenant.readiness.blockedCapabilities, role],
+    [tenant.capabilities, tenant.readiness.blockedCapabilities, role, permissions],
   );
+  const stakeholderLinked = useStakeholderScopeProbe(base);
+  return useMemo(
+    () => (stakeholderLinked ? { ...base, stakeholderLinked: true } : base),
+    [base, stakeholderLinked],
+  );
+}
+
+/**
+ * "NGUOI NAY CO PHAI BEN GOP VON KHONG" — hoi CHINH may chu (`#395`).
+ *
+ * `/auth/me` khong mang pham vi nay (no den tu mot hang lien ket, khong tu vai hay quyen rieng), nen
+ * cau tra loi duy nhat la `GET /transport/me/vehicles`: du lieu = co, `403` = khong. CUNG khoa voi
+ * `useMyStakeholderVehicles` — man "Xe tôi có cổ phần" mo ra la co ngay danh sach tu lan hoi nay
+ * (roi tu lam moi theo luat cua chinh man do).
+ *
+ * Mot lan moi phien: `403` la cau tra loi binh thuong cua nguoi khong gop von, nen khong thu lai,
+ * khong hoi lai khi gan man moi hay quay lai tab, va khong lam `AuthGate` doc lai `/auth/me`.
+ */
+function useStakeholderScopeProbe(input: NavigationInput): boolean {
+  const probe = useQuery({
+    queryKey: TRANSPORT_QUERY_KEYS.myVehicles,
+    queryFn: () => transportApi.stakeholderSelf.myVehicles(),
+    enabled: shouldProbeStakeholderScope(input),
+    retry: false,
+    retryOnMount: false,
+    staleTime: Number.POSITIVE_INFINITY,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    meta: FORBIDDEN_IS_ANSWER_META,
+  });
+  return probe.isSuccess;
 }
 
 export const TRANSPORT_QUERY_KEYS = {
@@ -58,6 +101,12 @@ export const TRANSPORT_QUERY_KEYS = {
   tollProviders: ['transport', 'toll', 'providers'],
   tollAccounts: ['transport', 'toll', 'accounts'],
   driverTrips: ['transport', 'me', 'trips'],
+  /**
+   * `#340` — viec hien truong (vong chay) cua CHINH lai xe. PHAI trung khoa ma man Hien truong
+   * (`driver/FieldScreen.tsx`) dung: trang chu va man do la MOT lan doc, mot o nho — khong phai hai
+   * anh chup lech nhau cua cung mot cau hoi "toi co viec gi".
+   */
+  driverFieldWork: ['transport', 'me', 'field-work'],
   driverFund: ['transport', 'me', 'fund'],
   driverFuel: ['transport', 'me', 'fuel'],
   driverPayslips: ['transport', 'me', 'payslips'],
@@ -78,6 +127,10 @@ export const TRANSPORT_QUERY_KEYS = {
   controlTower: ['transport', 'control-tower'],
   /** Lane G — sau con so tai chinh, cung mot lan doc. */
   financeSummary: ['transport', 'finance', 'summary'],
+  /** `#385` — hieu qua tung viec, cung ham gop voi `financeSummary`. */
+  financeMargin: ['transport', 'finance', 'margin'],
+  /** `#379` — dia diem da biet (bai xe, nha may/kho) cho man tao don. */
+  knownPlaces: ['transport', 'places', 'known'],
 } as const;
 
 /** Nang luc + hanh dong deu phai dat truoc khi ban mot yeu cau. */
@@ -89,7 +142,7 @@ const allowed = (
   if (capability !== null && !(input.capabilities as readonly string[]).includes(capability)) {
     return false;
   }
-  return canPerform(input.role, action);
+  return canPerform(input, action);
 };
 
 export function useTrips(input: NavigationInput) {
@@ -241,6 +294,14 @@ export function useFinanceSummary(input: NavigationInput) {
   });
 }
 
+export function useFinanceMargin(input: NavigationInput) {
+  return useQuery({
+    queryKey: TRANSPORT_QUERY_KEYS.financeMargin,
+    queryFn: () => transportApi.finance.margin(),
+    enabled: allowed(input, 'transport-settlement', 'transport.settlement.report.read'),
+  });
+}
+
 export function useVehicles(input: NavigationInput) {
   return useQuery({
     queryKey: TRANSPORT_QUERY_KEYS.vehicles,
@@ -267,6 +328,20 @@ export function useVehicleDriverHistory(input: NavigationInput, vehicleId: strin
     queryKey: [...TRANSPORT_QUERY_KEYS.vehicles, vehicleId, 'driver-history'],
     queryFn: () => transportApi.fleet.vehicleDriverHistory(vehicleId as string),
     enabled: vehicleId !== null && allowed(input, 'transport-core', 'transport.vehicle.read'),
+  });
+}
+
+/**
+ * SUC KHOE VI TRI cua MOT xe (`#297`) — `transport.tracking.read`, route cua `transport-proof`.
+ *
+ * Truoc `#395` query nay nam THANG trong `FleetView` va KHONG co cong: nguoi chi duoc xem ho so xe
+ * bam mot xe la nhan `403` in giua trang. Chi goi khi da MO mot xe, giong `useVehicleDriverHistory`.
+ */
+export function useVehicleLocationHealth(input: NavigationInput, vehicleId: string | null) {
+  return useQuery({
+    queryKey: ['transport', 'vehicles', vehicleId, 'location-health'],
+    queryFn: () => transportApi.fleet.locationHealth(vehicleId ?? ''),
+    enabled: vehicleId !== null && allowed(input, 'transport-proof', 'transport.tracking.read'),
   });
 }
 
@@ -341,6 +416,54 @@ export function useTransportOrders(input: NavigationInput) {
     queryKey: TRANSPORT_QUERY_KEYS.orders,
     queryFn: () => transportApi.movement.orders(),
     enabled: allowed(input, 'transport-core', 'transport.order.read'),
+  });
+}
+
+/**
+ * DIA DIEM DA BIET (`#379`) — CHI doc khi man tao don DANG MO.
+ *
+ * `isComposerOpen` nam trong `enabled`, khong phai mot lua chon trinh bay: danh sach don duoc mo
+ * hang chuc lan moi ngay de XEM, va moi lan mo ma ban them mot lan doc hang rao la mot lan goi
+ * khong ai can (bo e2e `office-leg-lifecycle` con khoa dieu nay bang `world.unhandled`).
+ *
+ * Ma quyen la `transport.order.manage` vi do dung la ma cua route — nguoi khong tao duoc don thi
+ * cung khong can danh sach cho de chon.
+ */
+export function useKnownPlaces(input: NavigationInput, isComposerOpen: boolean) {
+  return useQuery({
+    queryKey: TRANSPORT_QUERY_KEYS.knownPlaces,
+    queryFn: () => transportApi.places.known(),
+    enabled: isComposerOpen && allowed(input, 'transport-core', 'transport.order.manage'),
+    /*
+     * DOC LAI MOI LAN MO man tao don (`#395`). Truoc day hang rao "doi theo tuan" nen o nho giu 5
+     * phut; tu khi Giam doc them/tat dia diem o "Địa điểm vận hành", mot ke toan vua mo man tao don
+     * se khong thay dia diem moi toi 5 phut. Mot GET re moi lan mo la dung gia.
+     */
+    staleTime: 0,
+    refetchOnMount: 'always',
+  });
+}
+
+/**
+ * TIM DIA DIEM theo chu (`#379`) — `useMutation`, cung ly do voi `useDispatchSuggestions()`.
+ *
+ * Mot `useQuery` se tu chay lai khi cua so lay lai tieu diem hay mang noi lai: moi lan la mot luot
+ * cua nha cung cap ngoai (Nominatim cam tu dong hoan thanh). Nguoi dung bam "Tìm" hoac Enter, va
+ * CHI luc do mot yeu cau duoc gui.
+ */
+export function usePlaceSearch() {
+  return useMutation({
+    mutationFn: (query: string) => transportApi.places.search(query),
+  });
+}
+
+/**
+ * TIM NGUOC mot diem vua bam tren ban do (`#379`). Nguoi goi giu MA LUOT cua tung lan bam
+ * (`workspace/order-draft.ts`) — ket qua ve muon cua lan bam cu khong duoc ghi de lan bam moi.
+ */
+export function usePlaceReverse() {
+  return useMutation({
+    mutationFn: (point: GeoPoint) => transportApi.places.reverse(point),
   });
 }
 
@@ -672,6 +795,25 @@ export function useDriverTrips(input: NavigationInput) {
   });
 }
 
+/**
+ * VIEC DUOC DIEU cua chinh lai xe — `#340`: trang chu doc CUNG nguon voi man Hien truong.
+ *
+ * Gac bang DUNG cap (nang luc, hanh dong) cua muc `field` trong `DRIVER_SCREENS` va cua
+ * `DriverFieldController`: khach khong bat `transport-checkpoint` thi tuyen khong duoc gan, va mot
+ * yeu cau o day chi nhan ve trang 404 cua Next.js.
+ *
+ * `refetchOnWindowFocus` bat rieng o day (ung dung tat no o cap goc, `app/providers.tsx`): lai xe
+ * mo lai app sau khi van phong vua dieu viec phai thay viec do, khong phai mot trang chu cu.
+ */
+export function useDriverFieldWork(input: NavigationInput) {
+  return useQuery({
+    queryKey: TRANSPORT_QUERY_KEYS.driverFieldWork,
+    queryFn: () => transportApi.me.fieldWork(),
+    enabled: allowed(input, 'transport-checkpoint', 'transport.driver.self.checkpoint.record'),
+    refetchOnWindowFocus: true,
+  });
+}
+
 export function useDriverFund(input: NavigationInput) {
   return useQuery({
     queryKey: TRANSPORT_QUERY_KEYS.driverFund,
@@ -931,30 +1073,6 @@ export function usePartnerPosition(input: NavigationInput, partnerId: string | n
   });
 }
 
-/**
- * 404 la mot cau tra loi NGHIEP VU o day (chuyen chua co du lieu bien), khong phai mot su co. Nen
- * `retry: false`: thu lai ba lan mot cau tra loi dung chi lam man hinh cham di.
- */
-export function useTripDirectMargin(input: NavigationInput, tripId: string | null) {
-  return useQuery({
-    queryKey: ['transport', 'settlement', 'direct-margin', tripId],
-    queryFn: () => transportApi.settlement.tripDirectMargin(tripId as string),
-    enabled:
-      tripId !== null && allowed(input, 'transport-settlement', 'transport.settlement.report.read'),
-    retry: false,
-  });
-}
-
-export function useDirectMarginRollup(input: NavigationInput, tripIds: readonly string[]) {
-  return useQuery({
-    queryKey: ['transport', 'settlement', 'rollup', [...tripIds].sort().join(',')],
-    queryFn: () => transportApi.settlement.directMarginRollup(tripIds),
-    enabled:
-      tripIds.length > 0 &&
-      allowed(input, 'transport-settlement', 'transport.settlement.report.read'),
-  });
-}
-
 /** Quyen RIENG: lich su SUA mot con so tien khac voi "con no bao nhieu". */
 export function useDocumentChain(input: NavigationInput, originalId: string | null) {
   return useQuery({
@@ -1079,6 +1197,15 @@ export const toSectionQuery = <T>(query: UseQueryResult<T>): SectionQuery<T> => 
   // `isPending` + `fetchStatus === 'idle'` la dau hieu query bi `enabled: false` chan lai.
   isLoading: query.isPending && query.fetchStatus !== 'idle',
   isBlocked: query.isPending && query.fetchStatus === 'idle',
-  errorMessage: query.error === null ? null : query.error.message,
+  errorMessage: errorMessageOf(query.error),
   refetch: () => void query.refetch(),
 });
+
+/**
+ * `403 ACTION_NOT_PERMITTED` cua cong hanh dong (`#395`) noi mot cau NGHIEP VU, khong phai "Bạn
+ * không có quyền thực hiện thao tác này." (cau cua mot THAO TAC) va khong bao gio la "chua co du
+ * lieu". Moi query da gac bang dung ma cua route, nen dieu nay chi xay ra khi quyen vua bi doi —
+ * `AuthGate` doc lai `/auth/me` ngay sau mot `403` va danh muc tu cap nhat.
+ */
+const errorMessageOf = (error: Error | null): string | null =>
+  error === null ? null : isActionNotPermitted(error) ? SECTION_ACCESS_REVOKED : error.message;

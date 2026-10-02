@@ -5,7 +5,7 @@ import {
   transportErrorToHttp,
 } from '../transport-action.guard.js';
 import { FinanceReadService } from './finance-read.service.js';
-import type { FinanceSummaryView } from './finance-summary.js';
+import type { FinanceMarginView, FinanceSummaryView } from './finance-summary.js';
 
 /**
  * BANG TAI CHINH qua HTTP — #244 G5. CHI DOC.
@@ -39,6 +39,23 @@ export class FinanceController {
   async summary(): Promise<FinanceSummaryView> {
     try {
       return await this.read.summary();
+    } catch (error) {
+      throw transportErrorToHttp(error);
+    }
+  }
+
+  /**
+   * `#381`/`#385` — HIEU QUA TUNG VIEC: moi chuyen cu va moi don Run-first mot dong, kem `totals`
+   * CUNG ham gop voi `summary`. Tong la cua MAY CHU: man hinh khong goi N lan roi tu cong.
+   *
+   * Cung quyen `transport.settlement.report.read` — cung mot loai su that voi `summary`, chi chi tiet
+   * hon; mot ma quyen moi cho cung du lieu chi lam ma tran dai ra.
+   */
+  @Get('margin')
+  @RequiresTransportAction('transport.settlement.report.read')
+  async margin(): Promise<FinanceMarginView> {
+    try {
+      return await this.read.margin();
     } catch (error) {
       throw transportErrorToHttp(error);
     }

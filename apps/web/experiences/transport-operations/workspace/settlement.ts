@@ -1,10 +1,8 @@
 import {
   AGING_BUCKET_LABEL,
   agingBucketTone,
-  DIRECT_MARGIN_DISCLOSURE,
   EMPTY_VALUE,
   entityLabel,
-  formatBasisPoints,
   formatBusinessDate,
   formatCount,
   formatInstant,
@@ -12,7 +10,6 @@ import {
   SETTLEMENT_DOCUMENT_KIND_LABEL,
   SETTLEMENT_DOCUMENT_STATUS_LABEL,
   SETTLEMENT_FLOW_LABEL,
-  TRIP_KIND_LABEL,
   unresolvedReference,
   type StatusTone,
 } from '../customer-view';
@@ -20,8 +17,6 @@ import type {
   AgingBucket,
   ApByCounterpartyRow,
   ArAgingReport,
-  DirectMargin,
-  DirectMarginRollup,
   PartnerPosition,
   SettlementDocument,
   SettlementDocumentChain,
@@ -236,98 +231,6 @@ export const toPartnerPosition = (
         netDisplayLabel: formatMoney(position.netDisplay),
         netDisclosure: NET_DISPLAY_DISCLOSURE,
       };
-
-/* ------------------------------------------------------------------ *
- * Bien truc tiep
- * ------------------------------------------------------------------ */
-
-export interface DirectMarginModel {
-  readonly tripId: string;
-  readonly tripKindLabel: string;
-  readonly revenueLabel: string;
-  readonly directCostLabel: string;
-  readonly carrierPayableLabel: string;
-  readonly commissionLabel: string;
-  readonly deductionLabel: string;
-  readonly marginLabel: string;
-  readonly marginRateLabel: string;
-  /** LUON hien. `direct-margin.ts` cam man hinh bo cau nay hoac goi con so la "loi nhuan". */
-  readonly disclosure: string;
-  /** `true` khi chua nhap gia cuoc — khac han bien bang 0. */
-  readonly isRevenueMissing: boolean;
-  /** MOT MAU THUAN DU LIEU (`INV-04`), phai noi ra chu khong lang le cong vao. */
-  readonly inconsistencyNote: string | null;
-}
-
-export const UNEXPECTED_INTERNAL_COST_NOTE =
-  'Chuyến thuê xe ngoài nhưng lại có chi phí vận hành nội bộ. Đây là một mâu thuẫn dữ liệu cần ' +
-  'kiểm tra, không phải một con số nhỏ hơn.';
-
-export const REVENUE_MISSING_NOTE =
-  'Chuyến chưa nhập giá cước, nên chưa tính được biên. Đây khác với biên bằng 0.';
-
-export const toDirectMargin = (margin: DirectMargin | null): DirectMarginModel | null =>
-  margin === null
-    ? null
-    : {
-        tripId: margin.tripId,
-        tripKindLabel: TRIP_KIND_LABEL[margin.tripKind],
-        revenueLabel: formatMoney(margin.revenueAmount),
-        directCostLabel: formatMoney(margin.directCostAmount),
-        carrierPayableLabel: formatMoney(margin.carrierPayableAmount),
-        commissionLabel: formatMoney(margin.commissionAmount),
-        deductionLabel: formatMoney(margin.deductionAmount),
-        marginLabel: formatMoney(margin.marginAmount),
-        marginRateLabel: formatBasisPoints(margin.marginBasisPoints),
-        disclosure: margin.disclosure.length > 0 ? margin.disclosure : DIRECT_MARGIN_DISCLOSURE,
-        isRevenueMissing: margin.revenueAmount === null,
-        inconsistencyNote: margin.unexpectedInternalCost ? UNEXPECTED_INTERNAL_COST_NOTE : null,
-      };
-
-export interface DirectMarginRollupModel {
-  readonly revenueLabel: string;
-  readonly deductionLabel: string;
-  readonly marginLabel: string;
-  readonly marginRateLabel: string;
-  readonly tripCountLabel: string;
-  readonly skippedTripCountLabel: string;
-  /** Cau noi ra co bao nhieu chuyen KHONG duoc tinh — bo di la bao cao mot phan nhu ca thang. */
-  readonly coverageNote: string;
-  readonly disclosure: string;
-}
-
-export const toDirectMarginRollup = (
-  rollup: DirectMarginRollup | null,
-): DirectMarginRollupModel | null =>
-  rollup === null
-    ? null
-    : {
-        revenueLabel: formatMoney(rollup.revenueAmount),
-        deductionLabel: formatMoney(rollup.deductionAmount),
-        marginLabel: formatMoney(rollup.marginAmount),
-        marginRateLabel: formatBasisPoints(rollup.marginBasisPoints),
-        tripCountLabel: formatCount(rollup.tripCount),
-        skippedTripCountLabel: formatCount(rollup.skippedTripCount),
-        coverageNote:
-          rollup.skippedTripCount === 0
-            ? `Tính trên ${formatCount(rollup.tripCount)} chuyến.`
-            : `Tính trên ${formatCount(rollup.tripCount)} chuyến. ${formatCount(rollup.skippedTripCount)} chuyến chưa nhập giá cước nên không được tính vào.`,
-        disclosure: rollup.disclosure.length > 0 ? rollup.disclosure : DIRECT_MARGIN_DISCLOSURE,
-      };
-
-/**
- * Tran 200 chuyen/lan o may chu (route cong don lap tung chuyen). Chia lo o day thay vi de mot dia
- * chi qua dai bien route bao cao thanh mot cong tu choi dich vu.
- */
-export const ROLLUP_BATCH_LIMIT = 200;
-
-export const batchTripIds = (tripIds: readonly string[]): readonly (readonly string[])[] => {
-  const batches: string[][] = [];
-  for (let index = 0; index < tripIds.length; index += ROLLUP_BATCH_LIMIT) {
-    batches.push(tripIds.slice(index, index + ROLLUP_BATCH_LIMIT));
-  }
-  return batches;
-};
 
 /* ------------------------------------------------------------------ *
  * Chuoi chung tu — LICH SU SUA mot con so tien

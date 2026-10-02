@@ -1,5 +1,6 @@
 'use client';
 
+import { PermissionNote } from '../components/PermissionGate';
 import { MetricCard, PageHeader } from '../components/primitives';
 import { EmptyState, ErrorState, LoadingState } from '../components/SectionState';
 import {
@@ -38,11 +39,11 @@ export function OverviewView() {
   const trips = toSectionQuery(useTrips(navigation));
   const reconciliations = toSectionQuery(useReconciliations(navigation));
 
-  if (!hasOperationsScope(navigation.role)) {
+  if (!hasOperationsScope(navigation)) {
     return (
       <>
         <PageHeader title="Tổng quan" />
-        <ErrorState message={operationsEmptyMessage(navigation.role)} />
+        <ErrorState message={operationsEmptyMessage(navigation)} />
       </>
     );
   }
@@ -79,6 +80,18 @@ export function OverviewView() {
       {firstError === null ? null : <ErrorState message={firstError} onRetry={retryFailed} />}
       {isLoading ? <LoadingState label="Đang đọc số liệu vận hành…" /> : null}
       {model.operationsNotice === null ? null : <EmptyState title={model.operationsNotice} />}
+      {/*
+        `#395` — the PHU (don dang mo, chuyen lap tay, ky doi soat) KHONG hien khi thieu quyen: mot
+        cau noi thieu gi, thay vi mot the vang mat khong ly do.
+      */}
+      <PermissionNote
+        viewer={navigation}
+        actions={[
+          'transport.order.read',
+          'transport.trip.read',
+          'transport.fuel.reconciliation.read',
+        ]}
+      />
 
       <section className="tx-cards" aria-label="Số liệu vận hành">
         {model.stats.map((stat) => (

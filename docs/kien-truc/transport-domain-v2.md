@@ -816,6 +816,35 @@ chưa phân công xe (`PROJECTION_TRIP_HAS_NO_VEHICLE`).
 chiều khoá ngoại chỉ đi **một hướng**: bảng mới → bảng cũ. `MV-IT-05` đọc lại chuyến sau khi chiếu
 và đối chiếu từng trường để khoá tính chất này bằng một bài đo, không bằng một câu trong tài liệu.
 
+### 12.6. `#379` as-built — toạ độ điểm lấy / điểm giao của `TransportOrder`
+
+Từ `#379`, **toạ độ là sự thật** về vị trí của một đơn; `originLabel` / `destinationLabel` chỉ còn
+để hiển thị. Trước đó điều xe phải *đoán* điểm lấy hàng bằng cách so nhãn chữ với tên hàng rào.
+
+| Thứ | Hình dạng |
+|---|---|
+| Cột | `originLatitude` · `originLongitude` · `destinationLatitude` · `destinationLongitude` — `DOUBLE PRECISION`, **NULL-được, không `DEFAULT`**, cùng kiểu với `TransportGeofence` (giữ đường thêm cột `geography` sinh sau này, §3.1) |
+| Miền | `Order.originPoint` / `Order.destinationPoint: GeoPoint \| null` (`movement.types.ts`); hai cột thiếu một ⇒ cả điểm là `null` |
+| Biên HTTP | `POST /transport/orders` **bắt buộc** `originPoint` + `destinationPoint` `{ latitude, longitude }` (`.strict()`, không chặn khoảng ở zod). `PATCH` **không** sửa toạ độ. Mọi `GET`/`POST`/`PATCH` trả `Order` kèm hai trường (`null` với đơn cũ) |
+| Ngưỡng duy nhất | `parseGeoPoint` (`geo/geo-point.ts`). Từ chối ⇒ `400` `ORDER_ORIGIN_POINT_INVALID` / `ORDER_DESTINATION_POINT_INVALID`, không ghi hàng nào |
+| Quyết định | điểm `order.location` (`movement-decisions.ts`): `ORDER_LOCATION_CAPTURED` · `ORDER_LOCATION_ABSENT` · `ORDER_ORIGIN_POINT_REJECTED` · `ORDER_DESTINATION_POINT_REJECTED`. `detail` **không** mang toạ độ — chỉ mã từ chối, cờ có/không có điểm và cờ "ngoài vùng hoạt động" (gắn cờ, không từ chối) |
+| Đơn không có toạ độ | Đơn cũ trước `#379`, đơn chiếu từ chuyến v1 (`planOrderProjection` ghi `null` **tường minh**), đơn seed mẫu. **Không backfill, không geocode nhãn cũ** — một toạ độ đoán sai còn tệ hơn không có, vì điều xe sẽ tin nó |
+
+Ràng buộc SQL thô — migration `20260923140000_transport_order_location_points/` (kèm
+`README-rollback.sql`); mọi hàng cũ có bốn cột `NULL` nên thoả ngay, không cần bước vá dữ liệu:
+
+| Ràng buộc | Nó chặn gì |
+|---|---|
+| `TransportOrder_origin_point_paired` · `TransportOrder_destination_point_paired` | Nửa cặp toạ độ (có vĩ độ, mất kinh độ) — không phải một điểm trên mặt đất |
+| `TransportOrder_origin_latitude_range` · `_origin_longitude_range` · `_destination_latitude_range` · `_destination_longitude_range` | Ngoài `[-90, 90]` / `[-180, 180]` — cùng khoảng với `parseGeoPoint` |
+| `TransportOrder_origin_not_null_island` · `TransportOrder_destination_not_null_island` | `(0, 0)` — dấu hiệu định vị **chưa có**. Biểu thức `abs(lat) >= 1e-9 OR abs(lng) >= 1e-9` là phủ định **đúng chữ** của `parseGeoPoint` (từ chối khi cả hai `< 1e-9`), kể cả dấu `>=`: điểm `(1e-9, 0)` được cả hai tầng nhận, `(0, 0)` bị cả hai từ chối |
+
+Nghiệm thu: `transport-order-location-storage.spec.ts` (đọc thẳng migration: tên + thân từng
+`CHECK`, chỉ `ADD COLUMN`/`ADD CONSTRAINT`, không `DROP`/`DEFAULT`/backfill, có đường lui) ·
+`movement.schemas.spec.ts` · `order-location.spec.ts` · `trip-order-projection.spec.ts` (khoá
+`null` tường minh) · `transport-movement.int.spec.ts` `MV-IT-379-01`…`04` trên Postgres thật (toạ độ
+khứ hồi không mất chữ số; hàng cũ đọc ra `null`; từng `CHECK` từ chối lần ghi thẳng theo **tên**;
+`MV-IT-379-05` khoá biên null island `(1e-9, 0)` nhận / `(0, 0)` từ chối ở cả tầng miền lẫn DB).
 
 ---
 

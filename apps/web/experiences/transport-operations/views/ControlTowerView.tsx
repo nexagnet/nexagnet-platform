@@ -30,11 +30,11 @@ export function ControlTowerView() {
   const navigation = useNavigationInput();
   const tower = toSectionQuery(useControlTower(navigation));
 
-  if (!hasOperationsScope(navigation.role)) {
+  if (!hasOperationsScope(navigation)) {
     return (
       <>
         <PageHeader title="Bảng điều hành" />
-        <ErrorState message={operationsEmptyMessage(navigation.role)} />
+        <ErrorState message={operationsEmptyMessage(navigation)} />
       </>
     );
   }

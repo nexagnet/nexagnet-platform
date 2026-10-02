@@ -495,6 +495,12 @@ const transportCorePolicySchema = z
  * Bai xe la CO SO VAN HANH CUA B, khong phai mot `TransportCounterparty` — L5 goi ten dung cho de
  * nham lan nay. Nen no la cau hinh cua goi khach chu khong mot hang trong danh muc phap nhan.
  *
+ * `#395` — `depots` LA CAU HINH KHOI DAU CU. Tu #395 Giam doc khai bai xe tren man "Dia diem van
+ * hanh" (hang rao `DEPOT`, capability `transport-proof`), va do la nguon su that: co BAT KY hang rao
+ * `DEPOT` nao (ke ca da tat) thi khoi nay bi BO QUA hoan toan. Khoi nay chi con dung cho khach CHUA
+ * co bai xe nao duoc quan ly — vd khach chi bat `transport-core`, khong co so hang rao. Goi khach moi
+ * co `transport-proof` khong nen khai no.
+ *
  * ============================================================================================
  * `closure.idleHours` KHONG CO MAC DINH — VA DO LA CAU TRA LOI TRUNG THUC
  * ============================================================================================

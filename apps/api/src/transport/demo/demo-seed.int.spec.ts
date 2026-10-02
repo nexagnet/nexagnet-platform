@@ -1,7 +1,17 @@
 import { loadTenantConfig, resetTenantCache } from '@netviet/tenant';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { AuditLogService } from '../../audit/audit-log.service.js';
+import { PrismaAuditLogRepository } from '../../audit/prisma-audit-log.repository.js';
+import { PrismaUserRepository } from '../../auth/prisma-user.repository.js';
 import { PrismaService } from '../../config/prisma.service.js';
+import { PrismaCounterpartyRepository } from '../counterparty/prisma-counterparty.repository.js';
+import { PrismaCounterpartySiteRepository } from '../counterparty/prisma-counterparty-site.repository.js';
+import { CounterpartySiteService } from '../counterparty/site.service.js';
+import { DriverAccountLinkService } from '../fleet/driver-account-link.service.js';
 import { PrismaFleetRepository } from '../fleet/prisma-fleet.repository.js';
+import { TransportDomainError } from '../transport.errors.js';
+import { KnownPlacesFactsAdapter } from '../places/known-places.port.js';
+import { PrismaGeofenceRepository } from '../proof/geofence.repository.js';
 import { PrismaTripRepository } from '../trips/prisma-trip.repository.js';
 import { calculatePayslip } from '../workforce/payroll-calculator.js';
 import { WorkforceCoreFactsAdapter } from '../workforce/workforce.ports.js';
@@ -9,7 +19,15 @@ import { loadDemoMonthDataset } from './demo-dataset.js';
 import { DEMO_RESET_ENV, DEMO_RESET_TOKEN } from './demo-guard.js';
 import { buildDemoPlan } from './demo-plan.js';
 import {
+  DEMO_COUNTERPARTY_NOTE,
+  DEMO_DEPOT_MARKER,
+  DEMO_SITE_MARKERS,
+  SYNTHETIC_POINT_NOTE,
+  backfillDemoPlaceMarkers,
+} from './demo-places.js';
+import {
   backfillDemoPersonaLogins,
+  backfillDemoPersonaLoginsReport,
   resetTransportDemoData,
   seedTransportDemoMonth,
 } from './demo-seed.js';
@@ -342,6 +360,115 @@ describe.runIf(RUN)('Gieo thang van hanh mau (Postgres THAT)', () => {
     expect(await prisma.transportTrip.count()).toBe(before);
   });
 
+  /* ------------------------------------------------------------------ *
+   * #395 — noi tai khoan qua man hinh quan tri vs may gieo / lenh reset
+   * ------------------------------------------------------------------ */
+
+  const linkService = (fleet = new PrismaFleetRepository(prisma)) =>
+    new DriverAccountLinkService(
+      fleet,
+      new PrismaUserRepository(prisma),
+      new AuditLogService(new PrismaAuditLogRepository(prisma)),
+    );
+  const demoDriver = (index: number) =>
+    prisma.transportDriver.findFirstOrThrow({
+      where: { phone: loadDemoMonthDataset().drivers[index]?.phone },
+    });
+  const TEST_DRIVER_PW = 'mat-khau-chi-dung-trong-bai-test';
+  const backfill = () =>
+    backfillDemoPersonaLoginsReport(prisma, {
+      driverPassword: TEST_DRIVER_PW,
+      hashPassword: async (plain) => `${HASH_MARKER}${plain}`,
+    });
+
+  /**
+   * Buoc tao bu chay o MOI lan khoi dong stack xem truoc. Truoc #395 no noi lai moi ho so dang
+   * trong: Giam doc go noi tren man hinh, lan khoi dong sau no am tham noi lai; Giam doc chuyen noi
+   * `lx.a` sang ho so khac, lan khoi dong sau no chet o `authUserId @unique`.
+   */
+  it('#395: go noi / chuyen noi qua dich vu — lan tao bu sau KHONG noi lai, KHONG nem', async () => {
+    const service = linkService();
+    const a = await demoDriver(0);
+    const b = await demoDriver(1);
+    const loginA = a.authUserId as string;
+
+    await service.setDriverAccount(b.id, null, 'giam-doc');
+    await service.setDriverAccount(a.id, null, 'giam-doc');
+    await service.setDriverAccount(b.id, loginA, 'giam-doc');
+
+    const report = await backfill();
+
+    expect(report.skipped.map((skip) => [skip.driverId, skip.reason])).toEqual(
+      expect.arrayContaining([[a.id, 'DRIVER_UNLINKED_BY_DIRECTOR']]),
+    );
+    expect(
+      (await prisma.transportDriver.findUniqueOrThrow({ where: { id: a.id } })).authUserId,
+    ).toBeNull();
+    expect(
+      (await prisma.transportDriver.findUniqueOrThrow({ where: { id: b.id } })).authUserId,
+    ).toBe(loginA);
+    const trail = await prisma.auditLog.findMany({
+      where: { actor: 'giam-doc', entityType: 'TransportDriver', entityId: { in: [a.id, b.id] } },
+      select: { action: true },
+    });
+    expect(trail.map((row) => row.action).sort()).toEqual([
+      'transport.driver.account_link',
+      'transport.driver.account_unlink',
+      'transport.driver.account_unlink',
+    ]);
+  });
+
+  /** Hinh dang loi THAT cua Prisma tren Postgres — khong phai mot doi tuong gia trong bo nho. */
+  it('#395: hai lan noi dua nhau — unique cua Postgres doi thanh `DRIVER_ACCOUNT_TAKEN`', async () => {
+    class StaleFleet extends PrismaFleetRepository {
+      // Doc CU: lan noi kia chua commit luc lan nay kiem.
+      override async findDriverByAuthUserId(): Promise<null> {
+        return null;
+      }
+    }
+    const a = await demoDriver(0);
+    const b = await demoDriver(1);
+    expect(a.authUserId).toBeNull();
+
+    const error = await linkService(new StaleFleet(prisma))
+      .setDriverAccount(a.id, b.authUserId as string, 'giam-doc')
+      .catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(TransportDomainError);
+    expect(error).toMatchObject({ kind: 'CONFLICT', reason: 'DRIVER_ACCOUNT_TAKEN' });
+  });
+
+  /**
+   * Lenh reset xoa tai khoan THEO TEN cua nhan vat mau — khong con xoa "moi tai khoan co ho so lai
+   * xe tro toi". Mot tai khoan Giam doc tao va noi vao mot lai xe mau phai song sot.
+   */
+  it('#395: tai khoan Lai xe do Giam doc tao, noi vao lai xe mau, SONG SOT sau reset', async () => {
+    const username = 'it-s2-lai-xe-that';
+    const unusableHash = `${HASH_MARKER}khong-dung`;
+    await prisma.user.deleteMany({ where: { username } });
+    const real = await prisma.user.create({
+      data: { username, name: 'Lai xe that (IT #395)', passwordHash: unusableHash, role: 'SALE' },
+    });
+    try {
+      const a = await demoDriver(0);
+      await linkService().setDriverAccount(a.id, real.id, 'giam-doc');
+
+      const deleted = await resetTransportDemoData(prisma, resetEnv);
+
+      expect(await prisma.transportDriver.count()).toBe(0);
+      expect(await prisma.user.findUnique({ where: { id: real.id } })).not.toBeNull();
+      // Nhan vat mau VAN bi xoa het (ke ca `lx.a` da bi chuyen noi o bai tren): gieo lai chay duoc.
+      const logins = loadDemoMonthDataset().drivers.map((driver) => driver.login);
+      expect(await prisma.user.count({ where: { username: { in: logins } } })).toBe(0);
+      expect(deleted['user']).toBeGreaterThan(0);
+
+      const reseeded = await seed();
+      expect(reseeded.skipped).toBe(false);
+    } finally {
+      await prisma.user.deleteMany({ where: { id: real.id } });
+    }
+  }, 300_000);
+
   /**
    * XOA ROI GIEO LAI PHAI TRA VE DUNG TRANG THAI DO — do la dinh nghia cua "lenh reset an toan".
    *
@@ -407,4 +534,105 @@ describe.runIf(RUN)('Gieo thang van hanh mau (Postgres THAT)', () => {
     expect(later.trips.map((trip) => trip.code)).toEqual(here.trips.map((trip) => trip.code));
     expect(later.trips[0]?.businessDate).not.toBe(here.trips[0]?.businessDate);
   });
+
+  /**
+   * DIEM DIA DIEM MAU (#379) tren Postgres THAT — hai lan khoi dong CHONG NHAU (Railway chay buoc
+   * nay o moi lan api len): Serializable + thu lai mot lan phai ra DUNG mot ban cua moi diem, khong
+   * loi nem ra, khong mot dong lien ket khach nao.
+   *
+   * Hang rao/phap nhan/dia diem khong nam trong danh sach reset, nen bai tu don hang cua CHINH may
+   * gieo (`recordedBy = demo-seed` / ghi chu cua may gieo) truoc — de lan chay song song that su
+   * phai tao, chu khong chi cung doc thay "da gieo".
+   */
+  it('diem dia diem mau: hai lan chay song song ra dung mot ban, lan sau khong tao gi', async () => {
+    const siteNames = DEMO_SITE_MARKERS.map((marker) => marker.siteName);
+    const labels = [DEMO_DEPOT_MARKER.label, ...siteNames];
+    await prisma.transportGeofence.deleteMany({
+      where: { recordedBy: 'demo-seed', label: { in: labels } },
+    });
+    await prisma.transportCounterpartySite.deleteMany({
+      where: {
+        recordedBy: 'demo-seed',
+        name: { in: siteNames },
+        intakes: { none: {} },
+        operationalDocuments: { none: {} },
+      },
+    });
+    await prisma.transportCounterparty.deleteMany({
+      where: { note: DEMO_COUNTERPARTY_NOTE, sites: { none: {} }, acceptances: { none: {} } },
+    });
+    const linksBefore = await prisma.transportCounterpartyLink.count();
+
+    const [first, second] = await Promise.all([
+      backfillDemoPlaceMarkers(prisma),
+      backfillDemoPlaceMarkers(prisma),
+    ]);
+
+    expect(first.created.geofence + second.created.geofence).toBe(labels.length);
+    for (const result of [first, second]) {
+      const seeded = result.skipped.filter((entry) => entry.reason === 'MARKER_ALREADY_SEEDED');
+      expect(result.created.geofence + seeded.length).toBe(labels.length);
+    }
+    for (const label of labels) {
+      expect(
+        await prisma.transportGeofence.count({ where: { recordedBy: 'demo-seed', label } }),
+      ).toBe(1);
+    }
+    for (const name of siteNames) {
+      expect(
+        await prisma.transportCounterpartySite.count({ where: { recordedBy: 'demo-seed', name } }),
+      ).toBe(1);
+    }
+    expect(await prisma.transportCounterpartyLink.count()).toBe(linksBefore);
+
+    const third = await backfillDemoPlaceMarkers(prisma);
+    expect(third).toEqual({
+      created: { counterparty: 0, counterpartySite: 0, geofence: 0 },
+      skipped: labels.map((label) => ({ label, reason: 'MARKER_ALREADY_SEEDED' })),
+    });
+  }, 120_000);
+
+  /** Doc lai DUNG qua cong "dia diem da biet" ma man tao don dung — ten phap nhan doc theo lo. */
+  it('diem dia diem mau doc lai qua so hang rao, ghi ro toa do tong hop', async () => {
+    await backfillDemoPlaceMarkers(prisma);
+
+    const known = await new KnownPlacesFactsAdapter(
+      new PrismaGeofenceRepository(prisma),
+      new CounterpartySiteService(
+        new PrismaCounterpartySiteRepository(prisma),
+        new PrismaCounterpartyRepository(prisma),
+      ),
+      new PrismaCounterpartyRepository(prisma),
+    ).listKnownPlaces();
+    const ours = known.filter((place) =>
+      ['Bãi xe Hà Nội', 'Nhà máy thép Đình Vũ', 'Kho Nhựa Tân Phú Hưng'].includes(place.name),
+    );
+    expect(
+      ours.map((place) => [place.kind, place.name, place.detail, place.point, place.radiusMetres]),
+    ).toEqual([
+      ['DEPOT', 'Bãi xe Hà Nội', null, { latitude: 20.9652, longitude: 105.8468 }, 250],
+      [
+        'COUNTERPARTY_SITE',
+        'Kho Nhựa Tân Phú Hưng',
+        'Công ty TNHH Nhựa Tân Phú Hưng',
+        { latitude: 21.617, longitude: 105.817 },
+        250,
+      ],
+      [
+        'COUNTERPARTY_SITE',
+        'Nhà máy thép Đình Vũ',
+        'Công ty CP Thép Đông Á',
+        { latitude: 20.8264, longitude: 106.7752 },
+        300,
+      ],
+    ]);
+
+    const fences = await prisma.transportGeofence.findMany({
+      where: { id: { in: ours.map((place) => place.id) } },
+    });
+    for (const fence of fences) {
+      expect(fence.note).toBe(SYNTHETIC_POINT_NOTE);
+      expect(fence.recordedBy).toBe('demo-seed');
+    }
+  }, 120_000);
 });

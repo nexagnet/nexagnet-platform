@@ -1,6 +1,6 @@
 import type { GeoPoint } from '../geo/geo-point.js';
 import { gradeAccuracy, type AccuracyPolicy } from '../geo/location-quality.js';
-import type { RunLegStatus, VehicleRunStatus } from '../movement/movement.types.js';
+import type { RunLegKind, RunLegStatus, VehicleRunStatus } from '../movement/movement.types.js';
 import type { LocationSource } from '../proof/tracking.types.js';
 import type {
   LocationFreshness,
@@ -119,6 +119,11 @@ export interface RemainingLegFact {
   readonly runId: string;
   readonly orderId: string | null;
   readonly sequence: number;
+  /**
+   * `LOADED`/`EMPTY` — can de biet diem den cua chang lay tu DAU (#379): chang co tai di toi diem
+   * GIAO cua don no cho, chang rong dung ngay truoc mot chang co tai di toi diem LAY cua don ke.
+   */
+  readonly kind: RunLegKind;
   readonly status: RunLegStatus;
   readonly originLabel: string;
   readonly destinationLabel: string;

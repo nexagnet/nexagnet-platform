@@ -1,6 +1,11 @@
-import { BadRequestException } from '@nestjs/common';
-import { beforeEach, describe, expect, it } from 'vitest';
+import 'reflect-metadata';
+import { BadRequestException, HttpException, type ExecutionContext } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import type { AuthenticatedUser, UserRole } from '../../auth/auth.types.js';
 import type { AuthenticatedRequest } from '../../auth/session.types.js';
+import type { PermissionGrant } from '../permissions/transport-permission-rules.js';
+import { TransportActionGuard } from '../transport-action.guard.js';
 import { InMemoryGeofenceRepository } from './geofence.repository.js';
 import { GeofenceService } from './geofence.service.js';
 import {
@@ -349,5 +354,126 @@ describe('Bien gioi HTTP cua be mat nguoi duyet — PROOF-100', () => {
         BadRequestException,
       );
     });
+  });
+});
+
+/**
+ * ROUTE CU `POST /transport/geofences` KHONG LA CUA SAU cua man "Dia diem van hanh" (`#395`).
+ *
+ * Tu #395 Giam doc cap duoc `transport.geofence.manage` cho Dieu hanh. Cong route (`@Roles('ADMIN')`
+ * nhuong cho `TransportActionGuard`) de nguoi do qua — nen luat "dia diem cua don vi khac can
+ * THEM `transport.counterparty.manage`" phai nam trong CHINH route, nhu o `PlaceAdminService`.
+ */
+describe('route cu khai hang rao o che do session (#395)', () => {
+  const previous = { mode: process.env.AUTH_MODE, key: process.env.SESSION_SECRET };
+  let controller: ProofReviewController;
+
+  const userOf = (role: UserRole, grants: readonly PermissionGrant[] = []): AuthenticatedUser =>
+    ({
+      id: `user-${role}`,
+      username: `nguoi-${role.toLowerCase()}`,
+      name: `Người ${role}`,
+      role,
+      permissionGrants: grants,
+    }) as unknown as AuthenticatedUser;
+  const requestOf = (user: AuthenticatedUser): AuthenticatedRequest =>
+    ({ authUser: user, headers: {} }) as unknown as AuthenticatedRequest;
+  const GEOFENCE_ONLY = userOf('MANAGER', [
+    { permission: 'transport.geofence.manage', effect: 'ALLOW' },
+  ]);
+  const WITH_COUNTERPARTY = userOf('MANAGER', [
+    { permission: 'transport.geofence.manage', effect: 'ALLOW' },
+    { permission: 'transport.counterparty.manage', effect: 'ALLOW' },
+  ]);
+  const body = (subjectKind: string, subjectId: string | undefined, label: string) => ({
+    label,
+    subjectKind,
+    ...(subjectId === undefined ? {} : { subjectId }),
+    latitude: DEPOT.latitude,
+    longitude: DEPOT.longitude,
+    radiusMetres: 200,
+  });
+
+  const refusal = async (run: Promise<unknown>): Promise<{ status: number; body: unknown }> => {
+    try {
+      await run;
+    } catch (error) {
+      if (!(error instanceof HttpException)) throw error;
+      return { status: error.getStatus(), body: error.getResponse() };
+    }
+    throw new Error('Mong doi mot loi, nhung loi goi thanh cong');
+  };
+
+  beforeEach(() => {
+    process.env.AUTH_MODE = 'session';
+    process.env.SESSION_SECRET = 's'.repeat(48);
+    const facts = new FakeCoreFacts();
+    controller = new ProofReviewController(
+      new OperationalProofService(
+        new InMemoryOperationalProofRepository(),
+        new InMemoryTrackingRepository(),
+        facts,
+        { timeZone: 'Asia/Ho_Chi_Minh' },
+        new InMemoryProofChallengeRepository(),
+        DEFAULT_TRANSPORT_PROOF_POLICY,
+        undefined,
+        () => T0,
+      ),
+      new GeofenceService(new InMemoryGeofenceRepository(), DEFAULT_TRANSPORT_PROOF_POLICY),
+    );
+  });
+
+  afterEach(() => {
+    if (previous.mode === undefined) delete process.env.AUTH_MODE;
+    else process.env.AUTH_MODE = previous.mode;
+    if (previous.key === undefined) delete process.env.SESSION_SECRET;
+    else process.env.SESSION_SECRET = previous.key;
+  });
+
+  it('cong route de Dieu hanh chi co quyen hang rao di qua — nen luat phai nam trong route', () => {
+    const guard = new TransportActionGuard(new Reflector());
+    const context = {
+      getHandler: () => ProofReviewController.prototype.register,
+      getClass: () => ProofReviewController,
+      switchToHttp: () => ({ getRequest: () => requestOf(GEOFENCE_ONLY) }),
+    } as unknown as ExecutionContext;
+    expect(guard.canActivate(context)).toBe(true);
+  });
+
+  it.each([
+    ['dia diem cua doi tac', 'COUNTERPARTY_SITE', 'site-cua-cong-ty-khac'],
+    ['dia diem khach hang kieu cu', 'CUSTOMER', 'khach-1'],
+  ])(
+    '%s: chi co quyen hang rao -> 403 PLACE_SITE_REQUIRES_COUNTERPARTY_MANAGE',
+    async (_l, kind, id) => {
+      const refused = await refusal(
+        controller.register(requestOf(GEOFENCE_ONLY), body(kind, id, `Nơi ${kind}`)),
+      );
+      expect(refused).toMatchObject({
+        status: 403,
+        body: { reason: 'PLACE_SITE_REQUIRES_COUNTERPARTY_MANAGE' },
+      });
+      expect(await controller.list()).toEqual([]);
+    },
+  );
+
+  it('dia diem cua chinh cong ty (bai xe, diem tam) van chi can quyen hang rao', async () => {
+    const depot = await controller.register(
+      requestOf(GEOFENCE_ONLY),
+      body('DEPOT', 'kho-hp', 'Bãi xe Hải Phòng'),
+    );
+    const adHoc = await controller.register(
+      requestOf(GEOFENCE_ONLY),
+      body('AD_HOC', undefined, 'Điểm tạm Đình Vũ'),
+    );
+    expect([depot.subjectKind, adHoc.subjectKind]).toEqual(['DEPOT', 'AD_HOC']);
+  });
+
+  it('co them quyen doi tac -> khai duoc dia diem cua don vi khac', async () => {
+    const site = await controller.register(
+      requestOf(WITH_COUNTERPARTY),
+      body('COUNTERPARTY_SITE', 'site-1', 'Nhà máy Đình Vũ'),
+    );
+    expect(site.subjectKind).toBe('COUNTERPARTY_SITE');
   });
 });

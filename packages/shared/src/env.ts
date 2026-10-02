@@ -9,6 +9,18 @@ const MIN_ADMIN_PASSWORD_LENGTH = 16;
 const MIN_ADMIN_COOKIE_SECRET_LENGTH = 32;
 
 /**
+ * CSV ten dang nhap → danh sach da chuan hoa (bo khoang trang, chu thuong, bo rong, bo trung).
+ * Chu thuong vi `AuthService` luu ten dang nhap o dang chu thuong — so khop phai cung mot dang.
+ */
+export function parseUsernameList(value: string): readonly string[] {
+  const names = value
+    .split(',')
+    .map((name) => name.trim().toLocaleLowerCase('en-US'))
+    .filter((name) => name.length > 0);
+  return [...new Set(names)];
+}
+
+/**
  * Schema bien moi truong dung chung cho toan he thong.
  * Nguyen tac (CLAUDE.md - Luu y bao mat): khong hardcode secret,
  * validate ngay khi khoi dong, fail fast voi thong bao ro rang.
@@ -54,6 +66,15 @@ export const envSchema = z.object({
     .int()
     .positive()
     .default(8 * 60 * 60 * 1_000),
+  // TAI KHOAN HE THONG (#395), CSV ten dang nhap — vd tai khoan van hanh ma `bootstrap-auth-user.mjs`
+  // tao va moi lan smoke dang nhap. Man hinh quan tri KHONG khoa / ha vai / doi quyen / dat lai mat
+  // khau duoc cac tai khoan nay (ly do `PROTECTED_SERVICE_ACCOUNT`): lam vay se lam lan trien khai
+  // SAU chet o buoc bootstrap. De rong = khong tai khoan nao duoc bao ve. Deploy GCP truyen
+  // `PILOT_OPERATOR_USERNAME` vao day (`deploy/netviet/compose.yaml`, service `api`).
+  PROTECTED_ACCOUNT_USERNAMES: z
+    .string()
+    .default('')
+    .transform((value) => parseUsernameList(value)),
   // De trong duoc o local; cac module dung den (parser, bot) tu kiem tra khi bat.
   ANTHROPIC_API_KEY: z.string().optional(),
   DEEPSEEK_API_KEY: z.string().optional(),

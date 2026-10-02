@@ -44,6 +44,12 @@ export default defineConfig({
     reuseExistingServer: false,
     timeout: 120_000,
     // `NEXT_PUBLIC_API_URL=''` lam moi loi goi API thanh duong TUONG DOI, nen `page.route` chan duoc.
-    env: { ...process.env, TENANT_DIR: TOLL_TENANT_DIR, NEXT_PUBLIC_API_URL: '' },
+    env: {
+      ...process.env,
+      TENANT_DIR: TOLL_TENANT_DIR,
+      NEXT_PUBLIC_API_URL: '',
+      // Nen ban do mac dinh cua san pham (OpenFreeMap) goi Internet; CI bat buoc thi khong (#374).
+      NEXT_PUBLIC_TRANSPORT_MAP_PROVIDER: 'local',
+    },
   },
 });

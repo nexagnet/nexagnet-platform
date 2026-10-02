@@ -56,12 +56,26 @@ describe('planOrderProjection — chieu chuyen v1 sang NGHIA VU v2', () => {
         businessDate: '2026-09-08',
         originLabel: 'Ha Noi',
         destinationLabel: 'Hai Phong',
+        // #379: chuyen v1 khong co toa do => `null` TUONG MINH, khong geocode nhan thanh diem.
+        originPoint: null,
+        destinationPoint: null,
         customerId: 'khach-1',
         cargoDescription: 'Thep cuon',
         freightAmount: 5_000_000,
         note: 'Chieu tu chuyen CH-001',
       },
     });
+  });
+
+  it('#379: don chieu tu chuyen v1 mang toa do NULL tuong minh, khong bia tu nhan', () => {
+    const outcome = planOrderProjection(trip({ originLabel: 'Bai xe Ha Noi' }));
+
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) return;
+    // `toHaveProperty(..., null)` chu khong phai `toBeFalsy`: `undefined` nghia la "quen ghi",
+    // `null` nghia la "da quyet dinh khong co toa do". Chi cai sau la bat bien.
+    expect(outcome.order).toHaveProperty('originPoint', null);
+    expect(outcome.order).toHaveProperty('destinationPoint', null);
   });
 
   it.each(['EXTERNAL_CARRIER', 'PARTNER_REFERRED_INTERNAL_RUN', 'OWN_DIRECT'] as const)(

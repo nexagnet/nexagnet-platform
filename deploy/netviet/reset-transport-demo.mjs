@@ -4,6 +4,7 @@ import process from 'node:process';
 import { PrismaClient } from '../../apps/api/node_modules/@prisma/client/default.js';
 import { argon2id, hash } from '../../apps/api/node_modules/argon2/argon2.cjs';
 import { DemoTenantGuardError } from '../../apps/api/dist/transport/demo/demo-guard.js';
+import { backfillDemoPlaceMarkers } from '../../apps/api/dist/transport/demo/demo-places.js';
 import {
   resetTransportDemoData,
   seedTransportDemoMonth,
@@ -56,6 +57,25 @@ import {
  * `deploy-stack.sh`.
  */
 
+/** Tom tat DAY DU: nguoi van hanh vua go lenh reset bang tay, nen in ca cac diem "da gieo". */
+async function backfillPlaceMarkersWithoutBlocking(client) {
+  try {
+    const places = await backfillDemoPlaceMarkers(client);
+    const created = Object.entries(places.created)
+      .map(([key, count]) => `${key}=${count}`)
+      .join(' ');
+    const skipped = places.skipped.map((entry) => `${entry.label}=${entry.reason}`).join(', ');
+    process.stdout.write(
+      `Diem dia diem mau: tao ${created}; bo qua ${skipped.length > 0 ? skipped : 'khong'}\n`,
+    );
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    console.error(
+      `Khong gieo duoc diem dia diem mau (bo qua, du lieu van tai da gieo lai xong): ${reason}`,
+    );
+  }
+}
+
 const prisma = new PrismaClient();
 try {
   const hashPassword = (plain) => hash(plain, { type: argon2id });
@@ -78,6 +98,10 @@ try {
       .join(' ');
     process.stdout.write(`Da gieo lai thang van hanh mau (moc ${result.anchor}): ${summary}\n`);
     if (result.driverLoginNote !== null) process.stdout.write(`${result.driverLoginNote}\n`);
+    // Diem dia diem mau (#379): hang rao/phap nhan/dia diem SONG SOT lenh xoa o tren, nen lan nay
+    // thuong khong tao gi. Hong thi GHI LOI va di tiep: du lieu van tai da gieo lai xong, va diem
+    // mau chi la tien ich trinh dien — mot lan reset thanh cong khong duoc thanh ma thoat do vi no.
+    await backfillPlaceMarkersWithoutBlocking(prisma);
   }
 } catch (error) {
   if (error instanceof DemoTenantGuardError) {

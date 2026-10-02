@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { useTenantRuntime } from '../../../lib/tenant-runtime-context';
+import { PermissionGate, PermissionNote } from '../components/PermissionGate';
 import { PageHeader } from '../components/primitives';
 import { EmptyState, ErrorState } from '../components/SectionState';
 import {
@@ -20,6 +21,7 @@ import {
   useTrips,
   useVehicles,
 } from '../hooks/useTransportWorkspace';
+import { canPerformAll } from '../transport-actions';
 import type { ApByCounterpartyRow, SettlementFlow } from '../transport-types';
 import { toAssetDirectory } from '../workspace/assets';
 import {
@@ -71,6 +73,16 @@ export function ExportsView() {
   const commissionAp = toSectionQuery(useApByFlow(navigation, 'PARTNER_COMMISSION'));
   const fuelAp = toSectionQuery(useApByFlow(navigation, 'FUEL_SUPPLIER'));
 
+  /**
+   * `#395` — ban xuat CHUYEN XE la ban chinh cua muc (va la cong cua muc). Moi ban xuat con lai doc
+   * mot so rieng voi ma cua no: thieu quyen thi khoi do NOI mot cau, khong con mot nut xam khong ly
+   * do hay mot o chon rong.
+   */
+  const canExportFund = canPerformAll(navigation, [
+    'transport.costing.driver_fund.read',
+    'transport.driver.read',
+  ]);
+
   const settlementDirectory = useMemo(
     () => toSettlementDirectory({ customers: customers.data ?? [], partners: partners.data ?? [] }),
     [customers.data, partners.data],
@@ -121,6 +133,11 @@ export function ExportsView() {
       />
 
       {failure === null ? null : <ErrorState message={failure} />}
+      {/* Ten khach, doi tac, bien so trong tep: thieu danh ba thi tep ghi "chưa đọc được tên". */}
+      <PermissionNote
+        viewer={navigation}
+        actions={['transport.customer.read', 'transport.partner.read', 'transport.vehicle.read']}
+      />
 
       <section className="tx-panel" aria-label="Kết xuất không cần chọn thêm">
         <h2>Xuất ngay</h2>
@@ -133,117 +150,135 @@ export function ExportsView() {
           >
             Chuyến xe ({(trips.data ?? []).length})
           </button>
-          <button
-            type="button"
-            className="tx-btn"
-            disabled={aging.data === undefined}
-            onClick={() =>
-              run(() =>
-                aging.data === undefined
-                  ? null
-                  : arAgingCsv(aging.data, settlementDirectory, stamp),
-              )
-            }
-          >
-            Công nợ phải thu
-          </button>
-          <button
-            type="button"
-            className="tx-btn"
-            disabled={apByFlow.size === 0}
-            onClick={() => run(() => apCsv(apByFlow, settlementDirectory, stamp))}
-          >
-            Công nợ phải trả
-          </button>
+          <PermissionGate viewer={navigation} action="transport.settlement.report.read">
+            <button
+              type="button"
+              className="tx-btn"
+              disabled={aging.data === undefined}
+              onClick={() =>
+                run(() =>
+                  aging.data === undefined
+                    ? null
+                    : arAgingCsv(aging.data, settlementDirectory, stamp),
+                )
+              }
+            >
+              Công nợ phải thu
+            </button>
+            <button
+              type="button"
+              className="tx-btn"
+              disabled={apByFlow.size === 0}
+              onClick={() => run(() => apCsv(apByFlow, settlementDirectory, stamp))}
+            >
+              Công nợ phải trả
+            </button>
+          </PermissionGate>
         </div>
       </section>
 
       <section className="tx-panel" aria-label="Sổ quỹ một lái xe">
         <h2>Sổ quỹ lái xe</h2>
-        <label className="tx-field">
-          <span>Lái xe</span>
-          <select
-            aria-label="Lái xe"
-            value={driverId ?? ''}
-            onChange={(event) => setDriverId(event.target.value === '' ? null : event.target.value)}
-          >
-            <option value="">Chọn một lái xe</option>
-            {(drivers.data ?? []).map((driver) => (
-              <option key={driver.id} value={driver.id}>
-                {driver.fullName}
-              </option>
-            ))}
-          </select>
-        </label>
-        <button
-          type="button"
-          className="tx-btn"
-          disabled={fund.data === undefined}
-          onClick={() =>
-            run(() =>
-              fund.data === undefined ? null : driverFundCsv(fund.data, assetDirectory, stamp),
-            )
-          }
-        >
-          Xuất sổ quỹ
-        </button>
+        <PermissionNote
+          viewer={navigation}
+          actions={['transport.costing.driver_fund.read', 'transport.driver.read']}
+        />
+        {canExportFund ? (
+          <>
+            <label className="tx-field">
+              <span>Lái xe</span>
+              <select
+                aria-label="Lái xe"
+                value={driverId ?? ''}
+                onChange={(event) =>
+                  setDriverId(event.target.value === '' ? null : event.target.value)
+                }
+              >
+                <option value="">Chọn một lái xe</option>
+                {(drivers.data ?? []).map((driver) => (
+                  <option key={driver.id} value={driver.id}>
+                    {driver.fullName}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              className="tx-btn"
+              disabled={fund.data === undefined}
+              onClick={() =>
+                run(() =>
+                  fund.data === undefined ? null : driverFundCsv(fund.data, assetDirectory, stamp),
+                )
+              }
+            >
+              Xuất sổ quỹ
+            </button>
+          </>
+        ) : null}
       </section>
 
       <section className="tx-panel" aria-label="Đối soát nhiên liệu của một chuyến">
         <h2>Đối soát nhiên liệu</h2>
-        <label className="tx-field">
-          <span>Chuyến</span>
-          <select
-            aria-label="Chuyến"
-            value={tripId ?? ''}
-            onChange={(event) => setTripId(event.target.value === '' ? null : event.target.value)}
+        <PermissionGate viewer={navigation} action="transport.fuel.entry.read">
+          <label className="tx-field">
+            <span>Chuyến</span>
+            <select
+              aria-label="Chuyến"
+              value={tripId ?? ''}
+              onChange={(event) => setTripId(event.target.value === '' ? null : event.target.value)}
+            >
+              <option value="">Chọn một chuyến</option>
+              {(trips.data ?? []).map((trip) => (
+                <option key={trip.id} value={trip.id}>
+                  {trip.code} · {trip.originLabel} → {trip.destinationLabel}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            type="button"
+            className="tx-btn"
+            disabled={(fuelEntries.data ?? []).length === 0}
+            onClick={() => run(() => fuelReconciliationCsv(fuelEntries.data ?? [], stamp))}
           >
-            <option value="">Chọn một chuyến</option>
-            {(trips.data ?? []).map((trip) => (
-              <option key={trip.id} value={trip.id}>
-                {trip.code} · {trip.originLabel} → {trip.destinationLabel}
-              </option>
-            ))}
-          </select>
-        </label>
-        <button
-          type="button"
-          className="tx-btn"
-          disabled={(fuelEntries.data ?? []).length === 0}
-          onClick={() => run(() => fuelReconciliationCsv(fuelEntries.data ?? [], stamp))}
-        >
-          Xuất phiếu đổ dầu
-        </button>
+            Xuất phiếu đổ dầu
+          </button>
+        </PermissionGate>
       </section>
 
       <section className="tx-panel" aria-label="Bảng lương của một kỳ">
         <h2>Bảng lương</h2>
-        <label className="tx-field">
-          <span>Kỳ lương</span>
-          <select
-            aria-label="Kỳ lương"
-            value={periodId ?? ''}
-            onChange={(event) => setPeriodId(event.target.value === '' ? null : event.target.value)}
+        <PermissionGate viewer={navigation} action="transport.payroll.period.read">
+          <label className="tx-field">
+            <span>Kỳ lương</span>
+            <select
+              aria-label="Kỳ lương"
+              value={periodId ?? ''}
+              onChange={(event) =>
+                setPeriodId(event.target.value === '' ? null : event.target.value)
+              }
+            >
+              <option value="">Chọn một kỳ</option>
+              {(periods.data ?? []).map((period) => (
+                <option key={period.id} value={period.id}>
+                  {period.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          {periodId !== null && latestRunId === null ? (
+            <EmptyState title="Kỳ này chưa được chạy lần nào, nên chưa có bảng lương để xuất." />
+          ) : null}
+          <button
+            type="button"
+            className="tx-btn"
+            disabled={(payslips.data ?? []).length === 0}
+            onClick={() => run(() => payrollCsv(payslips.data ?? [], assetDirectory, stamp))}
           >
-            <option value="">Chọn một kỳ</option>
-            {(periods.data ?? []).map((period) => (
-              <option key={period.id} value={period.id}>
-                {period.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        {periodId !== null && latestRunId === null ? (
-          <EmptyState title="Kỳ này chưa được chạy lần nào, nên chưa có bảng lương để xuất." />
-        ) : null}
-        <button
-          type="button"
-          className="tx-btn"
-          disabled={(payslips.data ?? []).length === 0}
-          onClick={() => run(() => payrollCsv(payslips.data ?? [], assetDirectory, stamp))}
-        >
-          Xuất bảng lương (lần chạy gần nhất)
-        </button>
+            Xuất bảng lương (lần chạy gần nhất)
+          </button>
+        </PermissionGate>
       </section>
     </>
   );

@@ -23,6 +23,20 @@ import {
 } from './fleet.repository.js';
 
 /**
+ * Ho so lai xe qua DICH VU DOI XE — KHONG co `authUserId` (`#395` §1.8).
+ *
+ * Noi tai khoan voi ho so la mot thao tac PHAN QUYEN (mo pham vi "viec cua chinh lai xe"), va no co
+ * luat rieng (vai Lai xe, tai khoan dang hoat dong, khong noi hai ho so) — duong ghi duy nhat la
+ * `DriverAccountLinkService`. Kho (`CreateDriverInput`) VAN giu truong nay cho may gieo, fixture va
+ * chinh dich vu noi.
+ *
+ * Chan o tang KIEU, khong boc o luc chay: be mat HTTP da chan bang schema `strict` (`400`), con cac
+ * kich ban boot chay tu chuoi (khong qua `tsc`) dung duong nay de dung mot lai xe DA noi san.
+ */
+export type RegisterDriverInput = Omit<CreateDriverInput, 'authUserId'>;
+export type UpdateDriverProfileInput = Omit<UpdateDriverInput, 'authUserId'>;
+
+/**
  * `TX-01 Fleet` — xe, lai xe, gan lai xe phu trach xe, va hai danh muc doi tuong ma chuyen tro toi.
  *
  * Service la noi DUY NHAT ghi audit cho cac thay doi cua doi xe. Dat o kho thi moi ban hien thuc
@@ -100,7 +114,7 @@ export class FleetService {
 
   /* --------------------------- Lai xe --------------------------- */
 
-  async registerDriver(input: CreateDriverInput, actor: string): Promise<Driver> {
+  async registerDriver(input: RegisterDriverInput, actor: string): Promise<Driver> {
     const driver = await this.repository.createDriver({
       ...input,
       licenceExpiry: this.requireLicenceExpiry(input.licenceExpiry),
@@ -115,7 +129,7 @@ export class FleetService {
     return driver;
   }
 
-  async updateDriver(id: string, patch: UpdateDriverInput, actor: string): Promise<Driver> {
+  async updateDriver(id: string, patch: UpdateDriverProfileInput, actor: string): Promise<Driver> {
     const before = await this.requireDriver(id);
     const after = await this.repository.updateDriver(id, {
       ...patch,

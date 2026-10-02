@@ -2,6 +2,7 @@
 
 import dynamic from 'next/dynamic';
 import { useMemo, useState } from 'react';
+import { PermissionGate } from '../components/PermissionGate';
 import { DataTable, PageHeader } from '../components/primitives';
 import { EmptyState, ErrorState, LoadingState } from '../components/SectionState';
 import {
@@ -12,8 +13,15 @@ import {
   useTransportOrders,
   useTransportPlanningPolicy,
 } from '../hooks/useTransportWorkspace';
+import { canPerform } from '../transport-actions';
+import type { TransportApiError } from '../transport-api';
 import { boundsOf } from '../workspace/journey';
-import { toDispatch, toDispatchMap, type DispatchCandidateRow } from '../workspace/dispatch';
+import {
+  dispatchErrorMessage,
+  toDispatch,
+  toDispatchMap,
+  type DispatchCandidateRow,
+} from '../workspace/dispatch';
 
 /**
  * BAN DO DIEU XE (#278 N3) — de nghi cua Lane M (#277), quyet dinh cua CON NGUOI.
@@ -35,6 +43,13 @@ export function DispatchView(): React.ReactElement {
   const input = useNavigationInput();
   const ordersQuery = toSectionQuery(useTransportOrders(input));
   const policyQuery = useTransportPlanningPolicy(input);
+  /**
+   * `#395` — lan doc che do van hanh BI CHAN (thieu `transport.run.read`) thi KHONG phai "dang
+   * doc": `isPending` cua mot query bi `enabled: false` dung mai mai, va man hinh tung treo o "Đang
+   * đọc chế độ vận hành…" voi nguoi chi duoc cap ma de nghi. Muc gio doi ca ma do; day la chot chan.
+   */
+  const policy = toSectionQuery(policyQuery);
+  const canAssign = canPerform(input, 'transport.run.manage');
   const suggestions = useDispatchSuggestions();
   const assignment = useDispatchAssignment();
   const [orderId, setOrderId] = useState<string>('');
@@ -86,16 +101,20 @@ export function DispatchView(): React.ReactElement {
     {
       key: 'assign',
       header: 'Chọn',
-      render: (row: DispatchCandidateRow) => (
-        <button
-          type="button"
-          className="tx-btn tx-btn--small"
-          disabled={assignment.isPending}
-          onClick={() => assignment.mutate({ orderId, vehicleId: row.vehicleId })}
-        >
-          Gán xe
-        </button>
-      ),
+      render: (row: DispatchCandidateRow) =>
+        // Gan xe di sau `transport.run.manage` (may chu kiem lai); khong co quyen thi khong co nut.
+        canAssign ? (
+          <button
+            type="button"
+            className="tx-btn tx-btn--small"
+            disabled={assignment.isPending}
+            onClick={() => assignment.mutate({ orderId, vehicleId: row.vehicleId })}
+          >
+            Gán xe
+          </button>
+        ) : (
+          'Chưa được cấp quyền gán xe'
+        ),
     },
   ];
 
@@ -132,7 +151,8 @@ export function DispatchView(): React.ReactElement {
         }
       />
 
-      {policyQuery.isPending ? <LoadingState label="Đang đọc chế độ vận hành…" /> : null}
+      {policy.isLoading ? <LoadingState label="Đang đọc chế độ vận hành…" /> : null}
+      {policy.isBlocked ? <PermissionGate viewer={input} action="transport.run.read" /> : null}
 
       {/*
         CHE DO MOI DON MOT VONG CHAY — noi thang ra, khong de mot man hinh trong.
@@ -159,7 +179,9 @@ export function DispatchView(): React.ReactElement {
         </section>
       ) : null}
 
-      {suggestions.isError ? <ErrorState message={(suggestions.error as Error).message} /> : null}
+      {suggestions.isError ? (
+        <ErrorState message={dispatchErrorMessage(suggestions.error as TransportApiError)} />
+      ) : null}
       {assignment.isError ? <ErrorState message={(assignment.error as Error).message} /> : null}
       {suggestions.isPending ? <LoadingState label="Đang tìm xe phù hợp…" /> : null}
       {assignment.isSuccess ? (

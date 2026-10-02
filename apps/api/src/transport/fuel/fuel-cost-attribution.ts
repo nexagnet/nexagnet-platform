@@ -30,8 +30,10 @@ import type { FuelVerificationStatus } from './fuel-lifecycle.js';
  *
  * Hai so cai KHONG GIAO NHAU theo cau truc, nen:
  *
- *   · bao cao gia thanh CHUYEN (TX-03, bien loi nhuan chuyen, tong hop tai chinh) doc
- *     `TransportTripExpense` — nhu truoc, khong doi mot dong;
+ *   · bao cao gia thanh CHUYEN (TX-03, bien loi nhuan chuyen) doc `TransportTripExpense` — nhu
+ *     truoc, khong doi mot dong;
+ *   · tong hop tai chinh / hieu qua (`#385`, `finance/company-margin.ts`) cong CA HAI: chuyen cu qua
+ *     TX-03, don Run-first qua bang nay (doc bang `runMargin`) — moi phieu vao dung mot dong;
  *   · bao cao phan bo VONG CHAY/CHANG doc `TransportFuelCostAttribution` (`FuelCostAttributionReadService`);
  *   · KHONG bao cao nao cong ca hai cho CUNG MOT phieu — va khong the, vi mot phieu chi co mat o
  *     mot ben. Mot bao cao tuong lai muon gop (vd bien loi nhuan vong chay) cong duoc hai ben ma

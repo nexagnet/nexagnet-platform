@@ -55,6 +55,8 @@ const order = (over: Partial<Order> & Pick<Order, 'id'>): Order => ({
   customerId: 'cus-1',
   originLabel: 'HN',
   destinationLabel: 'HP',
+  originPoint: null,
+  destinationPoint: null,
   cargoDescription: null,
   freightAmount: 6_500_000,
   currencyCode: 'VND',

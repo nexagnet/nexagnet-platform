@@ -10,11 +10,13 @@ import type { TransportPlanningPolicy } from '../planning/planning.types.js';
 import { PrismaRunPlanRepository } from '../planning/prisma-planning.repository.js';
 import { TransportDomainError } from '../transport.errors.js';
 import { PrismaTripRepository } from '../trips/prisma-trip.repository.js';
+import { DispatchCoreFactsAdapter } from './dispatch-facts.port.js';
 import {
   PlanningDispatchAssignmentPlanner,
   dispatchIdempotencyKey,
   type DispatchCommitResult,
 } from './dispatch-planner.port.js';
+import { orderPickupPlace } from './place-resolution.js';
 
 /**
  * CONG GHI cua Lane M tren POSTGRES THAT — `#277 M14` muc 8/9/10 va `M15` muc 10.
@@ -251,6 +253,53 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')('cong ghi dieu xe tren Postgre
       planner.commit({ orderId: order.id, vehicleId, actor: ACTOR }),
     ).rejects.toBeInstanceOf(TransportDomainError);
     expect(await prisma.transportRunLeg.count({ where: { orderId: order.id } })).toBe(0);
+  });
+
+  /**
+   * `#379` — TOA DO DI QUA POSTGRES TOI TAN CUA SO DOC CUA DIEU XE.
+   *
+   * Bo bai don vi cua dieu xe dung kho gia, nen no KHONG bat duoc mot anh xa Prisma bo quen bon cot
+   * moi. Neu `toOrder` quen, moi lan dieu xe that se ra "don chua co toa do" trong khi moi bai don
+   * vi van xanh — bai nay la thu bat duoc dieu do. Don tao khong co diem (duong noi bo/don cu) phai
+   * doc lai la `null`, va dieu xe tu choi no thay vi suy tu nhan `Kho Hai Phong`.
+   */
+  it('toa do diem lay/giao di tu createOrder qua Postgres toi cong doc cua dieu xe', async () => {
+    const pickup = { latitude: 20.8449, longitude: 106.6881 };
+    const delivery = { latitude: 20.2506, longitude: 105.9745 };
+    const withPoints = await movement.createOrder(
+      {
+        code: `${PREFIX}-DON-P1`,
+        businessDate: BUSINESS_DATE,
+        originLabel: 'Kho Hai Phong',
+        destinationLabel: 'Bai Ninh Binh',
+        originPoint: pickup,
+        destinationPoint: delivery,
+        customerId: null,
+        cargoDescription: null,
+        freightAmount: null,
+        note: null,
+      },
+      ACTOR,
+    );
+    const legacy = await seedOrder('P0');
+    const facts = new DispatchCoreFactsAdapter(new PrismaMovementRepository(prisma), fleet);
+
+    const read = await facts.findOrder(withPoints.id);
+    expect(read?.originPoint).toEqual(pickup);
+    expect(read?.destinationPoint).toEqual(delivery);
+    expect(read && orderPickupPlace(read)).toMatchObject({
+      ok: true,
+      reason: 'PICKUP_FROM_ORDER_COORDINATES',
+      place: { point: pickup, source: 'ORDER_PICKUP_POINT', label: 'Kho Hai Phong' },
+    });
+
+    const readLegacy = await facts.findOrder(legacy.id);
+    expect(readLegacy?.originPoint).toBeNull();
+    expect(readLegacy?.destinationPoint).toBeNull();
+    expect(readLegacy && orderPickupPlace(readLegacy)).toEqual({
+      ok: false,
+      reason: 'PICKUP_ORDER_COORDINATES_MISSING',
+    });
   });
 
   /** Khoa chong lap phai TAT DINH — neu no ngau nhien thi moi bai o tren deu vo nghia. */

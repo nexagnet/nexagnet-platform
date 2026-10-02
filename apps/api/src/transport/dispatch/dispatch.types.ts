@@ -30,6 +30,17 @@ export type DispatchPlaceSource =
   | 'EXPLICIT_REQUEST_POINT'
   | 'EXPLICIT_REQUEST_SITE'
   | 'EXPLICIT_REQUEST_GEOFENCE'
+  /**
+   * Toa do diem LAY luu tren chinh don (`Order.originPoint`, #379). La su that nghiep vu do nguoi
+   * nhap don chon tren ban do — khong phai vi tri cua ai, nen khong bao gio bi che.
+   */
+  | 'ORDER_PICKUP_POINT'
+  /** Toa do diem GIAO luu tren don (`Order.destinationPoint`) — dung lam diem den cua chang co tai. */
+  | 'ORDER_DELIVERY_POINT'
+  /**
+   * Hai nguon theo NHAN duoi day chi con song o chang (chang chua mang toa do) va o chang cua don
+   * cu. Diem lay hang cua don KHONG BAO GIO di qua chung nua.
+   */
   | 'GEOFENCE_LABEL_EXACT'
   | 'COUNTERPARTY_SITE_GEOFENCE'
   /** Diem den tu mot ban dinh vi cua chinh chiec xe — chi dung cho diem xuat phat `CURRENT_NEAR`. */

@@ -1,6 +1,6 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import { TelemetryService } from '../../observability/telemetry.service.js';
-import { parseGeoPoint, type GeoPoint } from '../geo/geo-point.js';
+import type { GeoPoint } from '../geo/geo-point.js';
 import { greatCircleMetres } from '../geo/geodesy.js';
 import { DEFAULT_ACCURACY_POLICY } from '../geo/location-quality.js';
 import type { Order } from '../movement/movement.types.js';
@@ -45,12 +45,17 @@ import type {
   VehicleNextFree,
 } from './dispatch.types.js';
 import {
-  explicitPointPlace,
-  resolvePlaceByGeofenceId,
-  resolvePlaceByLabel,
-  resolvePlaceBySiteId,
-  type PlaceIndexEntry,
-} from './place-resolution.js';
+  pickupRejection,
+  resolveDispatchPickup,
+  type DispatchPickupRef,
+} from './pickup-resolution.js';
+import type { PlaceIndexEntry } from './place-resolution.js';
+import {
+  memoizeOrderLookup,
+  planRemainingLegs,
+  toRemainingLegFact,
+  type OrderLookup,
+} from './remaining-leg-plan.js';
 import { TransportRoutingPort } from './routing/transport-routing.port.js';
 import { truckFingerprint } from './routing/routing.types.js';
 import type { RouteEstimate, TruckProfile } from './routing/routing.types.js';
@@ -60,8 +65,6 @@ import {
   orderRemainingLegs,
   projectCurrentState,
   projectNextFree,
-  type RemainingLegFact,
-  type RemainingLegPlan,
 } from './vehicle-state-projection.js';
 
 /**
@@ -80,25 +83,28 @@ import {
  * chon cu di tiep (`#277 M9`).
  *
  * ===========================================================================
- * MOT SU THAT PHAI NOI RA TRUOC: DON KHONG MANG TOA DO
+ * DON MANG TOA DO; NHAN CHU CHI DE HIEN THI (#379)
  *
- * `TransportOrder` co `originLabel`/`destinationLabel` la CHUOI, khong co cot toa do, khong co han
- * lay hang, khong co khoi luong hang. Ba dieu do quyet dinh hinh dang cua ca be mat nay:
+ * `TransportOrder` luu toa do diem lay/giao (`originPoint`/`destinationPoint`) do nguoi nhap don
+ * chon tren ban do; `originLabel`/`destinationLabel` chi de hien thi. Don van KHONG co han lay hang
+ * va khoi luong hang. Ba dieu do quyet dinh hinh dang cua ca be mat nay:
  *
- *   · diem lay hang phai GIAI ra tu ten (`place-resolution.ts`), va khi khong giai duoc thi tra
- *     `DISPATCH_PICKUP_LOCATION_UNRESOLVED` chu khong doan;
+ *   · diem lay hang theo DUNG THU TU: tham chieu tuong minh cua nguoi goi (POINT/SITE/GEOFENCE) >
+ *     toa do cua don > tu choi `DISPATCH_ORDER_PICKUP_COORDINATES_MISSING`. KHONG con buoc suy tu
+ *     `originLabel`: mot nhan trung ten mot hang rao la mot su trung hop chinh ta, khong phai mot
+ *     lan khao sat — va don cu thi phai noi ra rang no chua co toa do;
+ *   · diem den cua cac chang con lai (phep chieu "xe se ranh o dau") lay tu toa do DON khi chang
+ *     tro toi mot don, va chi giai theo nhan khi chang khong co nguon toa do nao
+ *     (`remaining-leg-plan.ts`);
  *   · han lay hang va yeu cau tai trong den tu NGUOI GOI, va khi khong ai khai thi cac buoc xep
  *     hang tuong ung bi BO QUA chu khong chay voi mot gia tri bia.
  */
 
-/** Cach nguoi goi chi dinh diem lay hang — ba duong, deu tuong minh. */
-export type DispatchPickupRef =
-  | { readonly kind: 'POINT'; readonly latitude: unknown; readonly longitude: unknown }
-  | { readonly kind: 'SITE'; readonly siteId: string }
-  | { readonly kind: 'GEOFENCE'; readonly geofenceId: string };
+/** Giu duong nhap cu: kieu nay song o `pickup-resolution.ts` tu #379. */
+export type { DispatchPickupRef } from './pickup-resolution.js';
 
 export interface DispatchSuggestionRequest {
-  /** `null` = de he thong giai tu `originLabel` cua don. */
+  /** `null` = dung toa do diem lay luu tren don. Don cu khong co toa do -> tu choi co kieu. */
   readonly pickup: DispatchPickupRef | null;
   readonly requiredPickupAt: string | null;
   readonly requirement: DispatchRequirement;
@@ -143,6 +149,21 @@ interface VehicleAssessment {
   readonly hasCommittedWork: boolean;
   readonly nextFree: VehicleNextFree;
   readonly suitability: SuitabilityVerdict;
+}
+
+/**
+ * Nhung thu MOT luot `suggest()` dung chung cho moi chiec xe.
+ *
+ * `budget` va `orders` co trang thai TRONG luot tinh (ngan sach bi tru, don doc roi thi nho): gom
+ * chung vao mot cho de khong chiec xe nao lo tay tao ban rieng — mot ban rieng se lam ngan sach
+ * dinh tuyen nhan len theo so xe.
+ */
+interface AssessmentContext {
+  readonly requirement: DispatchRequirement;
+  readonly index: readonly PlaceIndexEntry[];
+  readonly now: Date;
+  readonly budget: { remaining: number };
+  readonly orders: OrderLookup;
 }
 
 /** Mot diem xuat phat ung vien TRUOC khi biet quang duong duong bo. */
@@ -272,11 +293,18 @@ export class DispatchService {
 
     const now = this.now();
     const vehicles = await this.core.listVehicles();
-    const budget = { remaining: this.policy.maxProjectionRouteCalls };
+    const context: AssessmentContext = {
+      requirement: request.requirement,
+      index: placeIndex,
+      now,
+      budget: { remaining: this.policy.maxProjectionRouteCalls },
+      // Don dang dieu da doc roi — dua vao bo dem de chang nao tro toi no khong doc lan hai.
+      orders: memoizeOrderLookup((id) => this.core.findOrder(id), [order]),
+    };
 
     const assessments: VehicleAssessment[] = [];
     for (const vehicle of vehicles) {
-      assessments.push(await this.assess(vehicle, request.requirement, placeIndex, now, budget));
+      assessments.push(await this.assess(vehicle, context));
     }
 
     const excluded: DispatchExclusion[] = assessments
@@ -466,7 +494,8 @@ export class DispatchService {
     ref: DispatchPickupRef | null,
     index: readonly PlaceIndexEntry[],
   ): { place: ResolvedPlace; reason: DispatchPickupResolutionReason } {
-    const resolution = this.resolvePickupRef(order, ref, index);
+    // KHONG con buoc suy tu `originLabel` (#379) — thu tu nam o `pickup-resolution.ts`.
+    const resolution = resolveDispatchPickup(order, ref, index);
 
     this.telemetry?.decision({
       vocabulary: TRANSPORT_DISPATCH_DECISIONS,
@@ -476,48 +505,12 @@ export class DispatchService {
       detail: { orderId: order.id },
     });
 
-    if (!resolution.ok) {
-      const kind =
-        resolution.reason === 'PICKUP_REQUEST_POINT_REJECTED'
-          ? ('DISPATCH_POINT_INVALID' as const)
-          : resolution.reason === 'PICKUP_REQUEST_REF_NOT_FOUND'
-            ? ('DISPATCH_PLACE_REF_NOT_FOUND' as const)
-            : ('DISPATCH_PICKUP_LOCATION_UNRESOLVED' as const);
-      throw TransportDomainError.invalid(
-        kind,
-        'Chua xac dinh duoc diem lay hang cua don. Hay chon mot dia diem da khai hang rao.',
-      );
-    }
+    if (!resolution.ok) throw pickupRejection(resolution.reason);
     return { place: resolution.place, reason: resolution.reason };
   }
 
-  private resolvePickupRef(
-    order: Order,
-    ref: DispatchPickupRef | null,
-    index: readonly PlaceIndexEntry[],
-  ):
-    | { ok: true; place: ResolvedPlace; reason: DispatchPickupResolutionReason }
-    | { ok: false; reason: DispatchPickupResolutionReason } {
-    if (ref === null) return resolvePlaceByLabel(order.originLabel, index);
-    if (ref.kind === 'GEOFENCE') return resolvePlaceByGeofenceId(ref.geofenceId, index);
-    if (ref.kind === 'SITE') return resolvePlaceBySiteId(ref.siteId, index);
-
-    const parsed = parseGeoPoint(ref.latitude, ref.longitude);
-    if (!parsed.ok) return { ok: false, reason: 'PICKUP_REQUEST_POINT_REJECTED' };
-    return {
-      ok: true,
-      reason: 'PICKUP_FROM_EXPLICIT_REQUEST',
-      place: explicitPointPlace(parsed.point, order.originLabel),
-    };
-  }
-
-  private async assess(
-    vehicle: Vehicle,
-    requirement: DispatchRequirement,
-    index: readonly PlaceIndexEntry[],
-    now: Date,
-    budget: { remaining: number },
-  ): Promise<VehicleAssessment> {
+  private async assess(vehicle: Vehicle, context: AssessmentContext): Promise<VehicleAssessment> {
+    const { requirement, now } = context;
     const truckProfile = truckProfileForVehicle(vehicle);
     const sample = (await this.location?.latestObservationForVehicle(vehicle.id)) ?? null;
 
@@ -538,14 +531,16 @@ export class DispatchService {
         }
       : null;
 
-    const remaining = orderRemainingLegs(await this.openLegFacts(vehicle.id));
-    const plans = await this.planRemainingLegs(
-      remaining,
+    const openLegs = await this.core.listOpenLegsForVehicle(vehicle.id);
+    const plans = await planRemainingLegs({
+      remaining: orderRemainingLegs(openLegs.map(toRemainingLegFact)),
       currentPlace,
-      truckProfile,
-      index,
-      budget,
-    );
+      truck: truckProfile,
+      index: context.index,
+      orders: context.orders,
+      routing: this.routing,
+      budget: context.budget,
+    });
 
     const projected = projectNextFree({
       currentPlace: currentUsableAsOrigin ? currentPlace : null,
@@ -580,61 +575,6 @@ export class DispatchService {
         currentUsableAsOrigin,
       }),
     };
-  }
-
-  private async openLegFacts(vehicleId: string): Promise<readonly RemainingLegFact[]> {
-    const facts = await this.core.listOpenLegsForVehicle(vehicleId);
-    return facts.map(({ leg, run }) => ({
-      legId: leg.id,
-      runId: leg.runId,
-      orderId: leg.orderId,
-      sequence: leg.sequence,
-      status: leg.status,
-      originLabel: leg.originLabel,
-      destinationLabel: leg.destinationLabel,
-      runStatus: run.status,
-      runBusinessDate: run.businessDate,
-      runCreatedAt: run.createdAt,
-    }));
-  }
-
-  /**
-   * Chuoi chang con lai -> ke hoach co GIO DI cua tung doan.
-   *
-   * Diem xuat phat cua doan dau la CHO XE DANG DUNG; tu doan thu hai tro di la diem den cua doan
-   * truoc. Doan nao thieu mot dau — khong biet xe o dau, hoac nhan dia diem khong giai duoc — thi
-   * `travelSeconds` la `null`, va `projectNextFree()` bien dieu do thanh mot `gap` co ten.
-   */
-  private async planRemainingLegs(
-    remaining: readonly RemainingLegFact[],
-    currentPlace: ResolvedPlace | null,
-    truck: TruckProfile,
-    index: readonly PlaceIndexEntry[],
-    budget: { remaining: number },
-  ): Promise<readonly RemainingLegPlan[]> {
-    const plans: RemainingLegPlan[] = [];
-    let from: ResolvedPlace | null = currentPlace;
-
-    for (const leg of remaining) {
-      const resolved = resolvePlaceByLabel(leg.destinationLabel, index);
-      const destination = resolved.ok ? resolved.place : null;
-
-      let travelSeconds: number | null = null;
-      if (from !== null && destination !== null && budget.remaining > 0) {
-        budget.remaining -= 1;
-        const outcome = await this.routing.route({
-          origin: from.point,
-          destination: destination.point,
-          truck,
-          departAt: null,
-        });
-        travelSeconds = outcome.ok ? outcome.estimate.durationSeconds : null;
-      }
-
-      plans.push({ legId: leg.legId, orderId: leg.orderId, destination, travelSeconds });
-      from = destination;
-    }
-    return plans;
   }
 
   /**

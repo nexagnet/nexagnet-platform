@@ -1,0 +1,1320 @@
+/*
+ * ===========================================================================
+ * QUAN TRI (`#395`) — "Tài khoản & quyền" va "Địa điểm vận hành".
+ *
+ * Cung huong thi giac SO SACH VAN HANH cua `transport-operations.css`: nen giay am, chu muc, dong
+ * ke mong thay cho hop. Danh sach tai khoan va dia diem la SO CAI — moi dong mot vach ke, khong
+ * phai moi dong mot the. Chi TRINH SUA (o nhap, o danh dau) moi co vien: vien la dau hieu cua viec
+ * go vao.
+ *
+ * Moi selector bat dau bang `.tx-admin`. Bien mau lay tu `.tx-shell` — tep nay khong khai bang mau
+ * rieng. Mau luon di kem CHU hoac HINH: trang thai nhom quyen co dau ✓ / –, loai dia diem co hinh
+ * ghim (vuong = bai xe, thoi = nha may, tron = kho khach) khop voi ban do.
+ *
+ * `1rem` = 14px o `apps/web` — co chu o day khong duoi 0.72rem (~10px) cho chu phu.
+ * ===========================================================================
+ */
+
+.tx-admin {
+  display: flex;
+  flex-direction: column;
+  gap: var(--tx-space-block);
+  min-width: 0;
+}
+
+.tx-admin .tx-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.tx-admin-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1.1rem;
+  margin: 0.35rem 0 0;
+  font-size: 0.82rem;
+  color: var(--tx-ink-soft);
+}
+
+.tx-admin-counts strong {
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--tx-ink);
+  margin-right: 0.2rem;
+}
+
+.tx-admin-eyebrow {
+  margin: 0 0 0.2rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--tx-accent);
+}
+
+.tx-admin-mono {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.92em;
+  letter-spacing: 0.01em;
+}
+
+.tx-admin-error p {
+  white-space: pre-line;
+}
+
+/*
+ * `.tx-field` mac dinh `flex: 1 1 190px` — dung cho HANG o loc. Trong mot COT (danh sach, the mat
+ * khau, trinh sua) `190px` thanh CHIEU CAO va de lai mot khoang trong duoi o nhap. O day moi o nhap
+ * cao dung noi dung cua no.
+ */
+.tx-admin
+  :is(
+    .tx-admin-listpane,
+    .tx-admin-credential,
+    .tx-admin-editor,
+    .tx-admin-lookup,
+    .tx-admin-position,
+    .tx-admin-sheet,
+    .tx-form
+  )
+  > .tx-field {
+  flex: none;
+}
+
+.tx-admin-hint {
+  font-size: 0.76rem;
+  color: var(--tx-ink-faint);
+}
+
+/* O nhap + goi y NGOAI nhan (goi y khong duoc thanh mot phan ten cua o). */
+.tx-admin-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.tx-admin-field > .tx-field {
+  flex: none;
+}
+
+/* ---------------------------------------------------------------- *
+ * Hai cot: so cai ben trai, chi tiet ben phai
+ * ---------------------------------------------------------------- */
+
+.tx-admin-split {
+  display: grid;
+  grid-template-columns: minmax(21rem, 27rem) minmax(0, 1fr);
+  gap: 1.35rem;
+  align-items: start;
+}
+
+.tx-admin-listpane {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  min-width: 0;
+}
+
+.tx-admin-detailpane {
+  min-width: 0;
+}
+
+.tx-admin-placeholder {
+  padding: 1.4rem 1.3rem;
+  border: 1px dashed var(--tx-line-strong);
+  border-radius: var(--tx-radius);
+  color: var(--tx-ink-soft);
+}
+
+.tx-admin-placeholder p {
+  margin: 0 0 0.5rem;
+}
+
+/* Nut loc — nut bam that (`aria-pressed`), khong phai o danh dau gia. */
+.tx-admin-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.tx-admin-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 2.15rem;
+  padding: 0.25rem 0.7rem;
+  font: inherit;
+  font-size: 0.82rem;
+  border: 1px solid var(--tx-line-strong);
+  border-radius: 999px;
+  background: var(--tx-paper);
+  color: var(--tx-ink-soft);
+  cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease;
+}
+
+.tx-admin-chip:hover {
+  border-color: var(--tx-accent);
+}
+
+.tx-admin-chip:focus-visible {
+  outline: 2px solid var(--tx-accent);
+  outline-offset: 2px;
+}
+
+.tx-admin-chip[aria-pressed='true'] {
+  background: var(--tx-ink);
+  border-color: var(--tx-ink);
+  color: var(--tx-paper);
+}
+
+.tx-admin-chip__count {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.74rem;
+  opacity: 0.75;
+}
+
+/* So cai: moi dong mot vach ke. Dong dang mo co MOT vach muc ben trai — va nen giay trang. */
+.tx-admin-people {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--tx-line);
+}
+
+.tx-admin-person {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'name side'
+    'meta side';
+  gap: 0.15rem 0.8rem;
+  width: 100%;
+  padding: 0.7rem 0.65rem 0.7rem 0.8rem;
+  font: inherit;
+  text-align: left;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--tx-line);
+  border-left: 3px solid transparent;
+  cursor: pointer;
+}
+
+.tx-admin-person:hover {
+  background: var(--tx-paper);
+}
+
+.tx-admin-person:focus-visible {
+  outline: 2px solid var(--tx-accent);
+  outline-offset: -2px;
+}
+
+.tx-admin-person[aria-current='true'] {
+  background: var(--tx-paper);
+  border-left-color: var(--tx-accent);
+  box-shadow: var(--tx-lift);
+}
+
+.tx-admin-person__name {
+  grid-area: name;
+  font-weight: 600;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.tx-admin-person__meta {
+  grid-area: meta;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15rem 0.6rem;
+  font-size: 0.8rem;
+  color: var(--tx-ink-soft);
+  min-width: 0;
+}
+
+.tx-admin-person__delta {
+  color: var(--tx-accent);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.tx-admin-person__side {
+  grid-area: side;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.25rem;
+}
+
+.tx-admin-person__login {
+  font-size: 0.74rem;
+  color: var(--tx-ink-faint);
+  white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------- *
+ * The chi tiet
+ * ---------------------------------------------------------------- */
+
+.tx-admin-sheet {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1.15rem 1.3rem 1.3rem;
+  background: var(--tx-paper);
+  border-radius: var(--tx-radius);
+  box-shadow: var(--tx-lift-strong);
+  min-width: 0;
+}
+
+.tx-admin-sheet h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(1.3rem, 1.1rem + 0.6vw, 1.6rem);
+  line-height: 1.15;
+}
+
+.tx-admin-sheet h2:focus {
+  outline: none;
+}
+
+.tx-admin-sheet__head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 0.6rem;
+  align-items: start;
+  padding-bottom: 0.8rem;
+  border-bottom: 1px solid var(--tx-line);
+}
+
+.tx-admin-sheet__head .tx-admin-mono,
+.tx-admin-sheet__sub {
+  margin: 0.2rem 0 0;
+  font-size: 0.85rem;
+  color: var(--tx-ink-soft);
+}
+
+.tx-admin-sheet__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  justify-content: flex-end;
+}
+
+.tx-admin-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.55rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--tx-line);
+}
+
+.tx-admin-block > * {
+  max-width: 100%;
+}
+
+.tx-admin-block > h3 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.02rem;
+}
+
+.tx-admin-block--danger > h3 {
+  color: var(--tx-stop);
+}
+
+.tx-admin-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+  gap: 0.6rem 1.2rem;
+  margin: 0;
+  width: 100%;
+}
+
+.tx-admin-facts dt {
+  font-size: 0.72rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--tx-ink-faint);
+}
+
+.tx-admin-facts dd {
+  margin: 0.1rem 0 0;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.tx-admin-facts__wide {
+  grid-column: 1 / -1;
+}
+
+.tx-admin-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.tx-admin-actions__status {
+  font-size: 0.8rem;
+  color: var(--tx-ink-soft);
+}
+
+/* "Người này làm được gì?" — cau cua may chu, doc nhu mot doan so tay. */
+.tx-admin-answer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  width: 100%;
+}
+
+.tx-admin-sentences,
+.tx-admin-scopes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.tx-admin-sentences li {
+  position: relative;
+  padding-left: 1.1rem;
+  line-height: 1.45;
+}
+
+.tx-admin-sentences li::before {
+  content: '';
+  position: absolute;
+  left: 0.15rem;
+  top: 0.62em;
+  width: 0.45rem;
+  height: 2px;
+  background: var(--tx-accent);
+}
+
+.tx-admin-scopes li {
+  padding: 0.4rem 0.6rem;
+  border-left: 3px solid var(--tx-wait);
+  background: var(--tx-wait-wash);
+  font-size: 0.85rem;
+}
+
+.tx-admin-scopes li[data-active] {
+  border-left-color: var(--tx-go);
+  background: var(--tx-go-wash);
+}
+
+.tx-admin-groupsummary {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
+  gap: 0.35rem 0.8rem;
+  margin: 0;
+}
+
+.tx-admin-groupsummary > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding: 0.3rem 0.5rem;
+  border-left: 3px solid var(--tx-wait);
+  font-size: 0.82rem;
+}
+
+.tx-admin-groupsummary > div[data-summary='FULL'] {
+  border-left-color: var(--tx-go);
+}
+
+.tx-admin-groupsummary dd {
+  margin: 0;
+  color: var(--tx-ink-soft);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.tx-admin-links {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.tx-admin-link {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0;
+}
+
+.tx-admin-link__kind {
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--tx-ink-faint);
+  margin-right: 0.3rem;
+}
+
+.tx-admin-history {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+}
+
+.tx-admin-history li {
+  display: grid;
+  grid-template-columns: 9.5rem 8rem minmax(0, 1fr);
+  gap: 0.6rem;
+  padding: 0.4rem 0;
+  border-bottom: 1px dotted var(--tx-line-strong);
+  font-size: 0.82rem;
+}
+
+.tx-admin-history time {
+  font-variant-numeric: tabular-nums;
+  color: var(--tx-ink-soft);
+}
+
+.tx-admin-history__who {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+/* ---------------------------------------------------------------- *
+ * The mat khau tam — noi bat co chu dich: no chi hien MOT lan
+ * ---------------------------------------------------------------- */
+
+.tx-admin-credential {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  padding: 1rem 1.1rem 1.1rem;
+  border: 2px solid var(--tx-accent);
+  border-radius: var(--tx-radius);
+  background:
+    repeating-linear-gradient(
+      -45deg,
+      transparent 0 10px,
+      color-mix(in oklab, var(--tx-accent) 4%, transparent) 10px 11px
+    ),
+    var(--tx-paper);
+}
+
+.tx-admin-credential h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.2rem;
+}
+
+.tx-admin-credential h2:focus {
+  outline: none;
+}
+
+.tx-admin-credential__facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
+  gap: 0.6rem 1rem;
+  margin: 0;
+}
+
+.tx-admin-credential__facts dt {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--tx-ink-faint);
+}
+
+.tx-admin-credential__facts dd {
+  margin: 0.15rem 0 0;
+}
+
+.tx-admin-credential__secret {
+  display: inline-block;
+  padding: 0.2rem 0.5rem;
+  border-radius: var(--tx-radius-sm);
+  background: var(--tx-canvas);
+  font-size: 1.3rem;
+  letter-spacing: 0.08em;
+  user-select: all;
+}
+
+.tx-admin-credential__message textarea {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.8rem;
+  resize: vertical;
+}
+
+/* ---------------------------------------------------------------- *
+ * Trinh chinh quyen — vai, nhom, tung viec
+ * ---------------------------------------------------------------- */
+
+.tx-admin-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  width: 100%;
+}
+
+.tx-admin-presets {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(12.5rem, 1fr));
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.tx-admin-presets > legend {
+  margin-bottom: 0.45rem;
+  padding: 0;
+  font-weight: 600;
+}
+
+.tx-admin-presets > .tx-note {
+  grid-column: 1 / -1;
+}
+
+.tx-admin-preset {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.7rem 0.8rem 0.7rem 2.2rem;
+  border: 1px solid var(--tx-line-strong);
+  border-radius: var(--tx-radius-sm);
+  background: var(--tx-paper);
+  cursor: pointer;
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.tx-admin-preset:hover {
+  border-color: var(--tx-accent);
+}
+
+.tx-admin-preset input {
+  position: absolute;
+  left: 0.75rem;
+  top: 0.85rem;
+  margin: 0;
+  accent-color: var(--tx-accent);
+}
+
+.tx-admin-preset:focus-within {
+  outline: 2px solid var(--tx-accent);
+  outline-offset: 1px;
+}
+
+.tx-admin-preset[data-checked] {
+  border-color: var(--tx-accent);
+  box-shadow: inset 0 0 0 1px var(--tx-accent);
+  background: color-mix(in oklab, var(--tx-accent) 5%, var(--tx-paper));
+}
+
+.tx-admin-preset[data-disabled] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.tx-admin-preset > span {
+  font-size: 0.8rem;
+  line-height: 1.4;
+  color: var(--tx-ink-soft);
+}
+
+.tx-admin-typed {
+  padding: 0.6rem 0.7rem;
+  border-left: 3px solid var(--tx-stop);
+  background: var(--tx-stop-wash);
+}
+
+.tx-admin-typed > span {
+  color: var(--tx-ink);
+  font-size: 0.85rem;
+}
+
+.tx-admin-groups {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  width: 100%;
+}
+
+.tx-admin-group {
+  border: 1px solid var(--tx-line);
+  border-left: 3px solid var(--tx-line-strong);
+  border-radius: var(--tx-radius-sm);
+  background: var(--tx-paper);
+}
+
+.tx-admin-group[data-state='on'] {
+  border-left-color: var(--tx-go);
+}
+
+.tx-admin-group[data-state='mixed'] {
+  border-left-color: var(--tx-wait);
+}
+
+.tx-admin-group[data-state='locked'] {
+  border-style: dashed;
+  border-left-style: solid;
+  background: transparent;
+}
+
+.tx-admin-group__head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.55rem 0.7rem;
+}
+
+.tx-admin-group__text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.tx-admin-group__text > span {
+  font-size: 0.8rem;
+  color: var(--tx-ink-soft);
+}
+
+.tx-admin-group__count {
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--tx-ink-faint);
+}
+
+/* O ba trang thai: `aria-checked` true / mixed / false — va CHU trong o (✓, –), khong chi mau. */
+.tx-admin-tri {
+  display: inline-grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+  font: inherit;
+  font-weight: 700;
+  line-height: 1;
+  border: 1.5px solid var(--tx-ink-soft);
+  border-radius: 4px;
+  background: var(--tx-paper);
+  color: var(--tx-paper);
+  cursor: pointer;
+}
+
+.tx-admin-tri:focus-visible {
+  outline: 2px solid var(--tx-accent);
+  outline-offset: 2px;
+}
+
+.tx-admin-tri[aria-checked='true'] {
+  background: var(--tx-accent);
+  border-color: var(--tx-accent);
+}
+
+.tx-admin-tri[aria-checked='mixed'] {
+  background: var(--tx-wait-wash);
+  border-color: var(--tx-wait);
+  color: var(--tx-wait);
+}
+
+/* O khoa: vien net dut va con tro "cam" noi "khong bam duoc", nhung dau ✓ / – van ro — o khoa
+   van phai noi dung trang thai that cua nhom. */
+.tx-admin-tri[aria-disabled='true'] {
+  border-style: dashed;
+  opacity: 0.72;
+  cursor: not-allowed;
+}
+
+.tx-admin-actionlist {
+  list-style: none;
+  margin: 0;
+  padding: 0.2rem 0.8rem 0.5rem 2.9rem;
+  border-top: 1px solid var(--tx-line);
+}
+
+.tx-admin-action {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.6rem;
+  padding: 0.35rem 0;
+  border-bottom: 1px dotted var(--tx-line);
+  font-size: 0.85rem;
+}
+
+.tx-admin-action:last-child {
+  border-bottom: 0;
+}
+
+.tx-admin-action label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1 1 15rem;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.tx-admin-action input {
+  margin: 0;
+  width: 1rem;
+  height: 1rem;
+  accent-color: var(--tx-accent);
+}
+
+.tx-admin-action input:disabled + .tx-admin-action__label {
+  color: var(--tx-ink-faint);
+}
+
+.tx-admin-action[data-origin='GRANTED'] .tx-admin-action__label {
+  color: var(--tx-accent);
+  font-weight: 600;
+}
+
+.tx-admin-action[data-origin='DENIED'] .tx-admin-action__label {
+  text-decoration: line-through;
+  color: var(--tx-ink-faint);
+}
+
+.tx-admin-action__lock,
+.tx-admin-action__origin {
+  font-size: 0.72rem;
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  background: var(--tx-canvas);
+  color: var(--tx-ink-soft);
+  white-space: nowrap;
+}
+
+.tx-admin-action__origin {
+  background: color-mix(in oklab, var(--tx-accent) 10%, var(--tx-paper));
+  color: var(--tx-accent);
+}
+
+.tx-admin-action__sod {
+  flex-basis: 100%;
+  padding-left: 1.5rem;
+  font-size: 0.74rem;
+  color: var(--tx-wait);
+}
+
+/*
+ * `#395` QUYEN KEM THEO — phep xem cua nhom KHAC ma man hinh cua mot nhom can. Cung dang nhan tron
+ * voi "Cấp thêm"/"Đã bớt", mau muc (khong mau canh bao): day la mot loi chi duong, khong phai loi.
+ */
+.tx-admin-action__needed {
+  font-size: 0.72rem;
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--tx-ink-soft) 10%, var(--tx-paper));
+  color: var(--tx-ink-soft);
+}
+
+.tx-admin-group__text > .tx-admin-group__needs {
+  font-size: 0.74rem;
+  color: var(--tx-ink-faint);
+}
+
+.tx-admin-kind {
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 0.05rem 0.4rem;
+  border-radius: 3px;
+  background: var(--tx-canvas);
+  color: var(--tx-ink-soft);
+  white-space: nowrap;
+}
+
+.tx-admin-kind[data-kind='XEM'] {
+  background: var(--tx-done-wash);
+  color: var(--tx-done);
+}
+
+.tx-admin-kind[data-kind='DUYET'] {
+  background: var(--tx-go-wash);
+  color: var(--tx-go);
+}
+
+.tx-admin-kind[data-kind='NHAY_CAM'] {
+  background: var(--tx-stop-wash);
+  color: var(--tx-stop);
+}
+
+.tx-admin-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.8rem 0.9rem;
+  border: 1px dashed var(--tx-line-strong);
+  border-radius: var(--tx-radius-sm);
+  background: var(--tx-canvas);
+}
+
+.tx-admin-preview h3 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 0.98rem;
+}
+
+.tx-admin-violations {
+  margin: 0;
+  padding: 0.6rem 0.8rem 0.6rem 1.7rem;
+  border-radius: var(--tx-radius-sm);
+  background: var(--tx-stop-wash);
+  color: var(--tx-stop);
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+
+/* ---------------------------------------------------------------- *
+ * Trinh tao tai khoan
+ * ---------------------------------------------------------------- */
+
+.tx-admin-steps {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.1rem;
+  margin: 0;
+  padding: 0 0 0.7rem;
+  border-bottom: 1px solid var(--tx-line);
+  font-size: 0.78rem;
+  color: var(--tx-ink-faint);
+}
+
+.tx-admin-steps li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.tx-admin-steps li[aria-current='step'] {
+  color: var(--tx-ink);
+  font-weight: 600;
+}
+
+.tx-admin-steps__num {
+  display: inline-grid;
+  place-items: center;
+  width: 1.3rem;
+  height: 1.3rem;
+  border-radius: 50%;
+  border: 1px solid var(--tx-line-strong);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.72rem;
+}
+
+.tx-admin-steps li[aria-current='step'] .tx-admin-steps__num {
+  background: var(--tx-accent);
+  border-color: var(--tx-accent);
+  color: var(--tx-paper);
+}
+
+.tx-admin-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+  gap: 0.75rem;
+}
+
+.tx-admin-linkfail {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.7rem 0.8rem;
+  border-left: 3px solid var(--tx-wait);
+  background: var(--tx-wait-wash);
+}
+
+.tx-admin-linkfail p {
+  margin: 0;
+}
+
+.tx-admin-openwork {
+  margin: 0.2rem 0 0.6rem;
+  font-size: 0.85rem;
+}
+
+.tx-admin-openwork p {
+  margin: 0.2rem 0;
+}
+
+.tx-admin-warning:empty {
+  display: none;
+}
+
+.tx-admin-warning p {
+  margin: 0.2rem 0 0.6rem;
+  padding: 0.5rem 0.65rem;
+  border-left: 3px solid var(--tx-wait);
+  background: var(--tx-wait-wash);
+  font-size: 0.85rem;
+}
+
+/* ---------------------------------------------------------------- *
+ * Dia diem van hanh — ban do truoc
+ * ---------------------------------------------------------------- */
+
+.tx-admin-mapsplit {
+  display: grid;
+  grid-template-columns: minmax(22rem, 29rem) minmax(0, 1fr);
+  gap: 1.25rem;
+  align-items: start;
+}
+
+.tx-admin-mapsplit__side {
+  min-width: 0;
+}
+
+/* Ban do DUNG YEN khi cot trai cuon — trinh sua dai, nhung diem dang dat luon trong tam mat. */
+.tx-admin-mapsplit__map {
+  position: sticky;
+  top: var(--tx-gutter);
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  height: calc(100vh - 2 * var(--tx-gutter) - var(--preview-strip-h, 0px));
+  min-height: 30rem;
+}
+
+.tx-admin-mapsplit__map > .tx-picker {
+  flex: 1 1 auto;
+}
+
+.tx-admin-maphint {
+  flex: none;
+}
+
+/* Chu giai ghim — cung ky hieu voi ghim tren ban do, nho lai cho mot dong chu. */
+.tx-admin-maplegend {
+  flex: none;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.9rem;
+  margin: 0;
+  padding: 0;
+  font-size: 0.76rem;
+  color: var(--tx-ink-soft);
+}
+
+.tx-admin-maplegend li {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.tx-admin-maplegend .tx-pin {
+  width: 1.2rem;
+  height: 1.2rem;
+  cursor: default;
+}
+
+.tx-admin-maptoggle {
+  display: none;
+}
+
+.tx-admin-depotcard {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.8rem 0.9rem;
+  border-left: 4px solid var(--tx-line-strong);
+  border-radius: 0 var(--tx-radius-sm) var(--tx-radius-sm) 0;
+  background: var(--tx-paper);
+  box-shadow: var(--tx-lift);
+}
+
+.tx-admin-depotcard[data-tone='go'] {
+  border-left-color: var(--tx-go);
+}
+
+.tx-admin-depotcard[data-tone='wait'] {
+  border-left-color: var(--tx-wait);
+  background: var(--tx-wait-wash);
+}
+
+.tx-admin-depotcard[data-tone='stop'] {
+  border-left-color: var(--tx-stop);
+  background: var(--tx-stop-wash);
+}
+
+.tx-admin-depotcard p {
+  margin: 0;
+}
+
+.tx-admin-depotcard__title {
+  font-family: var(--font-display);
+  font-size: 1.02rem;
+  line-height: 1.3;
+}
+
+.tx-admin-depotcard__standby {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem;
+  margin: 0;
+  padding: 0;
+}
+
+.tx-admin-planner {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.3rem 1rem;
+  padding: 0.55rem 0.7rem;
+  border-left: 3px solid var(--tx-line-strong);
+  background: var(--tx-canvas);
+  font-size: 0.85rem;
+}
+
+.tx-admin-planner[data-tone='go'] {
+  border-left-color: var(--tx-go);
+  background: var(--tx-go-wash);
+}
+
+.tx-admin-planner[data-tone='stop'] {
+  border-left-color: var(--tx-stop);
+  background: var(--tx-stop-wash);
+}
+
+.tx-admin-place__kind {
+  font-size: 0.72rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--tx-ink-faint);
+}
+
+/* Hinh ghim o dau dong — CUNG hinh voi ghim tren ban do: vuong bai xe, thoi nha may, tron kho. */
+.tx-admin-place .tx-admin-person__name::before {
+  content: '';
+  display: inline-block;
+  width: 0.62rem;
+  height: 0.62rem;
+  margin-right: 0.5rem;
+  vertical-align: 0.05em;
+  border: 2px solid var(--tx-ink-soft);
+  background: var(--tx-paper);
+}
+
+.tx-admin-place[data-kind='DEPOT'] .tx-admin-person__name::before {
+  background: var(--tx-ink);
+  border-color: var(--tx-ink);
+}
+
+.tx-admin-place[data-kind='COUNTERPARTY_SITE'] .tx-admin-person__name::before {
+  transform: rotate(45deg) scale(0.9);
+}
+
+.tx-admin-place[data-kind='CUSTOMER'] .tx-admin-person__name::before {
+  border-radius: 50%;
+}
+
+.tx-admin-placeeditor .tx-form {
+  gap: 0.95rem;
+}
+
+.tx-admin-position {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0.75rem 0.85rem 0.85rem;
+  border: 1px solid var(--tx-line-strong);
+  border-radius: var(--tx-radius-sm);
+  min-width: 0;
+}
+
+.tx-admin-position > legend {
+  padding: 0 0.3rem;
+  font-weight: 600;
+}
+
+.tx-admin-position__now {
+  margin: 0;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.tx-admin-nudge {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.tx-admin-lookup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.tx-admin-results {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--tx-line);
+}
+
+.tx-admin-results li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.45rem 0;
+  border-bottom: 1px solid var(--tx-line);
+}
+
+.tx-admin-results li > span {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.tx-admin-results small {
+  color: var(--tx-ink-soft);
+}
+
+.tx-admin-paste > summary {
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: var(--tx-accent);
+}
+
+.tx-admin-paste[open] > summary {
+  margin-bottom: 0.5rem;
+}
+
+.tx-admin-radius {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 8rem;
+  gap: 0.8rem;
+  align-items: end;
+}
+
+.tx-admin-radius input[type='range'] {
+  padding: 0;
+  border: 0;
+  accent-color: var(--tx-accent);
+}
+
+/* ---------------------------------------------------------------- *
+ * May tinh bang / dien thoai
+ * ---------------------------------------------------------------- */
+
+@media (max-width: 1100px) {
+  .tx-admin-mapsplit {
+    grid-template-columns: minmax(19rem, 24rem) minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 880px) {
+  .tx-admin-split,
+  .tx-admin-mapsplit {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* Tai khoan: chi tiet mo ra thi thay cho danh sach; "Đóng" ve danh sach. */
+  .tx-admin-split[data-has-detail] .tx-admin-listpane,
+  .tx-admin-split:not([data-has-detail]) .tx-admin-detailpane {
+    display: none;
+  }
+
+  .tx-admin-sheet {
+    padding: 0.95rem 0.9rem 1.05rem;
+  }
+
+  .tx-admin-sheet__head {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .tx-admin-sheet__badges {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    justify-content: flex-start;
+  }
+
+  .tx-admin-sheet__close {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .tx-admin-chip,
+  .tx-admin .tx-btn {
+    min-height: 2.6rem;
+  }
+
+  .tx-admin-history li {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.1rem;
+  }
+
+  .tx-admin-group__head {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .tx-admin-group__head > .tx-btn {
+    grid-column: 2 / -1;
+    justify-self: start;
+  }
+
+  .tx-admin-actionlist {
+    padding-left: 0.8rem;
+  }
+
+  .tx-admin-radius {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* Dia diem: danh sach mac dinh; ban do khi chon "Xem bản đồ", va TREN trinh sua khi dat diem. */
+  .tx-admin-maptoggle {
+    display: inline-flex;
+    justify-content: center;
+    align-self: stretch;
+  }
+
+  .tx-admin-mapsplit__map {
+    position: static;
+    order: -1;
+    height: 58vh;
+    min-height: 18rem;
+  }
+
+  .tx-admin-places[data-mobile-view='LIST'] .tx-admin-mapsplit__map {
+    display: none;
+  }
+
+  .tx-admin-places[data-mobile-view='EDIT'] .tx-admin-mapsplit__map {
+    height: 46vh;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tx-admin-chip,
+  .tx-admin-preset {
+    transition: none;
+  }
+}

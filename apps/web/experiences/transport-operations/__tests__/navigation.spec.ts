@@ -10,15 +10,19 @@ import {
   parseNavigationFromSearch,
   resolveNavigation,
   resolveSection,
+  shouldProbeStakeholderScope,
   SUPERSEDED_HEADING,
   supersededEntries,
   supersededNote,
+  TRANSPORT_SECTION_GROUPS,
   TRANSPORT_SECTIONS,
   visibleDriverScreens,
   visibleSections,
   type NavigationInput,
   type TransportSection,
+  type TransportSectionId,
 } from '../navigation';
+import { actionsForRole, type TransportAction } from '../transport-actions';
 
 /**
  * Kien truc thong tin la mot HOP DONG. Bo test nay giu no dung ba dieu ma #161 doi:
@@ -152,27 +156,37 @@ describe('loc theo vai — hau qua that cua cau bridge GD-22', () => {
       'control-tower',
       'dispatch',
       'fleet',
+      // #341 — bon nhom tien theo dong tien: phai thu → phai tra → lai xe → tong hop & hieu qua.
+      // Khoi `#341` ben duoi khoa nhan, nhom va cong quyen cua tung muc.
+      'settlement',
+      'ar-ap',
+      'fuel',
       'driver-fund',
       'expense-claims',
-      'fuel',
-      'settlement',
-      // `TX-08` (#242) — so dang ky so huu chi doi `transport-core`, nen no co mat voi MOI khach
-      // bat van tai, khong nhu `maintenance`/`payroll` doi them capability rieng. Quyen so huu la
-      // mot su that ve chinh chiec xe, khong phai mot lop nghiep vu ban them.
-      'asset-ownership',
       'finance',
+      'margin',
       'executive',
       'fleet-dashboard',
       'routes',
       'journey',
-      'margin',
-      'ar-ap',
       'exports',
+      // `TX-08` (#242) — so dang ky so huu chi doi `transport-core`, nen no co mat voi MOI khach
+      // bat van tai, khong nhu `maintenance`/`payroll` doi them capability rieng. Quyen so huu la
+      // mot su that ve chinh chiec xe, khong phai mot lop nghiep vu ban them. Nhom TAI SAN o cuoi
+      // tu #341.
+      'asset-ownership',
+      // `#395` — QUAN TRI o cuoi cung. `admin-places` doi them `transport-proof` (so hang rao), goi
+      // FULL khong bat nang luc do nen chi con `Tài khoản & quyền`.
+      'admin-accounts',
     ]);
   });
 
-  it('Ke toan thay dung nhung muc do — ba quyen bi cat khong phai quyen DOC', () => {
-    expect(idsOf(accountant())).toEqual(idsOf(director()));
+  it('Ke toan thay dung danh muc Giam doc TRU hai muc quan tri (#395)', () => {
+    const adminSections = new Set(['admin-accounts', 'admin-places']);
+    expect(idsOf(accountant())).toEqual(idsOf(director()).filter((id) => !adminSections.has(id)));
+    expect(idsOf(accountant([...FULL, 'transport-proof']))).toEqual(
+      idsOf(director()).filter((id) => !adminSections.has(id)),
+    );
   });
 
   it('Lai xe KHONG thay mot muc van hanh nao', () => {
@@ -194,12 +208,14 @@ describe('nhom tren thanh ben', () => {
   it('nhom rong bi bo han, khong de lai tieu de mo coi', () => {
     const groups = navigationGroups(director(MINIMUM));
     // `assets` khong con rong tu `TX-08`: so dang ky so huu chi doi `transport-core`, nen ke ca goi
-    // toi thieu cung co mot muc trong nhom nay.
+    // toi thieu cung co mot muc trong nhom nay. Bon nhom tien (#341) rong het o goi nay — va bien
+    // mat het, khong de lai tieu de nao.
     expect(groups.map((entry) => entry.group.id)).toEqual([
       'root',
       'dispatch',
-      'assets',
       'reports',
+      'assets',
+      'admin',
     ]);
     for (const entry of groups) expect(entry.sections.length).toBeGreaterThan(0);
   });
@@ -216,9 +232,27 @@ describe('moi muc phai khai du hai truc', () => {
    * `live`. Mot truc chi con MOT gia tri khong phai mot truc; giu lai se lam nguoi doc tuong con
    * mot muc nao do chua chay.
    */
-  it('khong muc nao thieu hanh dong bat buoc hay nhan', () => {
-    for (const section of TRANSPORT_SECTIONS) {
-      expect(section.requiredAction.startsWith('transport.')).toBe(true);
+  /**
+   * `#395` — truc quyen la DUNG MOT trong hai: mot hanh dong van tai, HOAC mot quyen nen tang. Thieu
+   * ca hai thi muc bi dong mai mai (fail-closed); khai ca hai thi khong ai biet cong nao thang.
+   */
+  it('moi muc khai DUNG MOT truc quyen, va co nhan', () => {
+    const sections: readonly TransportSection[] = TRANSPORT_SECTIONS;
+    for (const section of sections) {
+      const axes = [section.requiredActions, section.requiredPlatformPermission].filter(
+        (axis) => axis !== undefined,
+      );
+      expect(axes, section.id).toHaveLength(1);
+      if (section.requiredActions !== undefined) {
+        // `#395`: mot BO ma cua du lieu chinh — rong thi muc dong mai mai (fail-closed).
+        expect(section.requiredActions.length, section.id).toBeGreaterThan(0);
+        for (const action of section.requiredActions) {
+          expect(action.startsWith('transport.'), section.id).toBe(true);
+        }
+      }
+      if (section.requiredPlatformPermission !== undefined) {
+        expect(section.requiredPlatformPermission.startsWith('platform.')).toBe(true);
+      }
       expect(section.label.length).toBeGreaterThan(0);
     }
   });
@@ -345,10 +379,14 @@ describe('#275 K4 — muc Ket thuc don', () => {
     expect(idsOf(manager(WITH_ACCEPTANCE))).not.toContain('order-completion');
   });
 
-  it('nam trong nhom CHI PHI & DOI SOAT, canh duyet chi va quyet toan', () => {
+  /**
+   * #341 — o DAU nhom PHAI THU, truoc `Phải thu khách hàng`: doi soat voi khach chi nhan don da ket
+   * thuc, nen day la buoc dau cua viec thu tien khach. Hai truc quyen KHONG doi.
+   */
+  it('dung dau nhom PHAI THU, va giu nguyen hai truc quyen', () => {
     const section = TRANSPORT_SECTIONS.find((entry) => entry.id === 'order-completion');
-    expect(section?.group).toBe('cost');
-    expect(section?.requiredAction).toBe('transport.commercial_acceptance.read');
+    expect(section?.group).toBe('receivable');
+    expect(section?.requiredActions).toEqual(['transport.commercial_acceptance.read']);
     expect(section?.requiredCapabilities).toEqual(['transport-acceptance']);
   });
 });
@@ -499,9 +537,15 @@ describe('#339 — danh muc chinh bat dau tu Don hang, Chuyen xe chi con o loi p
       expect(primaryIds(manager(WITH_ACCEPTANCE))).not.toContain('movement');
     });
 
-    it('van doi `transport.run.read` — #339 khong doi truc quyen cua muc nay', () => {
+    /**
+     * #339 khong doi truc quyen cua muc nay; `#395` doi — co chu dich: DON la du lieu chinh (man
+     * hinh chan ca trang khi khong doc duoc don), con bang vong chay la phan phu tu gac bang
+     * `transport.run.read`. Vai khoi diem van thay dung muc nay (`preset-sections.spec.ts`).
+     */
+    it('doi `transport.order.read`; vong chay (`transport.run.read`) la phan phu (#395)', () => {
       const movement = TRANSPORT_SECTIONS.find((section) => section.id === 'movement');
-      expect(movement?.requiredAction).toBe('transport.run.read');
+      expect(movement?.requiredActions).toEqual(['transport.order.read']);
+      expect(movement?.optionalActions).toContain('transport.run.read');
       expect(movement?.requiredCapabilities).toEqual(['transport-core']);
     });
   });
@@ -564,9 +608,10 @@ describe('#339 — danh muc chinh bat dau tu Don hang, Chuyen xe chi con o loi p
       expect(primary.filter((id) => older.includes(id))).toEqual([]);
     });
 
-    it('ACCOUNTING khong regress: van thay dung tap muc cua Giam doc, tren ca hai loi', () => {
+    it('ACCOUNTING khong regress: van thay dung tap muc cua Giam doc (tru QUAN TRI), tren ca hai loi', () => {
+      // `#395` — hai muc quan tri chi Giam doc co; phan con lai cua danh muc KHONG doi.
       expect(primaryIds(accountant(WITH_ACCEPTANCE))).toEqual(
-        primaryIds(director(WITH_ACCEPTANCE)),
+        primaryIds(director(WITH_ACCEPTANCE)).filter((id) => !id.startsWith('admin-')),
       );
       expect(olderIds(accountant())).toEqual(['trips']);
     });
@@ -588,7 +633,7 @@ describe('#339 — danh muc chinh bat dau tu Don hang, Chuyen xe chi con o loi p
 
     it('`Chuyến xe` giu nguyen hai truc quyen — rut khoi danh muc khong doi ai duoc mo no', () => {
       const trips = TRANSPORT_SECTIONS.find((section) => section.id === 'trips');
-      expect(trips?.requiredAction).toBe('transport.trip.read');
+      expect(trips?.requiredActions).toEqual(['transport.trip.read']);
       expect(trips?.requiredCapabilities).toEqual(['transport-core']);
       expect(canNavigateTo('trips', director())).toBe(true);
       expect(canNavigateTo('trips', accountant())).toBe(true);
@@ -613,5 +658,557 @@ describe('#339 — danh muc chinh bat dau tu Don hang, Chuyen xe chi con o loi p
       const total = groups.reduce((sum, entry) => sum + entry.sections.length, 0);
       expect(total).toBeGreaterThanOrEqual(12);
     });
+  });
+});
+
+/** Hai truc quyen + truc vi tri cua mot muc — thu #341 KHONG duoc cham vao. */
+/**
+ * Cong NANG LUC va DUONG THAY THE cua mot muc. Cong QUYEN (mot ma truoc `#395`, mot bo ma sau) khong
+ * con o day: `preset-sections.spec.ts` giu ban do cong quyen truoc `#395` va chung minh bon vai khoi
+ * diem van thay DUNG cac muc nhu truoc.
+ */
+interface SectionGate {
+  readonly capabilities: readonly CapabilityId[];
+  readonly supersededBy: TransportSectionId | null;
+}
+
+/**
+ * ====================================================================================================
+ * #341 — DANH MUC KE TOAN TRA LOI CAU HOI NGHIEP VU, KHONG BAT NGUOI DUNG HOC TEN PHAN HE
+ * ====================================================================================================
+ *
+ * Do lai tren `main` sau #346, truoc khi sua: ADMIN va ACCOUNTING thay CUNG 22 muc; tien nam rai
+ * trong ba nhom tron lan (`CHI PHÍ & ĐỐI SOÁT`, `TÀI SẢN & NHÂN SỰ`, `BÁO CÁO`), va bon nhan —
+ * `Công nợ & quyết toán`, `AR/AP`, `Bảng tài chính`, `Quyết toán lái xe` — cung doc len nhu "cong
+ * no". Bon dieu duoc khoa o day:
+ *
+ *   1. ke toan nhin MOT luot la biet thu tien khach, xem phai tra, xem tong hop, xem hieu qua o dau;
+ *   2. moi cau hoi tien chi co MOT muc tra loi, va nhan + tom tat noi ra su khac nhau;
+ *   3. doi nhan/nhom/thu tu KHONG doi mot cong quyen nao — ban do cong cua ca 24 muc ghim nguyen;
+ *   4. moi dia chi cu van mo dung man cu, va TEN cu van tim ra muc trong o loc danh muc.
+ */
+describe('#341 — danh muc ke toan theo cau hoi nghiep vu', () => {
+  /** Goi khach cua dot UAT dau tien (`tenants/transport-preview`): du nang luc, ETC bi chan. */
+  const PREVIEW: readonly CapabilityId[] = [
+    ...FULL,
+    ...T6_CAPABILITIES,
+    'transport-proof',
+    'transport-checkpoint',
+    'transport-site-intake',
+    'transport-toll',
+    'transport-acceptance',
+  ];
+  const onPreview = (role: NavigationInput['role']): NavigationInput => ({
+    capabilities: PREVIEW,
+    role,
+    blockedCapabilityKeys: ['transport-toll'],
+  });
+  /** Cung goi do nhung KHONG chan gi — de moi muc, ke ca ETC, deu co mat. */
+  const everything = (role: NavigationInput['role']): NavigationInput => ({
+    capabilities: PREVIEW,
+    role,
+  });
+  const menuOf = (input: NavigationInput): readonly (readonly [string, readonly string[]])[] =>
+    navigationGroups(input).map((entry) => [
+      entry.group.label,
+      entry.sections.map((section) => section.label),
+    ]);
+  const fold = (value: string): string =>
+    value.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[Đđ]/g, 'd').toLowerCase();
+  const idsWithLabel = (fragment: string): readonly string[] =>
+    TRANSPORT_SECTIONS.filter((section) => fold(section.label).includes(fold(fragment))).map(
+      (section) => section.id,
+    );
+  const sections: readonly TransportSection[] = TRANSPORT_SECTIONS;
+  const summaryOf = (id: TransportSectionId): string =>
+    sections.find((section) => section.id === id)?.summary ?? '';
+
+  /**
+   * BAN DO CONG do tren `main` (bbdd59a3) TRUOC #341 — chep tay, KHONG sinh tu tep dang kiem.
+   * #341 chi doi nhan, tom tat, nhom va thu tu; mot o nao o day lech la mot lan doi cong lot vao
+   * duoi danh nghia sap xep danh muc. (Cong QUYEN: xem `SectionGate` va `preset-sections.spec.ts`.)
+   */
+  const GATES_BEFORE_341: Readonly<Record<string, SectionGate>> = {
+    overview: { capabilities: [], supersededBy: null },
+    movement: {
+      capabilities: ['transport-core'],
+      supersededBy: null,
+    },
+    trips: {
+      capabilities: ['transport-core'],
+      supersededBy: 'movement',
+    },
+    'control-tower': {
+      capabilities: ['transport-core'],
+      supersededBy: null,
+    },
+    dispatch: {
+      capabilities: ['transport-core'],
+      supersededBy: null,
+    },
+    fleet: {
+      capabilities: ['transport-core'],
+      supersededBy: null,
+    },
+    'driver-fund': {
+      capabilities: ['transport-costing'],
+      supersededBy: null,
+    },
+    'expense-claims': {
+      capabilities: ['transport-costing'],
+      supersededBy: null,
+    },
+    'order-completion': {
+      capabilities: ['transport-acceptance'],
+      supersededBy: null,
+    },
+    fuel: {
+      capabilities: ['transport-fuel'],
+      supersededBy: null,
+    },
+    toll: {
+      capabilities: ['transport-toll'],
+      supersededBy: null,
+    },
+    settlement: {
+      capabilities: ['transport-settlement'],
+      supersededBy: null,
+    },
+    maintenance: {
+      capabilities: ['transport-core', 'transport-asset-compliance'],
+      supersededBy: null,
+    },
+    'asset-ownership': {
+      capabilities: ['transport-core'],
+      supersededBy: null,
+    },
+    payroll: {
+      capabilities: ['transport-costing', 'transport-workforce'],
+      supersededBy: null,
+    },
+    'driver-settlement': {
+      capabilities: ['transport-costing', 'transport-workforce'],
+      supersededBy: null,
+    },
+    finance: {
+      capabilities: ['transport-settlement'],
+      supersededBy: null,
+    },
+    executive: {
+      capabilities: ['transport-core'],
+      supersededBy: null,
+    },
+    'fleet-dashboard': {
+      capabilities: ['transport-core'],
+      supersededBy: null,
+    },
+    routes: {
+      capabilities: ['transport-core'],
+      supersededBy: null,
+    },
+    journey: { capabilities: ['transport-core'], supersededBy: null },
+    margin: {
+      capabilities: ['transport-settlement'],
+      supersededBy: null,
+    },
+    'ar-ap': {
+      capabilities: ['transport-settlement'],
+      supersededBy: null,
+    },
+    exports: {
+      capabilities: ['transport-core'],
+      supersededBy: null,
+    },
+  };
+  const OLD_IDS: readonly string[] = Object.keys(GATES_BEFORE_341);
+
+  describe('acceptance 1 — ke toan nhin mot luot la biet di dau', () => {
+    const PREVIEW_MENU = [
+      ['', ['Tổng quan']],
+      ['ĐIỀU HÀNH', ['Đơn hàng & vòng chạy', 'Bảng điều hành', 'Điều xe', 'Đội xe & lái xe']],
+      ['PHẢI THU', ['Kết thúc đơn', 'Phải thu khách hàng']],
+      ['PHẢI TRẢ', ['Phải trả đối tác & cây xăng', 'Nhiên liệu']],
+      ['QUỸ & LƯƠNG LÁI XE', ['Quỹ lái xe', 'Duyệt chi lái xe', 'Lương', 'Quyết toán lái xe']],
+      [
+        'TỔNG HỢP & HIỆU QUẢ',
+        [
+          'Tổng hợp tài chính',
+          'Hiệu quả từng chuyến',
+          'Tổng hợp giám đốc',
+          'Bảng đội xe',
+          'Báo cáo tuyến',
+          'Bản đồ vòng chạy',
+          'Xuất dữ liệu',
+        ],
+      ],
+      ['TÀI SẢN', ['Bảo dưỡng & giấy tờ', 'Sở hữu tài sản']],
+    ];
+    /** `#395` — nhom QUAN TRI chi Giam doc co, va nam CUOI: khong chen vao danh muc ke toan doc. */
+    const ADMIN_GROUP = ['QUẢN TRỊ', ['Tài khoản & quyền', 'Địa điểm vận hành']] as const;
+
+    it('ACCOUNTING tren goi khach that: dung bay nhom, dung thu tu, dung nhan', () => {
+      expect(menuOf(onPreview('ACCOUNTING'))).toEqual(PREVIEW_MENU);
+    });
+
+    it('ADMIN tren goi khach that: cung bay nhom do, cong them QUAN TRI o cuoi (#395)', () => {
+      expect(menuOf(onPreview('ADMIN'))).toEqual([...PREVIEW_MENU, ADMIN_GROUP]);
+    });
+
+    it('ACCOUNTING va ADMIN van thay CUNG mot danh muc tien — #341 khong mo mot nhanh theo vai', () => {
+      expect(menuOf(onPreview('ACCOUNTING'))).toEqual(menuOf(onPreview('ADMIN')).slice(0, -1));
+      expect(supersededEntries(onPreview('ACCOUNTING')).map((entry) => entry.section.id)).toEqual([
+        'trips',
+      ]);
+    });
+
+    it.each([
+      ['thu tien khach', 'PHẢI THU', 'Phải thu khách hàng', 'settlement'],
+      ['xem phai tra', 'PHẢI TRẢ', 'Phải trả đối tác & cây xăng', 'ar-ap'],
+      ['xem tong hop tai chinh', 'TỔNG HỢP & HIỆU QUẢ', 'Tổng hợp tài chính', 'finance'],
+      ['xem hieu qua', 'TỔNG HỢP & HIỆU QUẢ', 'Hiệu quả từng chuyến', 'margin'],
+    ])('%s: nhom `%s` → muc `%s`', (_question, groupLabel, label, id) => {
+      const group = navigationGroups(onPreview('ACCOUNTING')).find(
+        (entry) => entry.group.label === groupLabel,
+      );
+      expect(group?.sections.find((section) => section.label === label)?.id).toBe(id);
+    });
+
+    it('khach bat ETC: `Phí đường bộ (ETC)` dung trong PHAI TRA, sau `Nhiên liệu`', () => {
+      const payable = navigationGroups(everything('ACCOUNTING')).find(
+        (entry) => entry.group.id === 'payable',
+      );
+      expect(payable?.sections.map((section) => section.id)).toEqual(['ar-ap', 'fuel', 'toll']);
+    });
+
+    it('moi muc nam dung nhom cau hoi cua no', () => {
+      expect(Object.fromEntries(sections.map((section) => [section.id, section.group]))).toEqual({
+        overview: 'root',
+        movement: 'dispatch',
+        trips: 'dispatch',
+        'control-tower': 'dispatch',
+        dispatch: 'dispatch',
+        fleet: 'dispatch',
+        maintenance: 'assets',
+        'asset-ownership': 'assets',
+        'my-vehicles': 'assets',
+        'order-completion': 'receivable',
+        settlement: 'receivable',
+        'ar-ap': 'payable',
+        fuel: 'payable',
+        toll: 'payable',
+        'driver-fund': 'driver-money',
+        'expense-claims': 'driver-money',
+        payroll: 'driver-money',
+        'driver-settlement': 'driver-money',
+        finance: 'reports',
+        margin: 'reports',
+        executive: 'reports',
+        'fleet-dashboard': 'reports',
+        routes: 'reports',
+        journey: 'reports',
+        exports: 'reports',
+        'admin-accounts': 'admin',
+        'admin-places': 'admin',
+      });
+    });
+
+    it('thu tu khai bao = thu tu thanh ben: moi nhom lien mot khoi, theo thu tu nhom', () => {
+      const order: readonly string[] = TRANSPORT_SECTION_GROUPS.map((group) => group.id);
+      const positions = sections.map((section) => order.indexOf(section.group));
+      expect(positions).not.toContain(-1);
+      expect(positions).toEqual([...positions].sort((left, right) => left - right));
+    });
+  });
+
+  describe('acceptance 2 — moi cau hoi tien chi co MOT muc tra loi', () => {
+    it.each([
+      ['phai thu', ['settlement']],
+      ['phai tra', ['ar-ap']],
+      ['tai chinh', ['finance']],
+      ['hieu qua', ['margin']],
+      ['quyet toan', ['driver-settlement']],
+      // Hai chieu cong no mang hai ten theo CHIEU — khong con nhan nao chi noi "cong no".
+      ['cong no', []],
+    ])('nhan chua "%s" → %j', (fragment, ids) => {
+      expect(idsWithLabel(fragment)).toEqual(ids);
+    });
+
+    it('khong con nhan theo ten phan he: khong `AR/AP`, khong kieu `A / B`', () => {
+      for (const section of sections) {
+        expect(section.label, section.id).not.toMatch(/\bA[RP]\b|\//);
+      }
+    });
+
+    it('`Phải thu khách hàng` chi hua MOT dong tien — man cua #337 la cong no KHACH', () => {
+      expect(sections.find((section) => section.id === 'settlement')?.label).toBe(
+        'Phải thu khách hàng',
+      );
+      for (const promise of ['năm dòng', 'nhà xe', 'cây xăng', 'lái xe', 'nguồn đơn']) {
+        expect(summaryOf('settlement'), promise).not.toContain(promise);
+      }
+    });
+
+    it('`Phải trả đối tác & cây xăng` khong hua tuoi no phai thu cua khach', () => {
+      for (const promise of ['phải thu', 'tuổi nợ', 'khách hàng']) {
+        expect(summaryOf('ar-ap').toLowerCase(), promise).not.toContain(promise);
+      }
+    });
+
+    it('chi `Tổng hợp tài chính` dat cac dong tien canh nhau', () => {
+      const flowsTogether = sections
+        .filter((section) => /sáu dòng|năm dòng|dòng tiền/i.test(section.summary))
+        .map((section) => section.id);
+      expect(flowsTogether).toEqual(['finance']);
+    });
+
+    it('khong hai muc nao mang cung mot tom tat', () => {
+      const summaries = sections.map((section) => section.summary);
+      expect(new Set(summaries).size).toBe(summaries.length);
+    });
+  });
+
+  describe('acceptance 3 — doi nhan, nhom, thu tu KHONG doi mot cong quyen nao', () => {
+    it('ban do cong nang luc va duong thay the cua ca 24 muc giu nguyen tu truoc #341', () => {
+      const now = Object.fromEntries(
+        sections
+          .filter((section) => OLD_IDS.includes(section.id))
+          .map((section) => [
+            section.id,
+            {
+              capabilities: section.requiredCapabilities,
+              supersededBy: section.supersededBy ?? null,
+            },
+          ]),
+      );
+      expect(now).toEqual(GATES_BEFORE_341);
+    });
+
+    /** Do tren goi khach that truoc #341: 23 muc mo duoc (22 muc chinh + `trips` o loi phu). */
+    it.each([
+      ['ADMIN', onPreview('ADMIN'), OLD_IDS.filter((id) => id !== 'toll')],
+      ['ACCOUNTING', onPreview('ACCOUNTING'), OLD_IDS.filter((id) => id !== 'toll')],
+      ['vai chua biet', onPreview(null), OLD_IDS.filter((id) => id !== 'toll')],
+      ['lai xe', onPreview('SALE'), []],
+      ['MANAGER', onPreview('MANAGER'), []],
+    ])('%s: tap muc mo duoc KHONG doi', (_name, input, expected) => {
+      const reachable = sections
+        .filter((section) => OLD_IDS.includes(section.id))
+        .filter((section) => canNavigateTo(section.id, input))
+        .map((section) => section.id);
+      expect([...reachable].sort()).toEqual([...expected].sort());
+    });
+
+    it('lai xe va MANAGER van khong co muc chinh nao, cung khong co loi phu', () => {
+      for (const input of [onPreview('SALE'), onPreview('MANAGER')]) {
+        expect(menuOf(input)).toEqual([]);
+        expect(supersededEntries(input)).toEqual([]);
+      }
+    });
+  });
+
+  describe('acceptance 4 — dia chi cu van mo dung man, ten cu van tim ra muc', () => {
+    it.each([['ADMIN'], ['ACCOUNTING']] as const)(
+      '%s: moi `?section=<id>` cu mo DUNG man do',
+      (role) => {
+        for (const id of OLD_IDS) {
+          expect(parseNavigationFromSearch(`?section=${id}`, everything(role)).section, id).toBe(
+            id,
+          );
+        }
+      },
+    );
+
+    it('dia chi sinh lai y nguyen — `id` khong doi, nen khong can mot bang anh xa nao', () => {
+      for (const id of OLD_IDS) {
+        expect(buildSectionUrl(id as TransportSectionId)).toBe(
+          id === 'overview' ? '/' : `/?section=${id}`,
+        );
+      }
+    });
+
+    it.each([
+      ['MANAGER', manager(PREVIEW)],
+      ['lai xe', driver(PREVIEW)],
+    ])('%s mo dia chi tien cu thi roi ve Tong quan — fail-closed nhu truoc', (_name, input) => {
+      for (const id of ['settlement', 'ar-ap', 'finance', 'margin', 'driver-fund']) {
+        expect(parseNavigationFromSearch(`?section=${id}`, input).section, id).toBe('overview');
+      }
+    });
+
+    it.each([
+      ['Công nợ & quyết toán', 'settlement'],
+      ['cong no', 'settlement'],
+      ['AR/AP', 'ar-ap'],
+      ['Bảng tài chính', 'finance'],
+      ['bien truc tiep', 'margin'],
+      ['Quỹ lái xe / Chi phí', 'driver-fund'],
+    ])('go ten cu "%s" vao o loc van ra `%s`, duoi ten moi', (query, id) => {
+      const found = filterNavigationGroups(
+        navigationGroups(onPreview('ACCOUNTING')),
+        query,
+      ).flatMap((entry) => entry.sections.map((section) => section.id));
+      expect(found).toEqual([id]);
+    });
+
+    it('ten cu chi de loc: khong trung nhan hien tai cua muc nao', () => {
+      const labels = new Set(sections.map((section) => section.label));
+      for (const section of sections) {
+        for (const former of section.formerLabels ?? []) {
+          expect(labels.has(former), former).toBe(false);
+        }
+      }
+    });
+  });
+});
+
+/**
+ * ====================================================================================================
+ * `#395` — MAN HINH DOC TAP QUYEN CUA MAY CHU, khong doc chuc danh.
+ *
+ * Truoc #395 danh muc hoi `canPerform(role, ...)` tren mot bang tinh theo vai, nen mot `MANAGER` duoc
+ * Giam doc cap nhom "Đội xe & lái xe" van thay danh muc TRONG — du API dang cho phep. Gio `/auth/me`
+ * tra tap quyen HIEU LUC va danh muc doc DUNG tap do; bang theo vai chi con la duong lui khi may chu
+ * khong tra truong nay.
+ * ====================================================================================================
+ */
+const TRANSPORT_ACTIONS_OF_ACCOUNTING: readonly TransportAction[] = actionsForRole('ACCOUNTING');
+
+describe('#395 — danh muc theo tap quyen hieu luc cua may chu', () => {
+  const PROOF: readonly CapabilityId[] = [...FULL, 'transport-proof'];
+  const withPermissions = (
+    role: NavigationInput['role'],
+    permissions: readonly string[],
+    capabilities: readonly CapabilityId[] = PROOF,
+  ): NavigationInput => ({ capabilities, role, permissions: new Set(permissions) });
+
+  const FLEET_GROUP = [
+    'transport.vehicle.read',
+    'transport.vehicle.manage',
+    'transport.driver.read',
+    'transport.driver.manage',
+  ];
+
+  it('MANAGER duoc cap nhom Doi xe THAY muc do — va chi muc do', () => {
+    const input = withPermissions('MANAGER', FLEET_GROUP);
+    expect(idsOf(input)).toEqual(['fleet']);
+    // Dia chi `/` cua ho khong phai `Tổng quan` (ho khong co quyen do) ma la muc dau tien ho mo duoc.
+    expect(parseNavigationFromSearch('', input).section).toBe('fleet');
+    expect(parseNavigationFromSearch('?section=settlement', input).section).toBe('fleet');
+  });
+
+  it('Ke toan bi Giam doc BOT quyen xem xe thi mat muc Doi xe (va Bao duong)', () => {
+    const accountingPreset = idsOf(accountant(PROOF));
+    expect(accountingPreset).toContain('fleet');
+    const denied = withPermissions(
+      'ACCOUNTING',
+      [...TRANSPORT_ACTIONS_OF_ACCOUNTING].filter((action) => action !== 'transport.vehicle.read'),
+    );
+    expect(idsOf(denied)).not.toContain('fleet');
+    expect(idsOf(denied)).toEqual(accountingPreset.filter((id) => id !== 'fleet'));
+  });
+
+  it('tap quyen RONG la khong co gi — khac han "chua biet" (null) la hien het', () => {
+    expect(idsOf(withPermissions('ADMIN', []))).toEqual([]);
+    expect(idsOf({ capabilities: PROOF, role: null, permissions: null })).toEqual(
+      idsOf({ capabilities: PROOF, role: null }),
+    );
+  });
+
+  it('`Tài khoản & quyền` doi quyen NEN TANG; `Địa điểm vận hành` doi XEM va SUA dia diem', () => {
+    const directorOnlyAdmin = withPermissions('ADMIN', [
+      'platform.accounts.manage',
+      'transport.geofence.read',
+      'transport.geofence.manage',
+    ]);
+    expect(idsOf(directorOnlyAdmin)).toEqual(['admin-accounts', 'admin-places']);
+    // MANAGER duoc cap xem + sua dia diem (khong phai quyen nen tang) thay dia diem, khong thay tai
+    // khoan.
+    expect(
+      idsOf(withPermissions('MANAGER', ['transport.geofence.read', 'transport.geofence.manage'])),
+    ).toEqual(['admin-places']);
+    // `#395` (d): CHI co ma sua thi danh sach dia diem (`GET /transport/places/admin`,
+    // `transport.geofence.read`) la `403` — muc KHONG hien, thay vi hien ra roi bao loi.
+    expect(idsOf(withPermissions('MANAGER', ['transport.geofence.manage']))).toEqual([]);
+    // Duong lui khi may chu khong tra tap quyen: chi Giam doc thay quan tri tai khoan.
+    expect(canNavigateTo('admin-accounts', director())).toBe(true);
+    expect(canNavigateTo('admin-accounts', accountant())).toBe(false);
+    expect(canNavigateTo('admin-accounts', manager())).toBe(false);
+    // `admin-places` doi `transport-proof`: khach khong bat so hang rao thi khong co muc do.
+    expect(canNavigateTo('admin-places', director(FULL))).toBe(false);
+    expect(canNavigateTo('admin-places', director(PROOF))).toBe(true);
+  });
+
+  it('man lai xe cung doc tap quyen: lai xe CO pham vi cua chinh minh qua `/auth/me`', () => {
+    const selfScope = visibleDriverScreens(
+      withPermissions('SALE', ['transport.driver.self.trip.read']),
+    ).map((screen) => screen.id);
+    expect(selfScope).toEqual(['home', 'trip', 'history']);
+  });
+});
+
+/**
+ * `#395` — BEN GOP VON CO THEM VIEC VAN HANH. Pham vi "Xe tôi có cổ phần" den tu mot hang lien ket
+ * ma chi may chu doc duoc; `/auth/me` khong mang no. Man hinh HOI may chu (`GET /transport/me/vehicles`)
+ * va chi dat muc len thanh ben khi may chu tra du lieu.
+ */
+describe('#395 — "Xe tôi có cổ phần" cho nguoi vua van hanh vua gop von', () => {
+  const FLEET = ['transport.vehicle.read', 'transport.vehicle.manage'];
+  const managerWith = (
+    permissions: readonly string[],
+    stakeholderLinked?: boolean,
+  ): NavigationInput => ({
+    capabilities: FULL,
+    role: 'MANAGER',
+    permissions: new Set(permissions),
+    ...(stakeholderLinked === undefined ? {} : { stakeholderLinked }),
+  });
+
+  it('MANAGER co quyen VA da noi ben gop von: muc nam trong TAI SAN, mo duoc bang dia chi', () => {
+    const input = managerWith(FLEET, true);
+    expect(idsOf(input)).toEqual(['fleet', 'my-vehicles']);
+    const assets = navigationGroups(input).find((entry) => entry.group.id === 'assets');
+    expect(assets?.sections.map((section) => section.label)).toEqual(['Xe tôi có cổ phần']);
+    expect(parseNavigationFromSearch('?section=my-vehicles', input).section).toBe('my-vehicles');
+  });
+
+  it('may chu chua xac nhan (dang hoi, hoac 403) thi KHONG co muc do', () => {
+    expect(idsOf(managerWith(FLEET))).toEqual(['fleet']);
+    expect(idsOf(managerWith(FLEET, false))).toEqual(['fleet']);
+    expect(parseNavigationFromSearch('?section=my-vehicles', managerWith(FLEET)).section).toBe(
+      'fleet',
+    );
+  });
+
+  it('ben gop von THUAN TUY (khong quyen nao): danh muc van rong — giu man hien thang', () => {
+    expect(navigationGroups(managerWith([], true))).toEqual([]);
+    expect(
+      navigationGroups({ capabilities: FULL, role: 'MANAGER', stakeholderLinked: true }),
+    ).toEqual([]);
+  });
+
+  it('chua biet ai (vai null) khong hua muc cua ben gop von — pham vi do khong vai nao mang', () => {
+    expect(idsOf(unknownRole())).not.toContain('my-vehicles');
+    expect(idsOf(director())).not.toContain('my-vehicles');
+    expect(idsOf({ ...director(), stakeholderLinked: true })).toContain('my-vehicles');
+  });
+
+  it('chi HOI may chu khi co tap quyen cua may chu VA co viec van hanh', () => {
+    expect(shouldProbeStakeholderScope(managerWith(FLEET))).toBe(true);
+    expect(
+      shouldProbeStakeholderScope({
+        capabilities: FULL,
+        role: 'ADMIN',
+        permissions: new Set(actionsForRole('ADMIN')),
+      }),
+    ).toBe(true);
+    // Ben gop von thuan tuy da co man hien thang — khong hoi hai lan.
+    expect(shouldProbeStakeholderScope(managerWith([]))).toBe(false);
+    // May chu cu / che do khong phien: khong co tap quyen, khong hoi.
+    expect(shouldProbeStakeholderScope(director())).toBe(false);
+    expect(shouldProbeStakeholderScope(unknownRole())).toBe(false);
+    // Khach khong bat van tai loi: khong hoi.
+    expect(
+      shouldProbeStakeholderScope({ ...managerWith(FLEET), capabilities: ['transport-costing'] }),
+    ).toBe(false);
   });
 });

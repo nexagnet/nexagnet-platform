@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { authApi, authFetch, resetAuthClientForTests } from './auth';
+import { AuthApiError, authApi, authFetch, resetAuthClientForTests } from './auth';
 
 /**
  * `authFetch` gui `headers` duoi dang `Headers` (chuan web, khong phan biet hoa thuong va gop
@@ -90,7 +90,9 @@ describe('auth client', () => {
   it('uses the rotated token returned after login', async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify({ csrfToken: 'before-login' }), { status: 200 }))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ csrfToken: 'before-login' }), { status: 200 }),
+      )
       .mockResolvedValueOnce(
         new Response(
           JSON.stringify({
@@ -112,5 +114,100 @@ describe('auth client', () => {
     );
     // Sau login, token phai la ban XOAY VONG tra ve tu /auth/login — khong dung lai token cu.
     expect(headerOf(fetchMock, fetchMock.mock.calls.length, 'x-csrf-token')).toBe('after-login');
+  });
+
+  /*
+   * `#395` — doi mat khau tao lai phien: token CSRF cu chet cung phien cu. Neu client khong giu token
+   * moi, lenh ghi DAU TIEN sau man doi bat buoc bi tu choi — dung luc nguoi dung vua duoc cho vao.
+   */
+  it('keeps the rotated token returned by a password change', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ csrfToken: 'old-session' }), { status: 200 }),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            csrfToken: 'new-session',
+            user: { id: 'u1', username: 'dh.an', name: 'An', role: 'MANAGER' },
+          }),
+          { status: 200 },
+        ),
+      )
+      .mockResolvedValueOnce(new Response('{}', { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const current = ['tam', '01'].join('-');
+    const next = ['mot', 'mat', 'khau', 'moi'].join('-');
+
+    await authApi.changePassword(current, next);
+    await authFetch('http://localhost:3001/transport/orders', { method: 'POST' });
+
+    expect(String(fetchMock.mock.calls[1]?.[0])).toContain('/auth/credentials/change');
+    expect(headerOf(fetchMock, 2, 'x-csrf-token')).toBe('old-session');
+    expect(headerOf(fetchMock, 3, 'x-csrf-token')).toBe('new-session');
+  });
+
+  it('keeps status, typed reason and structured detail of a refusal', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValueOnce(new Response(JSON.stringify({ csrfToken: 'c' }), { status: 200 }))
+        .mockResolvedValueOnce(
+          new Response(
+            JSON.stringify({
+              statusCode: 409,
+              message: 'Đây là Giám đốc đang hoạt động cuối cùng',
+              reason: 'LAST_ACTIVE_ADMIN',
+              detail: { username: 'giam-doc' },
+            }),
+            { status: 409 },
+          ),
+        ),
+    );
+
+    const failure = await authApi.disableUser('u-admin').catch((error: unknown) => error);
+
+    expect(failure).toBeInstanceOf(AuthApiError);
+    expect(failure).toMatchObject({
+      status: 409,
+      reason: 'LAST_ACTIVE_ADMIN',
+      detail: { username: 'giam-doc' },
+      message: 'Đây là Giám đốc đang hoạt động cuối cùng',
+    });
+  });
+
+  it('turns an HTML 404 into a typed not-mounted error instead of a SyntaxError', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValueOnce(new Response('<!doctype html><p>404</p>', { status: 404 })),
+    );
+
+    const failure = await authApi.users().catch((error: unknown) => error);
+
+    expect(failure).toMatchObject({ status: 404, reason: 'ROUTE_NOT_MOUNTED' });
+  });
+
+  it('never sends an empty password: the server then issues a temporary one', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ csrfToken: 'c' }), { status: 200 }))
+      .mockImplementation(async () => new Response('{}', { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await authApi.createUser({ username: 'lx.an', name: 'An', role: 'SALE', password: '' });
+    await authApi.resetPassword('u 1');
+    await authApi.enableUser('u 1');
+
+    const bodyOf = (nth: number): unknown =>
+      JSON.parse(String((fetchMock.mock.calls[nth - 1]?.[1] as RequestInit).body));
+    expect(bodyOf(2)).toEqual({ username: 'lx.an', name: 'An', role: 'SALE' });
+    expect(String(fetchMock.mock.calls[2]?.[0])).toContain(
+      '/settings/users/u%201/credentials/reset',
+    );
+    expect(bodyOf(3)).toEqual({});
+    expect(String(fetchMock.mock.calls[3]?.[0])).toContain('/settings/users/u%201/enable');
+    expect(bodyOf(4)).toEqual({ confirmed: true });
   });
 });

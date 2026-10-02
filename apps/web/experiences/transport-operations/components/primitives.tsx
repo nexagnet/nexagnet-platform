@@ -1,6 +1,6 @@
 'use client';
 
-import { useId, useState, type ReactNode } from 'react';
+import { useId, useState, type ReactNode, type Ref } from 'react';
 import type { StatusTone } from '../customer-view';
 
 /**
@@ -16,6 +16,7 @@ export function PageHeader({
   summary,
   context,
   actions,
+  headingRef,
 }: {
   readonly title: string;
   readonly summary?: string;
@@ -23,11 +24,18 @@ export function PageHeader({
   readonly context?: ReactNode;
   /** MOT thao tac chinh. Neu thay minh muon nhieu, doc lai §7. */
   readonly actions?: ReactNode;
+  /**
+   * Co = be mat nay DUA TIEU DIEM vao tieu de khi mo (vd man tao don thay cho danh sach): tieu de
+   * nhan tieu diem bang ma (`tabIndex=-1`) nhung khong nam trong vong Tab.
+   */
+  readonly headingRef?: Ref<HTMLHeadingElement>;
 }) {
   return (
     <header className="tx-pagehead">
       <div className="tx-pagehead__text">
-        <h1>{title}</h1>
+        <h1 ref={headingRef} tabIndex={headingRef === undefined ? undefined : -1}>
+          {title}
+        </h1>
         {summary === undefined ? null : <p className="tx-pagehead__summary">{summary}</p>}
         {context === undefined ? null : <div className="tx-pagehead__context">{context}</div>}
       </div>

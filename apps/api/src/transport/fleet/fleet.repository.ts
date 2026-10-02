@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import type { TransactionTrail } from '../../audit/audit-trail.js';
 import type { VehicleOperationalControl } from '../asset-ownership/asset-ownership.types.js';
 import type {
   Driver,
@@ -102,7 +103,15 @@ export abstract class FleetRepository {
   abstract listVehicles(): Promise<Vehicle[]>;
 
   abstract createDriver(input: CreateDriverInput): Promise<Driver>;
-  abstract updateDriver(id: string, patch: UpdateDriverInput): Promise<Driver | null>;
+  /**
+   * `trail` (`#395`): dau vet cua lan ghi — kho Prisma goi no TRONG cung giao dich (noi / go tai
+   * khoan dang nhap la cap / thu pham vi cua mot con nguoi). Kho bo nho khong goi.
+   */
+  abstract updateDriver(
+    id: string,
+    patch: UpdateDriverInput,
+    trail?: TransactionTrail<Driver>,
+  ): Promise<Driver | null>;
   abstract findDriver(id: string): Promise<Driver | null>;
   abstract findDriverByAuthUserId(authUserId: string): Promise<Driver | null>;
   abstract listDrivers(): Promise<Driver[]>;

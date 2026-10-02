@@ -2,6 +2,7 @@
 
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
+import { PermissionGate } from '../components/PermissionGate';
 import { DataTable, PageHeader, StatusBadge } from '../components/primitives';
 import { ConfirmAction, EmptyState, ErrorState, LoadingState } from '../components/SectionState';
 import type { StatusTone } from '../customer-view';
@@ -11,6 +12,7 @@ import {
   useNavigationInput,
   useOrderCompletionQueue,
 } from '../hooks/useTransportWorkspace';
+import { canPerform } from '../transport-actions';
 import { transportApi } from '../transport-api';
 import type {
   OperationalDocumentView,
@@ -140,12 +142,16 @@ export function OrderCompletionView() {
    */
   const openDialog = (row: OrderCompletionRow, outcome: OrderCompletionOutcome) => {
     setFailure(null);
-    void transportApi.operationalDocuments
-      .forOrder(row.orderId)
-      .then((items) => setDocuments(items.filter((item) => item.status === 'ACTIVE')))
-      .catch((error: unknown) =>
-        setFailure(error instanceof Error ? error.message : 'Không đọc được chứng từ của đơn.'),
-      );
+    // Chung tu van hanh la PHAN PHU (`transport.operational_document.read`, `#395`): khong co quyen
+    // thi khong hoi — hop quyet dinh noi mot cau thay vi in `403` cua may chu nhu mot loi.
+    if (canPerform(navigation, 'transport.operational_document.read')) {
+      void transportApi.operationalDocuments
+        .forOrder(row.orderId)
+        .then((items) => setDocuments(items.filter((item) => item.status === 'ACTIVE')))
+        .catch((error: unknown) =>
+          setFailure(error instanceof Error ? error.message : 'Không đọc được chứng từ của đơn.'),
+        );
+    }
     if (row.acceptanceId === null) {
       setPending({ row, outcome, supersedesId: null, idempotencyKey: newIdempotencyKey() });
       return;
@@ -360,6 +366,9 @@ export function OrderCompletionView() {
         />
       )}
 
+      {pending === null ? null : (
+        <PermissionGate viewer={navigation} action="transport.operational_document.read" />
+      )}
       {pending === null || documents.length === 0 ? null : (
         <section className="tx-panel" aria-label={`Chứng từ của đơn ${pending.row.orderCode}`}>
           <h2>Chứng từ số của đơn</h2>

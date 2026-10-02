@@ -125,6 +125,21 @@ export const ALLOWLIST = [
       resolve: (match) => `docs/khach-hang/${match[1]}/ban-giao/nguon-html/${match[2]}.html`,
     },
   },
+  {
+    // Chi .jpg, chi `ban-giao/assets/<vai>/`, chi ten `NN-ten-khong-dau` — hep dung dieu tai lieu
+    // ban giao can. Anh khach gui sang (png/jpeg tu dien thoai, ten tu do, nam o thu muc khac) van
+    // bi chan nhu cu.
+    pattern: /^docs\/khach-hang\/([^/]+)\/ban-giao\/assets\/([a-z0-9-]+)\/\d{2}-[a-z0-9-]+\.jpg$/,
+    reason:
+      'Anh chup man hinh san pham CUA CHUNG TA tren du lieu mau, minh hoa cho tai lieu ban giao — dau ra gui cho khach, khong phai anh khach gui sang.',
+    // Bang chung CAU TRUC nhu dong PDF: cung thu muc phai co so nguon goc anh. Bai test
+    // "moi anh ban giao deu khai nguon" doi so do ghi DUNG TEN tung anh, nen them mot anh ma khong
+    // khai nguon thi do.
+    evidence: {
+      kind: 'sourceFile',
+      resolve: (match) => `docs/khach-hang/${match[1]}/ban-giao/assets/${match[2]}/NGUON-ANH.md`,
+    },
+  },
 ];
 
 /** Ma cua tung duong tu choi. Mot cong co N duong tu choi phai phan biet duoc N ly do. */

@@ -174,3 +174,23 @@ export function toDispatchMap(view: DispatchSuggestionView): JourneyMapModel {
 
   return { segments: [], markers, gaps: [], hasGeometry: markers.length > 0, rawSampledFrom: 0 };
 }
+
+/**
+ * `#379` — don CU (tao truoc khi he thong luu toa do) khong co diem lay hang de xep hang xe.
+ *
+ * May chu tu choi bang ma `DISPATCH_ORDER_PICKUP_COORDINATES_MISSING` thay vi doan diem lay tu nhan
+ * chu. Cau cua may chu noi cho nguoi goi API ("chi dinh tuong minh khi dieu xe"); man hinh noi cho
+ * nguoi dieu hanh — ho khong co o nao de "chi dinh", ho can biet VI SAO khong co goi y.
+ */
+export const DISPATCH_PICKUP_MISSING_MESSAGE =
+  'Đơn này được tạo trước khi hệ thống lưu toạ độ điểm lấy hàng, nên chưa gợi ý xe được.';
+
+/** Cau hien khi hoi de nghi dieu xe that bai. Loi khac giu NGUYEN VAN cau cua may chu. */
+export function dispatchErrorMessage(error: {
+  readonly message: string;
+  readonly reason?: string | null;
+}): string {
+  return error.reason === 'DISPATCH_ORDER_PICKUP_COORDINATES_MISSING'
+    ? DISPATCH_PICKUP_MISSING_MESSAGE
+    : error.message;
+}

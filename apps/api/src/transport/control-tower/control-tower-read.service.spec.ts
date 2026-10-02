@@ -453,6 +453,8 @@ describe('moc hien truong — bang doc, khong suy', () => {
       customerId: null,
       originLabel: 'Ha Noi',
       destinationLabel: 'Hai Phong',
+      originPoint: null,
+      destinationPoint: null,
       cargoDescription: null,
       freightAmount: null,
       currencyCode: 'VND',

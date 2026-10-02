@@ -265,12 +265,18 @@ importers:
       '@deck.gl/core':
         specifier: 9.4.0
         version: 9.4.0(@luma.gl/webgpu@9.4.0(@luma.gl/core@9.4.0)(@luma.gl/shadertools@9.4.0(@luma.gl/core@9.4.0)))
+      '@deck.gl/google-maps':
+        specifier: 9.4.0
+        version: 9.4.0(@deck.gl/core@9.4.0(@luma.gl/webgpu@9.4.0(@luma.gl/core@9.4.0)(@luma.gl/shadertools@9.4.0(@luma.gl/core@9.4.0))))(@luma.gl/core@9.4.0)(@luma.gl/webgl@9.4.0(@luma.gl/core@9.4.0))
       '@deck.gl/layers':
         specifier: 9.4.0
         version: 9.4.0(@deck.gl/core@9.4.0(@luma.gl/webgpu@9.4.0(@luma.gl/core@9.4.0)(@luma.gl/shadertools@9.4.0(@luma.gl/core@9.4.0))))(@loaders.gl/core@4.4.5)(@luma.gl/core@9.4.0)(@luma.gl/engine@9.4.0(@luma.gl/core@9.4.0)(@luma.gl/shadertools@9.4.0(@luma.gl/core@9.4.0)))
       '@deck.gl/mapbox':
         specifier: 9.4.0
         version: 9.4.0(@deck.gl/core@9.4.0(@luma.gl/webgpu@9.4.0(@luma.gl/core@9.4.0)(@luma.gl/shadertools@9.4.0(@luma.gl/core@9.4.0))))(@luma.gl/core@9.4.0)(@math.gl/web-mercator@4.1.0)
+      '@googlemaps/js-api-loader':
+        specifier: 2.1.3
+        version: 2.1.3
       '@netviet/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -311,6 +317,9 @@ importers:
       '@playwright/test':
         specifier: ^1.62.1
         version: 1.62.1
+      '@types/google.maps':
+        specifier: ^3.66.3
+        version: 3.66.3
       '@types/node':
         specifier: ^22.10.0
         version: 22.20.0
@@ -1164,6 +1173,13 @@ packages:
   '@deck.gl/core@9.4.0':
     resolution: {integrity: sha512-0isP+x2eGNxteO7lT650lYO7oiAYXAu4aF1jG+BMi8aKYh38HtPugLq1TlQTravIXzBSi5Oe1oZNuVj8h4ZEjA==}
 
+  '@deck.gl/google-maps@9.4.0':
+    resolution: {integrity: sha512-iL+92RvDjWawZe56GsBDYadXdnLuptM5vwxDDrCu4N4dRxSGqNmlvSJrEhgd7eOFDDXgFFRVEn2jG94fn7BLrg==}
+    peerDependencies:
+      '@deck.gl/core': ~9.4.0
+      '@luma.gl/core': ~9.4.0
+      '@luma.gl/webgl': ~9.4.0
+
   '@deck.gl/layers@9.4.0':
     resolution: {integrity: sha512-jSL/xje2Ez7DmnP8AAIdhhg6IAtfXMmnXiUAKNgpl/TTaEL+iL5TAnagCdt39H3azmKVcCG33kOlIoWFAuLuRg==}
     peerDependencies:
@@ -1602,6 +1618,9 @@ packages:
 
   '@floating-ui/utils@0.2.11':
     resolution: {integrity: sha512-RiB/yIh78pcIxl6lLMG0CgBXAZ2Y0eVHqMPYugu+9U0AeT6YBeiJpf7lbdJNIugFP5SIjwNRgo4DhR1Qxi26Gg==}
+
+  '@googlemaps/js-api-loader@2.1.3':
+    resolution: {integrity: sha512-1t6umwRufEGzIPjHPjPeuuY1dCal0zU2bZeomkf4OA0MprFdlKCnXY3zeFkzDaCvKjwbFubeapm61P5+EbrAoA==}
 
   '@grpc/grpc-js@1.14.4':
     resolution: {integrity: sha512-k9Dj3DV/itK9D06Y8f190Qgop7/Ui+D0njFV3LHMPwPT75DpXLQohE9Wmz0QElrJnzsjB7KPWiKJbOl7IPDArQ==}
@@ -3042,6 +3061,9 @@ packages:
 
   '@types/geojson@7946.0.16':
     resolution: {integrity: sha512-6C8nqWur3j98U6+lXDfTUWIfgvZU+EumvpHKcYjujKH7woYyLj2sUmff0tRhrqM7BohUw7Pz3ZB1jj2gW9Fvmg==}
+
+  '@types/google.maps@3.66.3':
+    resolution: {integrity: sha512-IH8Pg3eIxDQapkiwZbpMZNTNth4v6bQvyatML9PFnDrOvrttsO/hUgrJSgQgoWmJSYRQq2X9cDZekTQRVGJT6A==}
 
   '@types/hoist-non-react-statics@3.3.7':
     resolution: {integrity: sha512-PQTyIulDkIDro8P+IHbKCsw7U2xxBYflVzW/FgWdCAePD9xGSidgA76/GeJ6lBKoblyhf9pBY763gbrN+1dI8g==}
@@ -6862,6 +6884,14 @@ snapshots:
     transitivePeerDependencies:
       - '@luma.gl/webgpu'
 
+  '@deck.gl/google-maps@9.4.0(@deck.gl/core@9.4.0(@luma.gl/webgpu@9.4.0(@luma.gl/core@9.4.0)(@luma.gl/shadertools@9.4.0(@luma.gl/core@9.4.0))))(@luma.gl/core@9.4.0)(@luma.gl/webgl@9.4.0(@luma.gl/core@9.4.0))':
+    dependencies:
+      '@deck.gl/core': 9.4.0(@luma.gl/webgpu@9.4.0(@luma.gl/core@9.4.0)(@luma.gl/shadertools@9.4.0(@luma.gl/core@9.4.0)))
+      '@luma.gl/core': 9.4.0
+      '@luma.gl/webgl': 9.4.0(@luma.gl/core@9.4.0)
+      '@math.gl/core': 4.1.0
+      '@types/google.maps': 3.66.3
+
   '@deck.gl/layers@9.4.0(@deck.gl/core@9.4.0(@luma.gl/webgpu@9.4.0(@luma.gl/core@9.4.0)(@luma.gl/shadertools@9.4.0(@luma.gl/core@9.4.0))))(@loaders.gl/core@4.4.5)(@luma.gl/core@9.4.0)(@luma.gl/engine@9.4.0(@luma.gl/core@9.4.0)(@luma.gl/shadertools@9.4.0(@luma.gl/core@9.4.0)))':
     dependencies:
       '@deck.gl/core': 9.4.0(@luma.gl/webgpu@9.4.0(@luma.gl/core@9.4.0)(@luma.gl/shadertools@9.4.0(@luma.gl/core@9.4.0)))
@@ -7191,6 +7221,10 @@ snapshots:
       '@floating-ui/utils': 0.2.11
 
   '@floating-ui/utils@0.2.11': {}
+
+  '@googlemaps/js-api-loader@2.1.3':
+    dependencies:
+      '@types/google.maps': 3.66.3
 
   '@grpc/grpc-js@1.14.4':
     dependencies:
@@ -8539,6 +8573,8 @@ snapshots:
       '@types/serve-static': 2.2.0
 
   '@types/geojson@7946.0.16': {}
+
+  '@types/google.maps@3.66.3': {}
 
   '@types/hoist-non-react-statics@3.3.7(@types/react@19.2.17)':
     dependencies:

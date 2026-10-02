@@ -256,14 +256,18 @@ describe('ly do tu choi doc tu `reason` co kieu', () => {
   });
 
   it('ma khong co trong bang hoac khong co ma: hien NGUYEN VAN cau cua may chu', () => {
+    // Than `403` cua guard quyen tu `#395`: ma co kieu, cau co dau — khong thuoc bang cua chang.
     const guard = lifecycleFailureOf(
-      rejected(null, 'Ban khong co quyen thuc hien thao tac nay (transport.run.manage)'),
+      rejected('ACTION_NOT_PERMITTED', 'Bạn không có quyền thực hiện thao tác này.'),
       LEG_FAILURE_MESSAGE,
     );
     expect(guard).toEqual({
-      message: 'Ban khong co quyen thuc hien thao tac nay (transport.run.manage)',
+      message: 'Bạn không có quyền thực hiện thao tác này.',
       needsOverride: false,
     });
+    expect(lifecycleFailureOf(rejected(null, 'Máy chủ bận'), LEG_FAILURE_MESSAGE).message).toBe(
+      'Máy chủ bận',
+    );
     expect(
       lifecycleFailureOf(rejected('SOMETHING_NEW', 'Cau moi'), LEG_FAILURE_MESSAGE).message,
     ).toBe('Cau moi');

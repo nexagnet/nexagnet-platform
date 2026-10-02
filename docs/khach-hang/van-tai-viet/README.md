@@ -8,18 +8,25 @@ riêng cho họ.
 - Quy mô: ~10 xe đầu kéo.
 - Giai đoạn hiện tại: **demo cho khách xem**. Nghiệp vụ chưa chốt hết; phần chưa chốt chạy trên
   giả định `GD-xx` được ghi tường minh ở [T1 §21](../../kien-truc/transport-domain-contract.md#21-giả-định-giai-đoạn-demo-gd-xx).
-- Chưa có gói `tenants/van-tai-viet/`. Mốc T2 (`TRANSPORT CORE v0`) **hoãn có chủ ý** việc tạo
-  gói này: T2 là mốc CODE-ONLY, chưa có màn hình vận hành để demo và chưa có dữ liệu khách được
-  duyệt về mặt riêng tư. Capability `transport-core` được chứng minh boot bằng một gói **fixture**
-  tổng hợp (`packages/tenant/src/__tests__/fixtures/transport-core/`). Gói khách thật thuộc T7.
+- Đã có màn hình vận hành đầy đủ, chạy trên gói demo `tenants/transport-preview` (tên hiển thị
+  "Vận tải Việt", dữ liệu mẫu). Luồng hiện hành đi từ **Đơn hàng** (điểm lấy/giao chọn trên bản đồ)
+  → **Vòng xe** → **Chặng rỗng / chặng có hàng** → mốc hiện trường → kết thúc đơn → đối soát, phải
+  thu. Gói khách thật `tenants/van-tai-viet/` chưa tạo — chờ dữ liệu thật được duyệt về riêng tư.
+
+> **Người đọc là lãnh đạo khách:** bắt đầu từ
+> [**Giới thiệu hệ thống cho lãnh đạo**](ban-giao/gioi-thieu-he-thong-cho-lanh-dao.md)
+> ([PDF](ban-giao/gioi-thieu-he-thong-cho-lanh-dao.pdf)).
 
 ## Tài liệu
 
-| File                                                                                           | Nội dung                                                                                                                                                                                                    |
-| ---------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`nghiep-vu/nguon-su-that-van-tai.md`](nghiep-vu/nguon-su-that-van-tai.md)                     | **T0 — Nguồn sự thật.** 60+ sự kiện truy vết tới từng trang/mục của tài liệu khách, kèm 8 xung đột, 23 quyết định còn mở, 6 mục thiếu nguồn                                                                 |
-| [`../../kien-truc/transport-domain-contract.md`](../../kien-truc/transport-domain-contract.md) | **T1 — Hợp đồng Transport Domain.** Trung tính, không nhắc tên khách. Bounded context, aggregate, bất biến tài chính, capability, phân quyền, guardrail, 25 case nghiệm thu, 23 giả định demo               |
-| [`ban-giao/`](ban-giao/README.md)                                                              | **T10 — Gói bàn giao.** Bắt đầu nhanh theo ba vai, bảng phân quyền, thủ tục chuyển sang dữ liệu thật, vận hành bản demo (sao lưu/phục hồi/làm lại), kịch bản demo 30–45 phút, và 12 giả định cần khách chốt |
+| File                                                                                                                                                  | Nội dung                                                                                                                                                                                            |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`ban-giao/gioi-thieu-he-thong-cho-lanh-dao.md`](ban-giao/gioi-thieu-he-thong-cho-lanh-dao.md) · [PDF](ban-giao/gioi-thieu-he-thong-cho-lanh-dao.pdf) | **Tài liệu chính cho lãnh đạo.** Một đơn đi qua công ty, từ cần biết, ai làm gì, 10 màn hình có khoanh, nhiên liệu và quỹ lái xe, hạn chế hiện tại, việc cần lãnh đạo quyết                         |
+| [`ban-giao/huong-dan-ke-toan.md`](ban-giao/huong-dan-ke-toan.md) · [PDF](ban-giao/huong-dan-ke-toan.pdf)                                              | **Hướng dẫn kế toán** theo việc hằng ngày                                                                                                                                                           |
+| [`ban-giao/huong-dan-tai-xe.md`](ban-giao/huong-dan-tai-xe.md) · [PDF](ban-giao/huong-dan-tai-xe.pdf)                                                 | **Hướng dẫn lái xe**, đọc trên điện thoại                                                                                                                                                           |
+| [`ban-giao/`](ban-giao/README.md)                                                                                                                     | **T10 — Gói bàn giao.** Tài liệu lãnh đạo, bảng phân quyền, thủ tục chuyển sang dữ liệu thật; các tài liệu cũ viết theo chuyến (bắt đầu nhanh, kịch bản demo, vận hành bản demo) được đánh dấu _cũ_ |
+| [`nghiep-vu/nguon-su-that-van-tai.md`](nghiep-vu/nguon-su-that-van-tai.md)                                                                            | **T0 — Nguồn sự thật.** 60+ sự kiện truy vết tới từng trang/mục của tài liệu khách, kèm 8 xung đột, 23 quyết định còn mở, 6 mục thiếu nguồn                                                         |
+| [`../../kien-truc/transport-domain-contract.md`](../../kien-truc/transport-domain-contract.md)                                                        | **T1 — Hợp đồng Transport Domain.** Trung tính, không nhắc tên khách. Bounded context, aggregate, bất biến tài chính, capability, phân quyền, guardrail, 25 case nghiệm thu, 23 giả định demo       |
 
 ## Hồ sơ gốc
 

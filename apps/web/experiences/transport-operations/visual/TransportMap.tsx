@@ -1,36 +1,46 @@
 'use client';
 
-import { useEffect, useMemo, useRef } from 'react';
-import Map, {
-  NavigationControl,
-  ScaleControl,
-  useControl,
-  type MapRef,
-} from 'react-map-gl/maplibre';
-import { MapboxOverlay } from '@deck.gl/mapbox';
-import { PathLayer, ScatterplotLayer } from '@deck.gl/layers';
-import { resolveBasemap } from './map-style';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import dynamic from 'next/dynamic';
+import { MapLibreBasemap } from './MapLibreBasemap';
+import { useGoogleMapsSession } from './google-maps-session';
+import { boundsKey, cameraFor } from './map-camera';
+import { effectiveBasemap, isExternalStyle, readBasemapEnv, resolveBasemap } from './map-style';
+import type { ExternalBasemapStatus } from './maplibre-basemap-watch';
 import { FALLBACK_PALETTE, paletteFrom, type ChartPalette } from './chart-options';
-import type { JourneyMapModel, JourneyMarker, JourneySegment } from '../workspace/journey';
-import 'maplibre-gl/dist/maplibre-gl.css';
+import type { JourneyMapModel } from '../workspace/journey';
+import './transport-map.css';
 
 /**
- * BAN DO VONG CHAY — MapLibre ve nen, deck.gl ve du lieu (#278 N1/N2/N5).
+ * Nen Google la nha cung cap TUY CHON: `@deck.gl/google-maps` chi duoc tai khi `provider=google` va
+ * Google da nap xong — trang dung OpenFreeMap mac dinh khong tai mot dong ma Google nao.
+ */
+const GoogleBasemap = dynamic(() => import('./GoogleBasemap'), { ssr: false });
+
+/**
+ * BAN DO VONG CHAY — mot nen, mot bo lop nghiep vu (#278 N1/N2/N5, #374).
+ *
+ * ```
+ * JourneyMapModel ──buildJourneyLayers──▶ lop deck.gl ──▶ nen
+ *                                                        ├─ OPENFREEMAP          (MapLibreBasemap) ← mac dinh
+ *                                                        ├─ GOOGLE_MAPS          (GoogleBasemap)   ← tuy chon
+ *                                                        ├─ CONFIGURED_STYLE_URL (MapLibreBasemap)
+ *                                                        └─ LOCAL_FALLBACK       (MapLibreBasemap)
+ * ```
+ *
+ * Tep nay chi CHON nen va noi ra vi sao. Cai gi ve len ban do, ve the nao, la cua
+ * `journey-layers.ts`; khung nhin la cua `map-camera.ts`; nen nao la cua `map-style.ts`.
  *
  * ===========================================================================
- * DECK.GL DI VAO NHU MOT `control` CUA MAPLIBRE, KHONG PHAI MOT LOP CANVAS THU HAI.
+ * NEN HONG THI LUI VE NEN CUC BO — KHONG BAO GIO LA MOT MAN HINH CHET.
  *
- * `MapboxOverlay` qua `useControl` la duong tich hop chinh thuc cua react-map-gl v8: deck.gl dung
- * CHUNG mot ngu canh WebGL va cung mot vong ve voi MapLibre. Chong hai canvas len nhau thi khi thu
- * phong hai lop se lech nhau vai khung hinh — tren mot ban do van tai, "lech vai khung hinh" nghia
- * la duong chay tach khoi cai moc ma no phai di qua.
+ * OpenFreeMap khong tra loi (instance cong khai khong co SLA), mang chan, khoa Google bi tu choi hay
+ * qua han: ban do ve lai CUNG du lieu tren nen cuc bo, va cau thong bao noi dung dieu do — nen hong,
+ * toa do khong sai.
  *
- * ===========================================================================
- * MAU DO CUA CHANG RONG DEN TU DU LIEU, KHONG TU MOT NHANH `if` CUA MAN HINH.
- *
- * `segment.role` do may chu dat, tu `TransportRunLeg.kind`. `#274` §4 doi chang rong mau DO, va
- * mau do o day di kem hai thu nua de mau khong phai tin hieu duy nhat (`#278` N2): duong rong duoc
- * ve DAY hon, va chu giai ben duoi ban do goi ten no.
+ * `key={basemap.source}` la co y: lui nen = go ban do cu, dung ban do MOI kem lop deck.gl MOI. Lop
+ * da thuoc ngu canh WebGL cua ban do cu khong ve lai duoc tren ban do moi — bai hoc 23/09/2026 voi
+ * Google (`gm_authFailure` SAU khi da ve), ap dung y het cho OpenFreeMap hong SAU khi da khoi tao.
  */
 
 export interface TransportMapProps {
@@ -41,78 +51,16 @@ export interface TransportMapProps {
   readonly heightPx?: number;
 }
 
-const toRgb = (hex: string): [number, number, number] => {
-  const value = hex.trim().replace('#', '');
-  const full =
-    value.length === 3
-      ? value
-          .split('')
-          .map((char) => `${char}${char}`)
-          .join('')
-      : value;
-  const parsed = Number.parseInt(full.slice(0, 6), 16);
-  if (!Number.isFinite(parsed)) return [0, 0, 0];
-  return [(parsed >> 16) & 255, (parsed >> 8) & 255, parsed & 255];
-};
-
 /**
- * DO DAY theo LOAI DUONG — de nguoi doc phan biet duoc ba nguon.
- *
- * `#278` N5 doi *"planned route vs actual/matched route visually distinguishable"*. Tuyen ke hoach
- * hom nay khong bao gio co diem (`NO_ROUTE_PROVIDER`), nhung be rong cua no van duoc khai o day:
- * cho vao san se lam ngay Lane M co du lieu thi khong ai phai nghi lai xem ve no the nao.
+ * Bang mau doc tu bien CSS SAU khi gan — luc ve lan dau `ref` con `null`, va doc `ref` trong luc
+ * ve la sai quy tac cua React.
  */
-const WIDTH_BY_PATH: Readonly<Record<JourneySegment['pathKind'], number>> = {
-  PLANNED: 2,
-  CHECKPOINT_ANCHORED: 5,
-  RAW_OBSERVED: 3,
-};
-
-function DeckLayers({
-  model,
-  palette,
-}: {
-  readonly model: JourneyMapModel;
-  readonly palette: ChartPalette;
-}): null {
-  const overlay = useControl(() => new MapboxOverlay({ interleaved: false }));
-
+function usePalette(host: React.RefObject<HTMLElement | null>): ChartPalette {
+  const [palette, setPalette] = useState<ChartPalette>(FALLBACK_PALETTE);
   useEffect(() => {
-    const loaded = toRgb(palette.loaded);
-    const empty = toRgb(palette.empty);
-
-    overlay.setProps({
-      layers: [
-        new PathLayer<JourneySegment>({
-          id: 'tx-journey-paths',
-          data: [...model.segments],
-          widthUnits: 'pixels',
-          widthMinPixels: 2,
-          getPath: (segment) => segment.coordinates as unknown as [number, number][],
-          /* Mau tu DU LIEU: `role` do may chu dat tu `TransportRunLeg.kind`. */
-          getColor: (segment) => (segment.role === 'EMPTY' ? empty : loaded),
-          /* Chang rong ve DAY hon — tin hieu thu hai ben canh mau. */
-          getWidth: (segment) =>
-            WIDTH_BY_PATH[segment.pathKind] + (segment.role === 'EMPTY' ? 2 : 0),
-          pickable: true,
-        }),
-        new ScatterplotLayer<JourneyMarker>({
-          id: 'tx-journey-markers',
-          data: [...model.markers],
-          radiusUnits: 'pixels',
-          getRadius: 6,
-          getPosition: (marker) => marker.coordinate as unknown as [number, number],
-          getFillColor: toRgb(palette.ink),
-          stroked: true,
-          lineWidthMinPixels: 2,
-          getLineColor: toRgb(palette.paper),
-          pickable: true,
-        }),
-      ],
-    });
-  }, [model, overlay, palette]);
-
-  return null;
+    if (host.current !== null) setPalette(paletteFrom(window.getComputedStyle(host.current)));
+  }, [host]);
+  return palette;
 }
 
 export function TransportMap({
@@ -122,62 +70,98 @@ export function TransportMap({
   heightPx = 420,
 }: TransportMapProps): React.ReactElement {
   const host = useRef<HTMLDivElement | null>(null);
-  const map = useRef<MapRef | null>(null);
-
-  const basemap = useMemo(
-    () => resolveBasemap(process.env.NEXT_PUBLIC_TRANSPORT_MAP_STYLE_URL),
-    [],
+  const configured = useMemo(() => resolveBasemap(readBasemapEnv()), []);
+  const google = useGoogleMapsSession(
+    configured.source === 'GOOGLE_MAPS' ? configured.apiKey : null,
   );
-
-  const palette = useMemo(
-    () =>
-      host.current === null || typeof window === 'undefined'
-        ? FALLBACK_PALETTE
-        : paletteFrom(window.getComputedStyle(host.current)),
-    [],
-  );
+  /* `null` = nen ngoai dang tai. Ham `set` cua React on dinh — watch khong bi dung lai moi lan ve. */
+  const [external, setExternal] = useState<ExternalBasemapStatus | null>(null);
+  const basemap = effectiveBasemap(configured, {
+    google: google?.status === 'FAILED' ? google.reason : null,
+    mapLibre: external?.status === 'FAILED' ? external.failure : null,
+  });
 
   /*
-   * Khung nhin theo DU LIEU, khong theo mot toa do mac dinh nao.
-   *
-   * Khi `bounds` la `null` thi khong co gi de ve, va man hinh (`JourneyView`) khong dung component
-   * nay. Nen o day khong co nhanh "bay ve giua Viet Nam" — mot ban do do doc y het mot ban do co
-   * du lieu ma xe dang o cho khac.
+   * Bang mau va MO HINH di xuong, KHONG phai lop deck.gl da dung san: moi nen tu dung lop cua no
+   * (xem `GoogleBasemap`), vi lop cua mot nen khong ve lai duoc tren nen khac khi nen dau hong.
    */
-  useEffect(() => {
-    const instance = map.current;
-    if (instance === null || bounds === null) return;
-    instance.fitBounds(
-      [
-        [bounds[0], bounds[1]],
-        [bounds[2], bounds[3]],
-      ],
-      { padding: 48, duration: 0, maxZoom: 13 },
+  const palette = usePalette(host);
+
+  /*
+   * Camera theo GIA TRI cua khung, khong theo doi tuong: `key` la chinh `bounds` viet thanh chuoi,
+   * nen lam tuoi du lieu khong keo ban do khoi cho nguoi dung vua keo/phong toi.
+   */
+  const key = boundsKey(bounds);
+  const camera = useMemo(() => cameraFor(bounds), [key]);
+
+  const isGoogleLoading = basemap.source === 'GOOGLE_MAPS' && google?.status === 'LOADING';
+  /* Khong co khung nhin thi khong co ban do nao dang tai — `aria-busy` khong duoc treo mai. */
+  const isBusy =
+    camera !== null && (isGoogleLoading || (isExternalStyle(basemap) && external === null));
+  const fallbackReason = basemap.source === 'LOCAL_FALLBACK' ? basemap.reason : undefined;
+
+  const renderBasemap = (): React.ReactNode => {
+    if (camera === null) return null;
+    if (basemap.source === 'GOOGLE_MAPS') {
+      return google?.status === 'READY' ? (
+        <GoogleBasemap
+          libraries={google.libraries}
+          mapId={basemap.mapId}
+          model={model}
+          palette={palette}
+          camera={camera}
+        />
+      ) : null;
+    }
+    return (
+      <MapLibreBasemap
+        key={basemap.source}
+        style={basemap.style}
+        onExternalStatus={isExternalStyle(basemap) ? setExternal : undefined}
+        model={model}
+        palette={palette}
+        camera={camera}
+      />
     );
-  }, [bounds]);
+  };
 
   return (
-    <div
-      ref={host}
-      className="tx-map"
-      style={{ height: `${heightPx}px` }}
-      role="img"
-      aria-label={ariaLabel}
-      data-testid="tx-map"
-      data-basemap={basemap.source}
-    >
-      <Map
-        ref={map}
-        initialViewState={{ longitude: 105.85, latitude: 21.02, zoom: 5 }}
-        mapStyle={basemap.style}
-        attributionControl={false}
-        style={{ width: '100%', height: '100%' }}
-      >
-        <NavigationControl position="top-right" showCompass={false} />
-        <ScaleControl position="bottom-left" unit="metric" />
-        <DeckLayers model={model} palette={palette} />
-      </Map>
-    </div>
+    <>
+      <div className="tx-map-frame">
+        <div
+          ref={host}
+          className="tx-map"
+          style={{ height: `${heightPx}px` }}
+          role="img"
+          aria-label={ariaLabel}
+          aria-busy={isBusy}
+          data-testid="tx-map"
+          data-basemap={basemap.source}
+          data-basemap-fallback={fallbackReason}
+          data-bounds={key}
+        >
+          {renderBasemap()}
+        </div>
+        {/*
+         * Mot dong trang thai mot luc: khong co toa do thi cung khong co gi de cho nen tai. Nen
+         * OpenFreeMap dang tai thi KHONG che khung — tuyen da ve ngay, nen chi la phan lot duoi.
+         */}
+        {camera === null ? (
+          <p className="tx-map__status" role="status">
+            Chưa có toạ độ hợp lệ để vẽ bản đồ.
+          </p>
+        ) : isGoogleLoading ? (
+          <p className="tx-map__status" role="status" aria-live="polite">
+            Đang tải nền Google Maps…
+          </p>
+        ) : null}
+      </div>
+      {basemap.notice === null ? null : (
+        <p className="tx-note" data-testid="tx-map-notice">
+          {basemap.notice}
+        </p>
+      )}
+    </>
   );
 }
 

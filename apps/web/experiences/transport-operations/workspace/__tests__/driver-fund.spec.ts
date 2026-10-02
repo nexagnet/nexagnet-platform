@@ -80,6 +80,33 @@ describe('so quy — sua lich su chi bang but toan dao', () => {
     expect(rows[0]!.isCredit).toBe(false);
     expect(rows[0]!.kindLabel).toBe('Chi phí chuyến');
   });
+
+  it('#380 — but toan Run-first `RUN_EXPENSE` co nhan tieng Viet, khong phai loai rong', () => {
+    const rows = toFundLedgerRows(
+      [fundEntry({ signedAmount: -1_320_000, kind: 'RUN_EXPENSE', tripId: null })],
+      'ACCOUNTING',
+    );
+    expect(rows[0]!.kindLabel).toBe('Chi phí vòng xe');
+    expect(rows[0]!.isCredit).toBe(false);
+  });
+
+  it('#385 — dien giai MAY viet cua phieu dau thanh cau nguoi doc hieu; ghi chu go tay giu nguyen', () => {
+    const [runFirst, legacy, typed] = toFundLedgerRows(
+      [
+        fundEntry({ id: 'a', kind: 'RUN_EXPENSE', note: 'Phieu do dau cmuechrvf0003ob01j35cds1q' }),
+        fundEntry({
+          id: 'b',
+          kind: 'TRIP_EXPENSE',
+          note: 'Phieu do dau cmu0000000000000000000000',
+        }),
+        fundEntry({ id: 'c', kind: 'ADVANCE', note: 'Phieu do dau tay — ke toan go' }),
+      ],
+      'ACCOUNTING',
+    );
+    expect(runFirst!.note).toBe('Tiền dầu lái xe trả tiền mặt (phiếu đổ dầu theo vòng xe)');
+    expect(legacy!.note).toBe('Tiền dầu lái xe trả tiền mặt (phiếu đổ dầu)');
+    expect(typed!.note).toBe('Phieu do dau tay — ke toan go');
+  });
 });
 
 describe('ky quy', () => {

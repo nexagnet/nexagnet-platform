@@ -34,6 +34,7 @@ const leg = (over: Partial<RemainingLegFact> & { legId: string }): RemainingLegF
   runId: 'run-1',
   orderId: null,
   sequence: 1,
+  kind: 'LOADED',
   status: 'PLANNED',
   originLabel: 'A',
   destinationLabel: 'B',

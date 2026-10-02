@@ -2,9 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { ACCOUNT_DECISIONS } from '../auth/account-decisions.js';
 import { CHANNEL_DECISIONS } from '../channels/channel-decisions.js';
 import { SALES_ORDER_DECISIONS } from '../orders/sales-order-decisions.js';
 import { TRANSPORT_COSTING_DECISIONS } from '../transport/costing/costing-decisions.js';
+import { TRANSPORT_ACCOUNT_LINK_DECISIONS } from '../transport/fleet/account-link-decisions.js';
+import { TRANSPORT_PLACE_ADMIN_DECISIONS } from '../transport/places/place-admin-decisions.js';
 import { TRANSPORT_DECISIONS } from '../transport/transport-decisions.js';
 import { TURN_DECISIONS } from '../turns/turn-decisions.js';
 import { decisionReasonLabel, defineDecisionVocabulary } from './decision-vocabulary.js';
@@ -36,6 +39,24 @@ describe('tu vung quyet dinh: nen tang giu KHUON, capability giu TU NGU', () => 
     expect(CHANNEL_DECISIONS.owner).toBe('messaging');
     expect(TRANSPORT_DECISIONS.owner).toBe('transport-core');
     expect(TRANSPORT_COSTING_DECISIONS.owner).toBe('transport-costing');
+    expect(ACCOUNT_DECISIONS.owner).toBe('platform-accounts');
+    expect(TRANSPORT_PLACE_ADMIN_DECISIONS.owner).toBe('transport-places-admin');
+    expect(TRANSPORT_ACCOUNT_LINK_DECISIONS.owner).toBe('transport-core');
+  });
+
+  /**
+   * `#395`: quan tri tai khoan la viec cua NEN TANG, quan tri dia diem la viec cua MIEN van tai —
+   * hai bo rieng, hai chu so huu, va khong ma ly do nao cua bo nay bi bo kia ghi de nhan
+   * (`defineDecisionVocabulary` ghi de im lang).
+   */
+  it('#395: hai bo tu vung moi giu diem va nhan cua chinh no', () => {
+    expect(ACCOUNT_DECISIONS.points).toEqual(['account.access']);
+    expect(TRANSPORT_PLACE_ADMIN_DECISIONS.points).toEqual(['place.write']);
+    for (const vocabulary of [ACCOUNT_DECISIONS, TRANSPORT_PLACE_ADMIN_DECISIONS]) {
+      for (const [reason, label] of Object.entries(vocabulary.labels)) {
+        expect(decisionReasonLabel(reason), reason).toBe(label);
+      }
+    }
   });
 
   /**
@@ -125,6 +146,19 @@ describe('moi diem quyet dinh deu co nguoi phat that', () => {
     ...TRANSPORT_DECISIONS.points.map((point) => [TRANSPORT_DECISIONS.owner, point] as const),
     ...TRANSPORT_COSTING_DECISIONS.points.map(
       (point) => [TRANSPORT_COSTING_DECISIONS.owner, point] as const,
+    ),
+    /* `#395` S2 — noi tai khoan voi ho so lai xe / ben gop von: co diem phat ngay tu lan dau. */
+    ...TRANSPORT_ACCOUNT_LINK_DECISIONS.points.map(
+      (point) => [TRANSPORT_ACCOUNT_LINK_DECISIONS.owner, point] as const,
+    ),
+    /*
+     * `#395`: `account.access` co diem phat that tu lat quan tri tai khoan (`AuthService`);
+     * `place.write` co diem phat tu man Dia diem van hanh (`PlaceAdminService`). Moi bo vao danh
+     * sach nay CUNG LAN voi dong `telemetry.decision()` dau tien — khong truoc.
+     */
+    ...ACCOUNT_DECISIONS.points.map((point) => [ACCOUNT_DECISIONS.owner, point] as const),
+    ...TRANSPORT_PLACE_ADMIN_DECISIONS.points.map(
+      (point) => [TRANSPORT_PLACE_ADMIN_DECISIONS.owner, point] as const,
     ),
   ];
 

@@ -103,7 +103,7 @@ export function RunLegWorkflow({
   const journey = useRunJourney(navigation, runId);
   const closure = useRunClosure(navigation, runId);
   const transition = useLegTransition();
-  const canManage = canPerform(navigation.role, 'transport.run.manage');
+  const canManage = canPerform(navigation, 'transport.run.manage');
 
   const [pending, setPending] = useState<PendingLegAction | null>(null);
   const [overrideReason, setOverrideReason] = useState('');

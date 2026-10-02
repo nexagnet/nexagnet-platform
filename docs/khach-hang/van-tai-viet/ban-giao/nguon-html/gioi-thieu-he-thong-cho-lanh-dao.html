@@ -1,0 +1,600 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<title>Giới thiệu hệ thống vận tải cho lãnh đạo</title>
+<!-- Tệp SINH TỰ ĐỘNG từ ../gioi-thieu-he-thong-cho-lanh-dao.md bởi tao-pdf.mjs — sửa Markdown, đừng sửa tệp này. -->
+<style>
+  @page { size: A4; margin: 16mm 15mm 18mm 15mm; }
+  :root { --ink: #1f2a30; --muted: #5d666c; --line: #ddd6ca; --paper: #faf8f4; --teal: #1f5566; --accent: #e0662b; }
+  * { box-sizing: border-box; }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { margin: 0; font-family: 'Segoe UI', Arial, sans-serif; font-size: 10.3pt; line-height: 1.55; color: var(--ink); }
+  h1, h2, h3 { font-family: Cambria, Georgia, serif; line-height: 1.25; break-after: avoid; }
+  h2 { font-size: 17pt; margin: 20pt 0 8pt; padding-top: 8pt; border-top: 2px solid var(--teal); color: var(--teal); }
+  h3 { font-size: 12.5pt; margin: 16pt 0 6pt; }
+  p, li { orphans: 3; widows: 3; }
+  ul, ol { padding-left: 18pt; margin: 4pt 0 8pt; }
+  li { margin: 2pt 0; }
+  li > ul, li > ol { margin: 2pt 0; }
+  strong { font-weight: 650; }
+  em { color: var(--muted); }
+  a { color: var(--teal); text-decoration: none; }
+  table { width: 100%; border-collapse: collapse; margin: 8pt 0 12pt; font-size: 9.4pt; line-height: 1.45; }
+  thead { display: table-header-group; }
+  tr { break-inside: avoid; }
+  th { background: #efe9df; text-align: left; font-weight: 650; }
+  th, td { border: 1px solid var(--line); padding: 5pt 7pt; vertical-align: top; }
+  figure { margin: 10pt 0 6pt; break-inside: avoid; }
+  figure img { display: block; width: 100%; border: 1px solid var(--line); border-radius: 6px; }
+  /* Ảnh điện thoại (dọc): giữ vừa nửa trang để chữ hướng dẫn nằm cạnh ảnh của nó. */
+  figure img[src*="/tai-xe/"] { width: auto; max-width: 100%; height: 100mm; margin: 0 auto; }
+  figure:has(img[src*="/tai-xe/"]) figcaption { text-align: center; }
+  figure + ol, figure + ul { break-before: avoid; }
+  figcaption { font-size: 8.6pt; color: var(--muted); margin-top: 4pt; }
+  .cover { min-height: 250mm; display: flex; flex-direction: column; break-after: page; }
+  .cover-band { background: var(--paper); border: 1px solid var(--line); border-left: 8px solid var(--teal); border-radius: 10px; padding: 26pt 26pt 20pt; margin-top: 30mm; }
+  .cover h1 { font-size: 27pt; margin: 0 0 10pt; color: var(--teal); }
+  .cover-band > p:first-of-type { font-size: 11.5pt; color: var(--muted); margin: 0 0 14pt; }
+  .cover .toc { margin-top: 18pt; }
+  .cover .toc h2 { border: 0; padding: 0; margin: 0 0 6pt; font-size: 12pt; color: var(--ink); }
+  .cover .toc ol { columns: 2; column-gap: 18pt; font-size: 10pt; list-style: none; padding-left: 0; }
+  .cover .toc li { break-inside: avoid; }
+</style>
+</head>
+<body>
+<section class="cover">
+  <div class="cover-band"><h1 id="gioi-thieu-he-thong-van-tai-cho-lanh-dao">Giới thiệu hệ thống vận tải cho lãnh đạo</h1>
+<p><strong>Vận tải Việt</strong> · Bản tháng 9/2026 · Đọc trong khoảng 15 phút</p>
+<p>Tài liệu này mô tả hệ thống <strong>đang chạy hôm nay</strong>:</p>
+<ul>
+<li>một đơn hàng đi qua công ty thế nào;</li>
+<li>ai làm bước nào;</li>
+<li>tiền được ghi ở đâu;</li>
+<li>những chỗ còn hạn chế.</li>
+</ul>
+<p>Hình chụp từ đúng phiên bản phần mềm đang chạy, trên <strong>dữ liệu mẫu</strong>: tên khách, biển số, lái xe và số tiền đều là giả lập.</p>
+</div>
+  <nav class="toc" aria-label="Mục lục"><h2>Nội dung</h2><ol><li><a href="#1-he-thong-giai-quyet-viec-gi">1. Hệ thống giải quyết việc gì</a></li><li><a href="#2-mot-don-hang-di-qua-cong-ty">2. Một đơn hàng đi qua công ty</a></li><li><a href="#3-nhung-tu-can-biet">3. Những từ cần biết</a></li><li><a href="#4-ai-lam-gi">4. Ai làm gì</a></li><li><a href="#5-xem-tren-man-hinh">5. Xem trên màn hình</a></li><li><a href="#6-nhien-lieu-va-quy-lai-xe-hai-duong-tien">6. Nhiên liệu và quỹ lái xe: hai đường tiền</a></li><li><a href="#7-ban-do-va-vi-tri-dung-de-lam-gi">7. Bản đồ và vị trí: dùng để làm gì</a></li><li><a href="#8-lai-xe-khong-nhin-thay-tien-cua-cong-ty">8. Lái xe không nhìn thấy tiền của công ty</a></li><li><a href="#9-han-che-hien-tai">9. Hạn chế hiện tại</a></li><li><a href="#10-dieu-can-lanh-dao-quyet-truoc-khi-chay-du-lieu-that">10. Điều cần lãnh đạo quyết trước khi chạy dữ liệu thật</a></li></ol></nav>
+</section>
+<main>
+<h2 id="1-he-thong-giai-quyet-viec-gi">1. Hệ thống giải quyết việc gì</h2>
+<p>Công ty từng nêu bốn nỗi lo khi mọi việc còn làm bằng Excel và Zalo:</p>
+<ul>
+<li>không nắm được xe và chuyến đang ở đâu;</li>
+<li>tiền dầu dễ thất thoát;</li>
+<li>giấy tờ xe dễ quên hạn;</li>
+<li>đối chiếu công nợ mất nhiều thời gian.</li>
+</ul>
+<p>Hệ thống trả lời bốn nỗi lo đó bằng <strong>một nguồn dữ liệu chung</strong> cho điều hành, lái xe và kế toán. Nó giữ một đơn hàng từ lúc nhận tới lúc tiền về.</p>
+<table>
+<thead>
+<tr>
+<th>Việc</th>
+<th>Trước đây</th>
+<th>Bây giờ</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Nhận đơn</td>
+<td>Ghi tên điểm lấy, điểm giao bằng chữ</td>
+<td><strong>Điểm lấy và điểm giao được xác định trên bản đồ, không còn chỉ là một dòng chữ</strong></td>
+</tr>
+<tr>
+<td>Điều xe</td>
+<td>Lập chuyến bằng tay, tự nhớ đoạn nào xe chạy không hàng</td>
+<td>Chọn xe. Hệ thống lập <strong>vòng xe</strong>, tự tách <strong>chặng rỗng</strong> và <strong>chặng có hàng</strong>, rồi giao cho lái xe của xe</td>
+</tr>
+<tr>
+<td>Theo dõi hiện trường</td>
+<td>Gọi điện hỏi lái xe</td>
+<td>Lái xe bấm mốc trên điện thoại, chụp giấy tờ. Văn phòng thấy khi mở hoặc tải lại màn hình</td>
+</tr>
+<tr>
+<td>Chốt đơn với khách</td>
+<td>Dò giấy tờ rời rạc</td>
+<td>Hàng đợi <strong>Kết thúc đơn</strong>. Mỗi quyết định ghi rõ người và giờ</td>
+</tr>
+<tr>
+<td>Tiền dầu</td>
+<td>Lẫn giữa tiền lái xe tự trả và tiền nợ cây xăng</td>
+<td><strong>Hai đường riêng</strong>, không bao giờ cộng lẫn</td>
+</tr>
+<tr>
+<td>Nhìn tổng thể</td>
+<td>Tổng hợp cuối tháng</td>
+<td>Một màn hình cho giám đốc, số liệu theo ngày</td>
+</tr>
+</tbody>
+</table>
+<h2 id="2-mot-don-hang-di-qua-cong-ty">2. Một đơn hàng đi qua công ty</h2>
+<figure><img src="../assets/lanh-dao/so-do-luong-don-hang.svg" alt="Sơ đồ: một đơn hàng đi qua công ty — vận hành, tiền thu, nhiên liệu"><figcaption>Hình 1. Sơ đồ: một đơn hàng đi qua công ty — vận hành, tiền thu, nhiên liệu</figcaption></figure>
+<p>Đọc sơ đồ theo ba dòng.</p>
+<p><strong>Dòng 1: vận hành.</strong> Văn phòng tạo <strong>đơn hàng</strong> và chọn điểm lấy, điểm giao trên bản đồ.</p>
+<p>Khi chọn xe, hệ thống lập một <strong>vòng xe</strong>:</p>
+<ul>
+<li><strong>chặng rỗng</strong>: từ bãi xe tới điểm lấy hàng. Mỗi vòng xe mới được coi là xuất phát từ bãi xe công ty đã khai. Hệ thống chỉ bỏ chặng này khi điểm lấy mang đúng tên bãi, không xét xe thực tế đang đứng ở đâu;</li>
+<li><strong>chặng có hàng</strong>: từ điểm lấy tới điểm giao.</li>
+</ul>
+<p>Lái xe của xe đó nhận việc ngay trên điện thoại, không phải tự đi nhận. Ở hiện trường, lái xe bấm các mốc và chụp biên nhận. Đây là <strong>bằng chứng</strong>; mốc lái xe bấm không tự đẩy tiến độ.</p>
+<p>Văn phòng xem bằng chứng, tiến từng chặng, rồi <strong>xác nhận đơn đã giao xong</strong>.</p>
+<p><strong>Việc đóng vòng xe do hệ thống tự quyết</strong>, không ai phải bấm.</p>
+<ul>
+<li>Hệ thống đóng ngay khi chặng hoàn tất sau cùng kết thúc đúng ở bãi xe.</li>
+<li>Kế hoạch hiện chưa có chặng về bãi, nên thường vòng xe đóng sau thời gian nghỉ công ty đã khai, hiện là <strong>12 giờ</strong>, tính từ lúc văn phòng hoàn tất chặng cuối.</li>
+<li>Hệ thống <strong>không</strong> đóng khi hiện trường còn ghi hàng trên xe, hoặc còn phiên chờ người nhận đang mở.</li>
+</ul>
+<p><strong>Dòng 2: tiền thu.</strong> Giao xong chưa phải là nợ của khách. Kế toán lần lượt:</p>
+<ol>
+<li>đối chiếu chứng từ rồi bấm <strong>“Đã kết thúc”</strong> đơn;</li>
+<li><strong>đối soát</strong> với khách, lúc đó mới thành khoản phải thu có hạn thanh toán;</li>
+<li>ghi <strong>tiền về</strong>;</li>
+<li><strong>gắn tiền vào nợ</strong>. Chỉ tới bước này, khoản phải thu mới giảm.</li>
+</ol>
+<p>Đóng vòng xe và kết thúc đơn là <strong>hai việc khác nhau</strong>. Việc thứ nhất là chuyện xe, do hệ thống lo. Việc thứ hai là chuyện tiền với khách, do kế toán quyết.</p>
+<p><strong>Dòng 3: nhiên liệu.</strong> Lái xe khai phiếu đổ dầu và chọn ai trả tiền. Hai trường hợp đi hai đường khác nhau (xem mục 6).</p>
+<h2 id="3-nhung-tu-can-biet">3. Những từ cần biết</h2>
+<table>
+<thead>
+<tr>
+<th>Từ</th>
+<th>Nghĩa</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Đơn hàng</strong></td>
+<td>Việc công ty nhận với khách: lấy ở đâu, giao ở đâu, cước bao nhiêu. Mọi việc bắt đầu từ đây</td>
+</tr>
+<tr>
+<td><strong>Vòng xe</strong></td>
+<td>Một lượt đi của một xe để làm đơn. Trên màn hình văn phòng còn gọi là <strong>vòng chạy</strong>. Hiện nay mỗi đơn có một vòng xe riêng</td>
+</tr>
+<tr>
+<td><strong>Chặng</strong></td>
+<td>Một đoạn đường trong vòng xe, có điểm đầu và điểm cuối</td>
+</tr>
+<tr>
+<td><strong>Chặng rỗng</strong></td>
+<td>Xe chạy không hàng, ví dụ từ bãi tới điểm lấy. Hệ thống tự lập và tô đỏ để dễ thấy xe chạy rỗng nhiều</td>
+</tr>
+<tr>
+<td><strong>Chặng có hàng</strong></td>
+<td>Xe chở hàng của đơn, từ điểm lấy tới điểm giao</td>
+</tr>
+<tr>
+<td><strong>Kế hoạch vận chuyển</strong></td>
+<td>Danh sách chặng hệ thống đề xuất khi văn phòng chọn xe. Văn phòng xem rồi bấm xác nhận</td>
+</tr>
+<tr>
+<td><strong>Mốc hiện trường</strong></td>
+<td>Lái xe bấm trên điện thoại: đã tới điểm lấy, đã vào cổng, đang xếp hàng, rời điểm lấy, đã đến nơi, khách đã nhận hàng. Là bằng chứng, không tự đổi tiến độ</td>
+</tr>
+<tr>
+<td><strong>Phiên chờ</strong></td>
+<td>Thời gian lái xe chờ người nhận ở điểm giao. Tự kết thúc khi lái xe bấm “Khách đã nhận hàng”</td>
+</tr>
+<tr>
+<td><strong>Hoàn tất chặng</strong></td>
+<td>Văn phòng xác nhận một chặng đã chạy xong</td>
+</tr>
+<tr>
+<td><strong>Đóng vòng xe</strong></td>
+<td>Hệ thống tự làm khi xe hết việc và về bãi, hoặc sau 12 giờ nghỉ</td>
+</tr>
+<tr>
+<td><strong>Giao xong đơn</strong></td>
+<td>Văn phòng xác nhận hàng đã tới khách. Việc này không tạo công nợ</td>
+</tr>
+<tr>
+<td><strong>Kết thúc đơn</strong></td>
+<td>Kế toán xác nhận đủ căn cứ, và đơn được vào đối soát với khách</td>
+</tr>
+<tr>
+<td><strong>Phải thu</strong></td>
+<td>Tiền khách nợ công ty, chỉ tính sau khi đối soát</td>
+</tr>
+<tr>
+<td><strong>Phải trả</strong></td>
+<td>Tiền công ty nợ đối tác: cây xăng, nhà xe thuê ngoài, hoa hồng nguồn đơn</td>
+</tr>
+<tr>
+<td><strong>Quỹ lái xe</strong></td>
+<td>Sổ tiền riêng của từng lái xe với công ty: tạm ứng, tiền lái xe tự trả rồi được hoàn, hoàn quỹ</td>
+</tr>
+<tr>
+<td><strong>Biên trực tiếp</strong></td>
+<td>Doanh thu trừ chi phí trực tiếp. Chuyến cũ trừ dầu, cầu đường, bốc xếp…; đơn theo vòng xe hiện chỉ trừ tiền dầu đã phân bổ. <strong>Chưa gồm chi phí cố định</strong> như khấu hao, lương văn phòng. Không phải lợi nhuận cuối cùng</td>
+</tr>
+<tr>
+<td><strong>Chuyến cũ</strong></td>
+<td>Chuyến lập tay theo cách làm trước đây. Chỉ còn để khép sổ và vẫn được tính trong báo cáo, không cộng hai lần</td>
+</tr>
+</tbody>
+</table>
+<h2 id="4-ai-lam-gi">4. Ai làm gì</h2>
+<table>
+<thead>
+<tr>
+<th>Người</th>
+<th>Làm gì trong hệ thống</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Văn phòng điều hành</strong></td>
+<td>Tạo đơn trên bản đồ, chọn xe, xác nhận kế hoạch, tiến chặng, xác nhận giao xong</td>
+</tr>
+<tr>
+<td><strong>Lái xe</strong></td>
+<td>Xem việc được giao, bấm mốc, chụp giấy tờ, khai phiếu dầu, xem quỹ và phiếu lương của mình</td>
+</tr>
+<tr>
+<td><strong>Kế toán</strong></td>
+<td>Kết thúc đơn, đối soát với khách, ghi tiền về, xác thực phiếu dầu, đối soát bảng kê cây xăng, quỹ lái xe, lương</td>
+</tr>
+<tr>
+<td><strong>Giám đốc</strong></td>
+<td>Xem tổng hợp mỗi ngày. Làm được mọi việc của văn phòng và kế toán, và thêm các việc chỉ giám đốc được làm</td>
+</tr>
+<tr>
+<td><strong>Hệ thống</strong></td>
+<td>Lập chặng, giao việc cho lái xe của xe, đóng vòng xe, tính biên trực tiếp, nhắc giấy tờ và bảo dưỡng sắp hết hạn</td>
+</tr>
+</tbody>
+</table>
+<p>Hệ thống hiện có ba loại tài khoản: giám đốc, kế toán và lái xe. Chưa có loại riêng cho văn phòng điều hành; việc điều hành làm bằng tài khoản kế toán hoặc giám đốc.</p>
+<p>Có ba điểm lãnh đạo nên biết.</p>
+<ul>
+<li>
+<p><strong>Người quyết, máy ghi.</strong> Máy không tự đánh dấu “giao xong”, không tự “kết thúc đơn”, không tự trừ tiền của ai. Những bước đó luôn có một người bấm, và hệ thống lưu tên người đó cùng giờ bấm.</p>
+</li>
+<li>
+<p><strong>Kế toán thấy cùng danh mục với giám đốc</strong>, nhưng không được làm một số việc:</p>
+<ul>
+<li>mở lại một kỳ đã chốt, như kỳ chi phí hay kỳ đối soát dầu;</li>
+<li>xem lịch sử vị trí của lái xe trên bản đồ;</li>
+<li>vài việc quản trị khác.</li>
+</ul>
+<p>Giới hạn này do máy chủ giữ, không chỉ ẩn trên màn hình.</p>
+</li>
+<li>
+<p><strong>Hiện kế toán cũng tạo đơn và điều xe được.</strong> Nếu công ty muốn tách hẳn việc điều xe khỏi kế toán, cần quyết định (mục 10).</p>
+</li>
+</ul>
+<h2 id="5-xem-tren-man-hinh">5. Xem trên màn hình</h2>
+<p>Hình dưới đây đi theo đúng đường của một đơn hàng. Số khoanh trong hình được giải thích ngay bên dưới hình.</p>
+<h3 id="5-1-tong-quan-mo-he-thong-ra-thay-gi">5.1. Tổng quan: mở hệ thống ra thấy gì</h3>
+<figure><img src="../assets/lanh-dao/01-tong-quan.jpg" alt="Màn Tổng quan: bảy ô đếm và danh sách việc cần xử lý ngay"><figcaption>Hình 2. Màn Tổng quan: bảy ô đếm và danh sách việc cần xử lý ngay</figcaption></figure>
+<ol>
+<li><strong>Bảy ô đếm</strong>: đơn đang mở, vòng chạy đang chạy, vòng chạy đã lên kế hoạch, xe rỗi, xe bảo dưỡng, lái xe đang làm, kỳ đối soát đang mở.</li>
+<li><strong>Cần xử lý ngay</strong>: việc đang chờ người, ví dụ giấy tờ xe hết hạn, bảo dưỡng quá hạn. Bấm vào để xem đủ danh sách.</li>
+</ol>
+<p>Dòng mờ cuối trang nhắc số chuyến cũ chưa khép. Đó là dữ liệu của cách làm trước đây, không phải việc mới.</p>
+<h3 id="5-2-tao-don-tren-ban-do">5.2. Tạo đơn trên bản đồ</h3>
+<figure><img src="../assets/lanh-dao/02-tao-don-tim-dia-diem.jpg" alt="Tạo đơn mới: tìm địa điểm bằng tiếng Việt và đặt điểm trên bản đồ"><figcaption>Hình 3. Tạo đơn mới: tìm địa điểm bằng tiếng Việt và đặt điểm trên bản đồ</figcaption></figure>
+<ol>
+<li><strong>Tìm địa điểm</strong> bằng tiếng Việt, ví dụ “Khu công nghiệp Đình Vũ Hải Phòng”. Kết quả chỉ là gợi ý. Một kết quả chỉ trở thành điểm của đơn khi người tạo đơn bấm chọn.</li>
+<li><strong>Bản đồ</strong>: bấm thẳng lên bản đồ để đặt điểm, kéo ghim để chỉnh. Nút <strong>“Vị trí của tôi”</strong> giúp đặt nhanh khi đang đứng tại chỗ. Đây chỉ là gợi ý để chọn điểm, <strong>không phải bằng chứng vị trí</strong>.</li>
+</ol>
+<p>Ngoài hai cách trên còn có danh sách <strong>Địa điểm đã biết</strong>, gồm bãi xe, nhà máy, kho của khách. Chọn một lần là xong, không phải gõ lại.</p>
+<figure><img src="../assets/lanh-dao/03-tao-don-phieu-tuyen.jpg" alt="Tạo đơn mới: phiếu tuyến đủ hai điểm, còn thiếu thông tin đơn"><figcaption>Hình 4. Tạo đơn mới: phiếu tuyến đủ hai điểm, còn thiếu thông tin đơn</figcaption></figure>
+<ol>
+<li><strong>Phiếu tuyến</strong>:
+<ul>
+<li>Mỗi điểm ghi rõ lấy từ đâu (kết quả tìm, địa điểm đã biết, hay chọn trên bản đồ).</li>
+<li>Tên in trên đơn sửa được mà không làm dịch điểm.</li>
+<li>Dòng “Đường chim bay ≈ 133 km” chỉ để tham khảo, <strong>không phải quãng đường xe chạy</strong>.</li>
+</ul>
+</li>
+<li><strong>Hai ghim Lấy và Giao</strong> trên bản đồ, cạnh danh sách địa điểm đã biết.</li>
+<li><strong>Nút “Tạo đơn” chỉ mở khi đủ</strong>: hai điểm có tên, mã đơn, khách hàng, ngày vận hành, cước. Dòng “Còn thiếu” nói rõ còn thiếu gì.</li>
+</ol>
+<p>Bản đồ nền là bản đồ mở, không cần tài khoản Google.</p>
+<h3 id="5-3-don-vong-xe-va-chang">5.3. Đơn, vòng xe và chặng</h3>
+<p>Sau khi tạo đơn, văn phòng làm ba bước ngay trên trang đơn:</p>
+<ol>
+<li>chọn xe;</li>
+<li>bấm <strong>“Xem kế hoạch”</strong>;</li>
+<li>bấm <strong>“Xác nhận kế hoạch và giao xe”</strong>.</li>
+</ol>
+<p>Lái xe đang gắn với xe được giao việc tự động. Hệ thống không cho xác nhận nếu xe chưa có lái xe, có hai lái xe cùng lúc, hoặc lái xe đã ngừng hoạt động hay chưa có tài khoản đăng nhập.</p>
+<figure><img src="../assets/lanh-dao/04-don-vong-xe-chang.jpg" alt="Chi tiết đơn: vòng chạy phục vụ đơn, chặng rỗng, chặng có hàng, trạng thái đóng vòng và ô giao xong"><figcaption>Hình 5. Chi tiết đơn: vòng chạy phục vụ đơn, chặng rỗng, chặng có hàng, trạng thái đóng vòng và ô giao xong</figcaption></figure>
+<ol>
+<li><strong>Vòng chạy đang phục vụ đơn</strong>: mã vòng, xe, và cho biết đây là vòng mới hay nối vào vòng đang chạy.</li>
+<li><strong>Chặng 1, chạy rỗng</strong>: từ bãi xe tới điểm lấy. Chặng này không có mốc hàng.</li>
+<li><strong>Chặng 2, có hàng</strong>: gắn với đơn. Cột “Hiện trường” cho thấy lái xe đã bấm tới đâu. Cột “Việc văn phòng” là nơi văn phòng bấm <strong>“Bắt đầu chạy”</strong>, rồi <strong>“Hoàn tất chặng”</strong>.
+<ul>
+<li>Nếu hiện trường chưa ghi khách đã nhận mà văn phòng vẫn muốn hoàn tất, phải ghi lý do. Lý do được lưu lại.</li>
+</ul>
+</li>
+<li><strong>Đóng vòng chạy (hệ thống tự quyết)</strong>: chỉ là dòng trạng thái, không có nút.</li>
+<li><strong>Giao xong đơn</strong>: văn phòng bấm <strong>“Xác nhận đã giao xong”</strong>.
+<ul>
+<li>Hệ thống nhắc nếu còn chặng có hàng chưa hoàn tất.</li>
+<li>Việc này không đóng vòng xe và không tạo công nợ.</li>
+</ul>
+</li>
+</ol>
+<p>Đơn trong hình được tạo trước khi có bản đồ, nên dòng trên cùng ghi “chỉ có tên hiển thị”. Đơn mới luôn có điểm trên bản đồ.</p>
+<h3 id="5-4-bang-dieu-hanh-xe-dang-o-buoc-nao">5.4. Bảng điều hành: xe đang ở bước nào</h3>
+<figure><img src="../assets/lanh-dao/05-bang-dieu-hanh.jpg" alt="Bảng điều hành: sáu ô đội xe và bảng vòng chạy theo bảy cột"><figcaption>Hình 6. Bảng điều hành: sáu ô đội xe và bảng vòng chạy theo bảy cột</figcaption></figure>
+<ol>
+<li>
+<p><strong>Đội xe hôm nay</strong>: xe trong đội, đang chạy, đang rảnh, đang sửa, lái xe đang hoạt động, việc đang chờ xử lý.</p>
+</li>
+<li>
+<p><strong>Vòng chạy theo bảy cột của quy trình</strong>:</p>
+<ol>
+<li>Đã lên kế hoạch</li>
+<li>Vào lấy hàng</li>
+<li>Đang xếp hàng</li>
+<li>Trên đường</li>
+<li>Đã đến nơi giao</li>
+<li>Chờ người nhận</li>
+<li>Đã giao xong</li>
+</ol>
+<ul>
+<li>Thẻ rời cột “Đã lên kế hoạch” khi văn phòng bấm “Bắt đầu chạy”.</li>
+<li>Sau đó thẻ theo mốc lái xe bấm trên chặng đầu tiên chưa xong. Vì vậy khi văn phòng chưa hoàn tất chặng rỗng, mốc trên chặng có hàng chưa làm thẻ chuyển cột.</li>
+<li>Lái xe đã giao hàng nhưng vòng xe chưa đóng thì thẻ nằm ở “Trên đường”.</li>
+<li>Cột cuối nghĩa là <strong>vòng xe đã đóng</strong>, không có nghĩa là đơn đã được xác nhận giao.</li>
+</ul>
+</li>
+<li>
+<p><strong>Thẻ vòng chạy</strong> cho biết đang ở chặng nào. Chặng rỗng được tô đỏ.</p>
+</li>
+</ol>
+<p>Đây là màn người trực điều hành làm việc cả ngày. Bên dưới bảng là hàng việc đang chờ người xử lý.</p>
+<h3 id="5-5-lai-xe-tren-dien-thoai">5.5. Lái xe trên điện thoại</h3>
+<figure><img src="../assets/lanh-dao/06-dien-thoai-lai-xe.jpg" alt="Ba màn điện thoại của lái xe: Trang chủ, Hiện trường, Nhiên liệu"><figcaption>Hình 7. Ba màn điện thoại của lái xe: Trang chủ, Hiện trường, Nhiên liệu</figcaption></figure>
+<ol>
+<li>
+<p><strong>Trang chủ: việc được điều từ văn phòng.</strong> Lái xe thấy ngay:</p>
+<ul>
+<li>việc kế tiếp phải bấm;</li>
+<li>tuyến và mã đơn;</li>
+<li>số dư quỹ của mình.</li>
+</ul>
+<p>Lái xe không phải đi nhận việc lại.</p>
+</li>
+<li>
+<p><strong>Hiện trường</strong>:</p>
+<ul>
+<li>Chỉ hiện những nút được phép bấm ở bước đó, ở đây là “Đã tới điểm lấy hàng”. Có bước hiện vài nút cùng lúc, ví dụ “Đã vào cổng”, “Đang xếp hàng”, “Rời điểm lấy hàng”.</li>
+<li>Dòng “Còn thiếu” nhắc giấy tờ bắt buộc, hiện là biên nhận giao hàng.</li>
+<li>Chặng rỗng không có nút nào, vì không có mốc hàng. Văn phòng tiến chặng này như mọi chặng khác.</li>
+<li>Hai mốc “Đã đến nơi” và “Khách đã nhận hàng” lấy vị trí điện thoại ngay lúc bấm. Nếu máy chưa bật định vị, mốc <strong>không được ghi</strong>, và máy nói rõ phải làm gì.</li>
+</ul>
+</li>
+<li>
+<p><strong>Nhiên liệu: lái xe chọn ai trả tiền.</strong> Máy nói rõ ngay dưới ô chọn tiền sẽ đi đâu (mục 6).</p>
+</li>
+</ol>
+<p>Lái xe có chín mục ở thanh dưới: Trang chủ, Nhận việc, Hiện trường, Chuyến, Nhiên liệu, Chi phí, Quỹ, Lịch sử, Phiếu lương.</p>
+<p>Hệ thống cần sóng điện thoại. Nếu mất sóng, lái xe bấm lại khi có sóng; bấm lại cùng một mốc không tạo mốc trùng. Riêng “Đang xếp hàng” được ghi nhiều lần theo thiết kế.</p>
+<p><em>Hình màn lái xe chụp trên một bản cài riêng của đúng phiên bản phần mềm đang chạy. Giao diện và cách hoạt động giống hệt.</em></p>
+<h3 id="5-6-ket-thuc-don-ke-toan-nhan-ban-giao">5.6. Kết thúc đơn: kế toán nhận bàn giao</h3>
+<figure><img src="../assets/lanh-dao/07-ket-thuc-don.jpg" alt="Kết thúc đơn: bộ lọc, cột giao hàng và chứng từ, cột đủ điều kiện đối soát"><figcaption>Hình 8. Kết thúc đơn: bộ lọc, cột giao hàng và chứng từ, cột đủ điều kiện đối soát</figcaption></figure>
+<ol>
+<li><strong>Lọc theo trạng thái</strong>: chờ kết thúc, đã kết thúc, cần bổ sung, từ chối.</li>
+<li><strong>Giao hàng và chứng từ</strong>: chỉ đơn đã được văn phòng xác nhận giao xong mới vào đây. Cột “Chứng từ” cho biết số chứng từ số; “Bản giấy” nghĩa là chưa có bản số.</li>
+<li><strong>Đủ điều kiện đối soát</strong>: chỉ đơn đã giao xong <strong>và</strong> đã được kế toán bấm “Đã kết thúc” mới vào kỳ đối soát với khách.</li>
+</ol>
+<p>Kế toán có ba lựa chọn cho mỗi đơn: “Đã kết thúc”, “Cần bổ sung”, “Từ chối”. Mỗi quyết định phải có căn cứ:</p>
+<ul>
+<li>hoặc chọn chứng từ số;</li>
+<li>hoặc ghi rõ bên kia đã nhận hay xác nhận gì.</li>
+</ul>
+<p>Hệ thống lưu người quyết và giờ máy chủ.</p>
+<h3 id="5-7-phai-thu-khach-hang">5.7. Phải thu khách hàng</h3>
+<figure><img src="../assets/lanh-dao/08-phai-thu-khach-hang.jpg" alt="Phải thu khách hàng: bốn ô tiền, tuổi nợ và chứng từ còn nợ"><figcaption>Hình 9. Phải thu khách hàng: bốn ô tiền, tuổi nợ và chứng từ còn nợ</figcaption></figure>
+<ol>
+<li><strong>Bốn con số tách bạch</strong>:
+<ul>
+<li>tổng còn nợ;</li>
+<li>trong đó quá hạn;</li>
+<li>chờ đối soát, tức đơn kế toán đã bấm “Đã kết thúc” nhưng chưa đối soát với khách, nên <strong>chưa phải công nợ</strong>;</li>
+<li>tiền nhận trước, tức tiền đã về nhưng chưa gắn vào chứng từ nào.</li>
+</ul>
+</li>
+<li><strong>Tuổi nợ</strong>: trong hạn, quá hạn 1–30 ngày, 31–60 ngày, trên 60 ngày.</li>
+<li><strong>Chứng từ còn nợ theo khách</strong>: ngày, hạn thanh toán, còn nợ, tuổi nợ.</li>
+</ol>
+<p>Màn này chỉ giữ <strong>một dòng tiền: cước khách hàng</strong>. Tiền nợ cây xăng, nhà xe, hoa hồng nằm ở “Phải trả đối tác &amp; cây xăng”. Tiền với lái xe nằm ở “Quỹ lái xe” và “Quyết toán lái xe”.</p>
+<h3 id="5-8-tong-hop-tai-chinh-va-bien-truc-tiep">5.8. Tổng hợp tài chính và biên trực tiếp</h3>
+<figure><img src="../assets/lanh-dao/09-tong-hop-tai-chinh.jpg" alt="Tổng hợp tài chính: doanh thu và biên trực tiếp, chia theo nguồn, các lưu ý về con số"><figcaption>Hình 10. Tổng hợp tài chính: doanh thu và biên trực tiếp, chia theo nguồn, các lưu ý về con số</figcaption></figure>
+<ol>
+<li><strong>Doanh thu, chi phí trực tiếp, biên trực tiếp</strong>. Biên trực tiếp luôn kèm câu <strong>“Chưa gồm chi phí cố định”</strong>.</li>
+<li><strong>Theo nguồn</strong>: đơn theo vòng xe (cách làm hiện nay) và chuyến cũ (cách làm trước đây) nằm cạnh nhau. Một đơn sinh từ chuyến cũ chỉ được tính một lần.</li>
+<li><strong>Lưu ý về con số</strong>. Hệ thống tự nói khi con số chưa đủ, thay vì lặng lẽ cho ra số đẹp. Màn này ghi lời nhắc cho cả công ty; ở <strong>Hiệu quả từng chuyến</strong>, từng đơn mang nhãn tương ứng:
+<ul>
+<li>“Dầu chưa phân bổ”: có phiếu dầu trên vòng xe nhưng kế toán chưa phân bổ vào chi phí, nên biên thật có thể thấp hơn.</li>
+<li>“Chưa ghi chi phí”: đơn chưa có khoản chi nào. <strong>Biên 100% ở đây là “chưa ghi chi phí”, không phải “không tốn chi phí”.</strong></li>
+</ul>
+</li>
+</ol>
+<p>Phía dưới là <strong>sáu dòng tiền, giữ riêng</strong>:</p>
+<ul>
+<li>khách hàng còn nợ;</li>
+<li>còn nợ cây xăng;</li>
+<li>còn nợ nhà xe;</li>
+<li>hoa hồng phải trả đối tác;</li>
+<li>công ty còn nợ lái xe;</li>
+<li>lương đã ghi nhận mà lái xe chưa rút.</li>
+</ul>
+<p>Bảng <strong>cố ý không có ô tổng</strong>, vì cộng các dòng này lại cho ra một con số không ai nợ ai cả.</p>
+<h3 id="5-9-tong-hop-giam-doc-nam-phut-moi-sang">5.9. Tổng hợp giám đốc: năm phút mỗi sáng</h3>
+<figure><img src="../assets/lanh-dao/10-tong-hop-giam-doc.jpg" alt="Tổng hợp giám đốc: vận hành, hiệu quả chạy xe, tiền và việc cần xử lý"><figcaption>Hình 11. Tổng hợp giám đốc: vận hành, hiệu quả chạy xe, tiền và việc cần xử lý</figcaption></figure>
+<p>Màn này trả lời ba câu hỏi mỗi sáng.</p>
+<ol>
+<li><strong>Xe đang chạy thế nào</strong>: số xe trong đội, đang chạy, đang rảnh, đang sửa, lái xe hoạt động, việc đang chờ.</li>
+<li><strong>Hiệu quả chạy xe</strong>: tổng km và tỷ lệ chạy rỗng toàn đội.
+<ul>
+<li>Trong hình hai ô này đang trống, kèm dòng “21 chặng chưa nhập km nên chưa cộng được tổng”.</li>
+<li>Lý do: km của chặng theo vòng xe hiện chưa được ghi (mục 9).</li>
+</ul>
+</li>
+<li><strong>Tiền đang ở đâu</strong>: sáu dòng tiền ở mục 5.8, cùng biên trực tiếp và tỷ lệ biên. Luôn kèm câu “chưa gồm chi phí cố định” và số đơn, chuyến đã được tính.</li>
+</ol>
+<p>Bên dưới là <strong>việc cần xử lý</strong>.</p>
+<p><strong>Một ngày của giám đốc</strong> đi theo bốn bước:</p>
+<ol>
+<li>Mở <strong>Tổng hợp giám đốc</strong> và đọc ba khối.</li>
+<li>Có việc đỏ thì mở <strong>Bảng điều hành</strong> để xem đủ hàng việc và mở thẳng màn cần xử lý.</li>
+<li>Cần chi tiết tiền thì mở <strong>Phải thu khách hàng</strong> hoặc <strong>Hiệu quả từng chuyến</strong>. Màn thứ hai có một dòng cho mỗi đơn hoặc chuyến, kèm lý do nếu dòng đó chưa đủ số.</li>
+<li>Cần xem xe đang ở bước nào thì cũng mở <strong>Bảng điều hành</strong>.</li>
+</ol>
+<h2 id="6-nhien-lieu-va-quy-lai-xe-hai-duong-tien">6. Nhiên liệu và quỹ lái xe: hai đường tiền</h2>
+<p>Khi khai phiếu đổ dầu trên vòng xe, lái xe chọn một trong hai cách thanh toán.</p>
+<table>
+<thead>
+<tr>
+<th>Cách trả</th>
+<th>Tiền đi đâu</th>
+<th>Ai làm</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Lái xe trả tiền mặt</strong></td>
+<td>Kế toán xác thực phiếu. Khoản này ghi vào <strong>sổ quỹ của lái xe</strong>, làm số dư giảm. Nếu lái xe đã chi quá tạm ứng, công ty còn nợ lái xe và trả lại ở “Quyết toán lái xe”. <strong>Không</strong> ghi nợ cây xăng</td>
+<td>Lái xe khai, kế toán xác thực</td>
+</tr>
+<tr>
+<td><strong>Ghi nợ cây xăng</strong></td>
+<td>Ba bước, theo thứ tự: kế toán <strong>xác thực</strong> phiếu → <strong>đối soát</strong> với bảng kê của cây xăng (máy so khớp từng phiếu đã xác thực) → <strong>đóng kỳ</strong>. Chỉ khi đóng kỳ, khoản nợ mới vào <strong>phải trả cây xăng</strong>; khai hay xác thực đều chưa tạo công nợ. <strong>Không</strong> đụng tới quỹ của lái xe</td>
+<td>Lái xe khai; kế toán xác thực, đối soát, đóng kỳ</td>
+</tr>
+</tbody>
+</table>
+<p>Khi so khớp, hệ thống bắt các chỗ lệch:</p>
+<ul>
+<li>phiếu chỉ có một phía;</li>
+<li>số hoá đơn khác nhau;</li>
+<li>lệch quá dung sai;</li>
+<li>phiếu lái xe đã trả tiền mặt nhưng vẫn xuất hiện trên bảng kê.</li>
+</ul>
+<p>Kế toán xử lý từng dòng lệch, kèm lý do. Đây là chỗ chặn thất thoát dầu quan trọng nhất.</p>
+<p>Tiền dầu <strong>không tự</strong> vào chi phí của đơn. Kế toán phân bổ phiếu dầu vào vòng xe hoặc chặng. Trước khi phân bổ, màn hiệu quả hiện “Dầu chưa phân bổ”, để không ai nhầm là đơn không tốn dầu.</p>
+<h2 id="7-ban-do-va-vi-tri-dung-de-lam-gi">7. Bản đồ và vị trí: dùng để làm gì</h2>
+<ul>
+<li><strong>Bản đồ để chọn đúng điểm.</strong> Điểm lấy và giao là một vị trí trên bản đồ. Tên chỉ để đọc cho dễ. Toạ độ giúp màn “Điều xe” ước lượng xe nào gần điểm lấy. Riêng việc lập chặng rỗng hiện vẫn so tên điểm lấy với tên bãi đã khai, và km của chặng chưa được tính.</li>
+<li><strong>Tìm địa điểm theo tên</strong> dựa trên dữ liệu bản đồ công cộng. Đây là tiện ích, mặc định tắt, và <strong>máy chủ không cho bật</strong> khi hệ thống được khai là chạy dữ liệu thật của công ty. Khi đó bản đồ, danh sách địa điểm đã biết và nút “Vị trí của tôi” vẫn dùng được, nhưng tên điểm phải gõ tay.</li>
+<li><strong>“Vị trí của tôi” lúc tạo đơn chỉ là gợi ý</strong>, không phải bằng chứng xe đã ở đó.</li>
+<li><strong>Bằng chứng vị trí</strong> là vị trí điện thoại lái xe gửi lên đúng lúc bấm “Đã đến nơi” và “Khách đã nhận hàng”.</li>
+<li>Hệ thống <strong>chưa</strong> theo dõi liên tục cả hành trình, và <strong>chưa</strong> nối với thiết bị giám sát hành trình gắn trên xe.</li>
+</ul>
+<h2 id="8-lai-xe-khong-nhin-thay-tien-cua-cong-ty">8. Lái xe không nhìn thấy tiền của công ty</h2>
+<p>Màn hình lái xe <strong>không có</strong> cước vận chuyển, doanh thu, biên, hay công nợ của khách. Lái xe chỉ thấy:</p>
+<ul>
+<li>việc được giao;</li>
+<li>quỹ của chính mình;</li>
+<li>phiếu dầu của chính mình;</li>
+<li>phiếu lương của chính mình.</li>
+</ul>
+<p>Giới hạn này do máy chủ giữ. Lái xe có cố mở đường khác thì máy chủ cũng không trả những số đó về.</p>
+<h2 id="9-han-che-hien-tai">9. Hạn chế hiện tại</h2>
+<p>Chỉ ghi những điều có ảnh hưởng tới quyết định.</p>
+<h3 id="anh-huong-toi-tien">Ảnh hưởng tới tiền</h3>
+<table>
+<thead>
+<tr>
+<th>Hạn chế</th>
+<th>Ảnh hưởng</th>
+<th>Làm tạm</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Lái xe <strong>chưa ghi được chi phí dọc đường</strong> (cầu đường, bốc xếp, bến bãi, sửa dọc đường) cho vòng xe. Hiện chỉ phiếu dầu ghi được</td>
+<td>Các khoản này chưa vào chi phí của đơn, nên biên trực tiếp cao hơn thực tế</td>
+<td>Theo dõi riêng cho tới khi sửa</td>
+</tr>
+<tr>
+<td><strong>Km của chặng theo vòng xe chưa được ghi</strong></td>
+<td>Tổng km và tỷ lệ chạy rỗng chỉ có từ chuyến cũ hoặc để trống</td>
+<td>Đọc km theo chuyến cũ; chờ quyết định lấy km từ đâu (mục 10)</td>
+</tr>
+<tr>
+<td><strong>Lương theo chuyến và theo km chưa tính việc theo vòng xe</strong></td>
+<td>Hệ thống chỉ đếm chuyến theo cách cũ. Việc theo vòng xe không được đếm vào phần khoán theo chuyến và theo km trên phiếu lương</td>
+<td>Nếu trả theo chuyến hoặc km, kế toán cộng tay phần này</td>
+</tr>
+</tbody>
+</table>
+<h3 id="anh-huong-toi-van-hanh">Ảnh hưởng tới vận hành</h3>
+<table>
+<thead>
+<tr>
+<th>Hạn chế</th>
+<th>Ảnh hưởng</th>
+<th>Làm tạm</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Ở <strong>Kết thúc đơn</strong>, chọn chứng từ số bằng chuột chưa được</td>
+<td>Kế toán ghi rõ đã nhận giấy gì thay vì chọn tệp</td>
+<td>Quyết định vẫn lưu người và giờ</td>
+</tr>
+<tr>
+<td>Vòng xe giao xong xa bãi được <strong>giữ mở tới 12 giờ</strong>. Trong thời gian đó, cùng lái xe <strong>không ghi được hai mốc giao hàng</strong> của đơn mới</td>
+<td>Một lái xe khó làm hai đơn liền trong ngày</td>
+<td>Giao đơn kế tiếp cho xe khác</td>
+</tr>
+<tr>
+<td>Vòng xe giao xong mà xe chưa về bãi nằm ở trạng thái <strong>“Đang giữ” tới 12 giờ</strong> rồi mới tự đóng. Cả hai cách tự đóng (khi về bãi, và sau 12 giờ nghỉ) <strong>đã chạy thật</strong> trên bản đang chạy</td>
+<td>Trong 12 giờ đó xe vẫn bị đếm là đang chạy, thẻ nằm ở “Trên đường”</td>
+<td>Không cần làm gì</td>
+</tr>
+<tr>
+<td>Văn phòng <strong>hoàn tất chặng có hàng bằng ghi đè</strong> khi hiện trường còn ghi hàng trên xe, hoặc phiên chờ còn mở</td>
+<td>Vòng xe <strong>không bao giờ tự đóng</strong>. Trong lúc đó xe bị đếm là đang chạy, thẻ nằm ở “Trên đường”</td>
+<td>Chỉ ghi đè khi thật cần; nhắc lái xe bấm “Khách đã nhận hàng” trước</td>
+</tr>
+<tr>
+<td>Một số việc văn phòng <strong>chưa có nút</strong>: huỷ đơn; huỷ hoặc đổi xe sau khi đã xác nhận kế hoạch; thêm hoặc huỷ chặng; đóng phiên chờ thay lái xe; duyệt phụ cấp chờ; ghi nhận lái xe đã nộp biên nhận giấy; nhập danh sách địa điểm đã biết</td>
+<td>Các việc này phải xử lý ngoài hệ thống</td>
+<td>Ghi chú lại cho tới khi có nút</td>
+</tr>
+<tr>
+<td>Lái xe <strong>chưa xem được lịch sử vòng xe đã xong</strong>. Mục “Chuyến” và “Lịch sử” chỉ có chuyến cũ</td>
+<td>Lái xe hỏi lại văn phòng khi cần</td>
+<td>—</td>
+</tr>
+</tbody>
+</table>
+<h3 id="ngoai-pham-vi-dot-nay">Ngoài phạm vi đợt này</h3>
+<ul>
+<li><strong>Mỗi đơn một vòng xe.</strong> Chưa gom nhiều đơn lên một vòng xe.</li>
+<li><strong>Chưa nối thiết bị giám sát hành trình trên xe.</strong> Vị trí chỉ lấy lúc lái xe bấm hai mốc giao hàng.</li>
+<li><strong>Phí đường bộ tự động (ETC)</strong> chưa nằm trong đợt này.</li>
+<li><strong>Tìm địa điểm theo tên</strong> không bật được khi chạy dữ liệu thật (mục 7).</li>
+</ul>
+<h2 id="10-dieu-can-lanh-dao-quyet-truoc-khi-chay-du-lieu-that">10. Điều cần lãnh đạo quyết trước khi chạy dữ liệu thật</h2>
+<ol>
+<li><strong>Lương lái xe cho việc theo vòng xe tính theo gì?</strong>
+<ul>
+<li>Theo vòng xe, theo đơn giao xong, hay theo chặng có hàng?</li>
+<li>Chặng rỗng có tính km không?</li>
+</ul>
+</li>
+<li><strong>Km lấy từ đâu?</strong> Đồng hồ xe, bản đồ, hay nhập tay. Câu trả lời quyết định cả lương theo km lẫn báo cáo chạy rỗng.</li>
+<li><strong>Một xe chạy nhiều đơn liên tiếp trong ngày có phổ biến không?</strong> Nếu có, cần hai việc:
+<ul>
+<li>ưu tiên sửa hạn chế “giữ mở 12 giờ”;</li>
+<li>cân nhắc gom nhiều đơn lên một vòng xe.</li>
+</ul>
+</li>
+<li><strong>Thời gian nghỉ 12 giờ để tự đóng vòng xe có hợp lý không?</strong></li>
+<li><strong>Danh sách bãi xe, nhà máy, kho của khách cần nhập sẵn</strong>, vì tìm địa điểm theo tên sẽ tắt khi chạy dữ liệu thật. Hiện danh sách này do đội triển khai nhập, chưa có màn hình.</li>
+<li><strong>Ai được tạo đơn và điều xe.</strong> Hiện kế toán cũng làm được.</li>
+</ol>
+<p>Hướng dẫn thao tác từng bước: <a href="huong-dan-ke-toan.md">cho kế toán</a> · <a href="huong-dan-tai-xe.md">cho lái xe</a>.</p>
+<p><em>Tài liệu cũ trong thư mục này (“Bắt đầu nhanh”, “Kịch bản demo”, “Vận hành bản demo”) viết theo cách làm dựa trên chuyến. Khi nội dung khác nhau, tài liệu này là bản đúng.</em></p>
+
+</main>
+</body>
+</html>

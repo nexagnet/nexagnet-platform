@@ -1,0 +1,234 @@
+/*
+ * ===========================================================================
+ * BAN DO CHON DIEM (#379) — rieng cho `LocationPickerMap`, nam canh component.
+ *
+ * KHONG dung `.tx-map`: CSS man hep ep `.tx-map` cao 260px `!important`, con ban do chon diem phai
+ * cao theo cho chua no (lap day cot ban do tren may ban, 55vh tren dien thoai). Chieu cao do CHO
+ * CHUA quyet dinh; tep nay chi bat khung lap day cho chua.
+ *
+ * Khong mot quy tac nao o day cham vao `.maplibregl-ctrl-attrib`: ghi nguon OpenFreeMap / OSM la
+ * bat buoc va phai doc duoc.
+ *
+ * Mau la mau NGHIA, khong trang tri: Lay = `--tx-go`, Giao = `--tx-done`, dia diem da biet = muc
+ * nhat, ket qua tim = `--tx-wait`, vi tri cua toi = `--tx-accent`. Va mau KHONG BAO GIO la tin hieu
+ * duy nhat — moi ghim mang chu, so hoac hinh dang rieng.
+ * ===========================================================================
+ */
+
+.tx-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  height: 100%;
+  min-height: 0;
+}
+
+/* MapLibre do kich thuoc cho chua luc khoi tao — cho chua phai co chieu cao TRUOC khi ban do dung. */
+/*
+ * `isolation`: z-index cua ghim (hai dau tuyen tren cung) chi co nghia TRONG ban do — khong mot ghim
+ * nao duoc noi len tren the tim kiem hay bang trang thai dat de len ban do.
+ */
+.tx-picker__canvas {
+  position: relative;
+  isolation: isolate;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: var(--tx-radius);
+  background: #eef1f4;
+}
+
+.tx-picker__canvas[data-mode='pick'] .maplibregl-canvas {
+  cursor: crosshair;
+}
+
+.tx-picker__notice {
+  flex: none;
+}
+
+/* ---------------------------------------------------------------- *
+ * Ghim — mot nut that, vung cham >= 32px, tieu diem hien ro
+ * ---------------------------------------------------------------- */
+
+.tx-pin {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-family: var(--font-body);
+  color: var(--tx-ink);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+span.tx-pin {
+  cursor: default;
+}
+
+.tx-pin:focus-visible {
+  outline: 2px solid var(--tx-accent);
+  outline-offset: 2px;
+  border-radius: var(--tx-radius-sm);
+}
+
+/*
+ * COC DANH DAU diem lay/giao: mot the chu tren mot than coc, dau coc CHAM dung toa do. Cung mot
+ * chu "Lấy"/"Giao" voi dau cuong phieu tuyen — mat noi duoc hai cho ma khong can chu giai.
+ */
+.tx-pin--stake {
+  flex-direction: column;
+  cursor: grab;
+}
+
+.tx-pin--stake:active {
+  cursor: grabbing;
+}
+
+.tx-pin__tag {
+  display: block;
+  padding: 0.22rem 0.55rem 0.24rem;
+  border-radius: var(--tx-radius-sm);
+  color: var(--tx-paper);
+  font-size: 0.8rem;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: 0.01em;
+  box-shadow:
+    0 0 0 2px var(--tx-paper),
+    0 4px 10px rgb(27 26 23 / 28%);
+}
+
+.tx-pin__stem {
+  display: block;
+  width: 2px;
+  height: 14px;
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 70%);
+}
+
+/* Dau coc: mot cham nho, tam cham la diem da chon. */
+.tx-pin__stem::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -3px;
+  width: 7px;
+  height: 7px;
+  margin-left: -3.5px;
+  border-radius: 50%;
+  background: inherit;
+  box-shadow: 0 0 0 2px var(--tx-paper);
+}
+
+.tx-pin--origin .tx-pin__tag,
+.tx-pin--origin .tx-pin__stem {
+  background: var(--tx-go);
+}
+
+.tx-pin--destination .tx-pin__tag,
+.tx-pin--destination .tx-pin__stem {
+  background: var(--tx-done);
+}
+
+/* `#395` — diem DANG DAT o man "Địa điểm vận hành": coc mau thuong hieu, chu "Đây". */
+.tx-pin--place .tx-pin__tag,
+.tx-pin--place .tx-pin__stem {
+  background: var(--tx-accent);
+}
+
+/* Dia diem da biet: HINH DANG noi loai — bai xe vuong, nha may/kho thoi, kho khach tron nho. */
+.tx-pin--known,
+.tx-pin--result {
+  width: 32px;
+  height: 32px;
+}
+
+.tx-pin--known .tx-pin__mark {
+  display: block;
+  background: var(--tx-ink-soft);
+  box-shadow:
+    0 0 0 2px var(--tx-paper),
+    0 2px 5px rgb(27 26 23 / 25%);
+  transition: transform 120ms ease;
+}
+
+.tx-pin--depot .tx-pin__mark {
+  width: 13px;
+  height: 13px;
+  border-radius: 2px;
+}
+
+.tx-pin--site .tx-pin__mark {
+  width: 12px;
+  height: 12px;
+  border-radius: 1px;
+  transform: rotate(45deg);
+}
+
+.tx-pin--customer .tx-pin__mark {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.tx-pin--known:hover .tx-pin__mark,
+.tx-pin--known:focus-visible .tx-pin__mark {
+  background: var(--tx-ink);
+}
+
+.tx-pin--depot:hover .tx-pin__mark,
+.tx-pin--customer:hover .tx-pin__mark {
+  transform: scale(1.25);
+}
+
+.tx-pin--site:hover .tx-pin__mark {
+  transform: rotate(45deg) scale(1.25);
+}
+
+/* Ket qua tim: vong tron vien, danh SO — trung so voi dong trong danh sach. */
+.tx-pin--result .tx-pin__mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid var(--tx-wait);
+  background: var(--tx-paper);
+  color: var(--tx-wait);
+  font-size: 0.78rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 2px 6px rgb(27 26 23 / 22%);
+  transition:
+    transform 120ms ease,
+    background-color 120ms ease;
+}
+
+.tx-pin--result:hover .tx-pin__mark,
+.tx-pin--result.is-hot .tx-pin__mark {
+  background: var(--tx-wait);
+  color: var(--tx-paper);
+  transform: scale(1.18);
+}
+
+/* Vi tri cua toi: cham mau thuong hieu, vong trang — quang sai so ve bang lop ban do. */
+.tx-pin--me .tx-pin__mark {
+  display: block;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--tx-accent);
+  box-shadow:
+    0 0 0 3px var(--tx-paper),
+    0 1px 6px rgb(27 26 23 / 35%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tx-pin--known .tx-pin__mark,
+  .tx-pin--result .tx-pin__mark {
+    transition: none;
+  }
+}

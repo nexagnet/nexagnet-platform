@@ -29,6 +29,8 @@ describe('composition cua bang tai chinh', () => {
   it('den cung `transport-settlement`', () => {
     expect(controllerNames(SETTLEMENT)).toContain('FinanceController');
     expect(providerTokens(SETTLEMENT)).toContain('FinanceSettlementFacts');
+    // `#385` — cua so viec Run-first di cung bang, khong phai mot capability rieng.
+    expect(providerTokens(SETTLEMENT)).toContain('FinanceRunFirstFacts');
   });
 
   /**
@@ -83,7 +85,22 @@ describe('be mat tai chinh khong co duong ghi nao', () => {
     const methods = source.match(/abstract (\w+)\(/g) ?? [];
     expect(methods.length).toBeGreaterThan(0);
     for (const method of methods) {
-      expect(method).toMatch(/abstract (receivable|payable|directMargin|balances)/);
+      expect(method).toMatch(/abstract (receivable|payable|tripMargins|balances)/);
+    }
+  });
+
+  /**
+   * `#385` — cong viec Run-first: MOT ham doc, va adapter khong goi mot ham ghi nao cua bon thu no
+   * tiem. Quet ten ham goi tren moi phu thuoc — mot `create`/`record`/`set` o day la bao cao dang ghi.
+   */
+  it('cong viec Run-first chi co ham doc, va khong goi ham ghi nao', () => {
+    const source = sourceOf('finance-run-first.port.ts');
+    const methods = source.match(/abstract (\w+)\(/g) ?? [];
+    expect(methods).toEqual(['abstract runFirstMargins(']);
+    const calls = source.match(/this\.(movement|metrics|fuel|attributions)\.(\w+)\(/g) ?? [];
+    expect(calls.length).toBeGreaterThan(0);
+    for (const call of calls) {
+      expect(call).toMatch(/\.(find|list|runMargin)\w*\($/);
     }
   });
 
@@ -104,6 +121,8 @@ describe('be mat tai chinh khong co duong ghi nao', () => {
       'finance.controller.ts',
       'finance-facts.port.ts',
       'finance-decisions.ts',
+      'company-margin.ts',
+      'finance-run-first.port.ts',
     ]) {
       const source = sourceOf(file).toLowerCase();
       expect(source, `${file} goi bien truc tiep la lai rong`).not.toContain('lãi ròng');

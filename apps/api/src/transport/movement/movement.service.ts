@@ -3,6 +3,7 @@ import { AuditLogService } from '../../audit/audit-log.service.js';
 import { TelemetryService } from '../../observability/telemetry.service.js';
 import { assertBusinessDate, toBusinessDate } from '../business-date.js';
 import { FleetRepository } from '../fleet/fleet.repository.js';
+import { isWithinRoadNetworkBoundingBox, parseGeoPoint, type GeoPoint } from '../geo/geo-point.js';
 import { MoneyError, nonNegativeMoney } from '../money.js';
 import { TRANSPORT_CORE_POLICY, type TransportCorePolicy } from '../transport-policy.js';
 import { TransportDomainError } from '../transport.errors.js';
@@ -147,6 +148,8 @@ export class MovementService {
    * ------------------------------------------------------------------ */
 
   async createOrder(input: CreateOrderCommand, actor: string): Promise<Order> {
+    // Kiem toa do TRUOC moi lan doc DB: day la loi hinh dang dau vao (400), khong phu thuoc du lieu.
+    const location = this.parseOrderLocation(input);
     if (await this.repository.findOrderByCode(input.code)) {
       throw TransportDomainError.conflict(
         'ORDER_CODE_TAKEN',
@@ -157,9 +160,11 @@ export class MovementService {
 
     const order = await this.repository.createOrder({
       ...input,
+      ...location,
       businessDate: this.resolveBusinessDate(input.businessDate),
       freightAmount: this.checkMoney(input.freightAmount ?? null),
     });
+    this.recordOrderLocation(order);
 
     await this.audit.append({
       actor,
@@ -849,6 +854,10 @@ export class MovementService {
       tripId,
       orderId: projection.order.id,
     });
+    // Don chieu tu chuyen v1 KHONG co toa do (#379) — nhat ky phai noi ra dieu do nhu voi moi don
+    // moi, neu khong nguoi doc trace chi thay ORDER_LOCATION_ABSENT tu duong tao tay va tuong moi
+    // don thieu diem deu la loi nhap. Chi o nhanh VUA TAO: nhanh `UNCHANGED` phia tren khong tao gi.
+    this.recordOrderLocation(projection.order);
     await this.audit.append({
       actor,
       action: 'transport.order.project_trip',
@@ -892,6 +901,9 @@ export class MovementService {
       runId: projection.run.id,
       legId: projection.leg.id,
     });
+    // Phep chieu dieu hanh cung co the VUA TAO mot don (chuyen co khach) — cung ly do voi
+    // `projectTripOrder`. Chuyen khong khach thi khong co don nao de ghi.
+    if (projection.order !== null) this.recordOrderLocation(projection.order);
     await this.audit.append({
       actor,
       action: 'transport.run.project_trip',
@@ -1006,6 +1018,73 @@ export class MovementService {
       throw new Error(`Chang ${String(detail.legId)} doi trang thai nguoc chieu may trang thai`);
     }
     return this.deny(point, decision.reason, { ...detail, by: 'ANOTHER_WRITER' });
+  }
+
+  /**
+   * TOA DO DIEM LAY / DIEM GIAO (#379) -- nguong DUY NHAT la `parseGeoPoint`, khong dat nguong
+   * thu hai o day hay o zod. Tra ve diem da chuan hoa (chi hai so, bo moi khoa la) de repository
+   * khong bao gio ghi nguyen doi tuong cua nguoi goi.
+   *
+   * Vang mat (`undefined`/`null`) la hop le O TANG NAY: chi duong noi bo di toi day ma khong co
+   * diem, vi bien HTTP bat buoc ca hai. Nhung vang mat thi ghi `null` -- KHONG BAO GIO doan tu nhan.
+   */
+  private parseOrderLocation(input: CreateOrderCommand): {
+    readonly originPoint: GeoPoint | null;
+    readonly destinationPoint: GeoPoint | null;
+  } {
+    return {
+      originPoint: this.requireOrderPoint(input.originPoint, 'ORIGIN'),
+      destinationPoint: this.requireOrderPoint(input.destinationPoint, 'DESTINATION'),
+    };
+  }
+
+  private requireOrderPoint(
+    point: GeoPoint | null | undefined,
+    role: 'ORIGIN' | 'DESTINATION',
+  ): GeoPoint | null {
+    if (point === undefined || point === null) return null;
+    const parsed = parseGeoPoint(point.latitude, point.longitude);
+    if (parsed.ok) return parsed.point;
+
+    const isOrigin = role === 'ORIGIN';
+    // `detail` chi mang MA tu choi, khong mang toa do: vi tri lay/giao hang cua khach la du lieu
+    // nghiep vu, va mot toa do hong van co the la mot dia chi that bi go lech.
+    this.telemetry?.decision({
+      vocabulary: TRANSPORT_MOVEMENT_DECISIONS,
+      point: 'order.location',
+      outcome: 'denied',
+      reason: isOrigin ? 'ORDER_ORIGIN_POINT_REJECTED' : 'ORDER_DESTINATION_POINT_REJECTED',
+      detail: { role, rejection: parsed.rejection },
+    });
+    throw TransportDomainError.invalid(
+      isOrigin ? 'ORDER_ORIGIN_POINT_INVALID' : 'ORDER_DESTINATION_POINT_INVALID',
+      `Toa do diem ${isOrigin ? 'lay' : 'giao'} hang khong hop le (${parsed.rejection}). ` +
+        'Hay chon lai diem tren ban do.',
+    );
+  }
+
+  /**
+   * Ghi quyet dinh SAU khi don da luu, de `orderId` tro toi mot don co that. Co "ngoai vung hoat
+   * dong" chi GAN CO (`isWithinRoadNetworkBoundingBox` khong tu choi) -- du de nguoi doc trace thay
+   * mot diem chon nham sang nuoc khac ma khong phai dua toa do vao nhat ky.
+   */
+  private recordOrderLocation(order: Order): void {
+    const hasOrigin = order.originPoint !== null;
+    const hasDestination = order.destinationPoint !== null;
+    this.allow(
+      'order.location',
+      hasOrigin && hasDestination ? 'ORDER_LOCATION_CAPTURED' : 'ORDER_LOCATION_ABSENT',
+      {
+        orderId: order.id,
+        hasOriginPoint: hasOrigin,
+        hasDestinationPoint: hasDestination,
+        originOutsideOperatingArea:
+          order.originPoint !== null && !isWithinRoadNetworkBoundingBox(order.originPoint),
+        destinationOutsideOperatingArea:
+          order.destinationPoint !== null &&
+          !isWithinRoadNetworkBoundingBox(order.destinationPoint),
+      },
+    );
   }
 
   private allow(

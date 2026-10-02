@@ -244,6 +244,14 @@ export class PrismaFuelCostAttributionRepository extends FuelCostAttributionRepo
     return rows.map(toAttribution);
   }
 
+  async listAttributedRunIds(): Promise<string[]> {
+    const rows: { runId: string }[] = await model(
+      this.prisma,
+      'transportFuelCostAttribution',
+    ).findMany({ select: { runId: true }, distinct: ['runId'], orderBy: { runId: 'asc' } });
+    return rows.map((row) => row.runId);
+  }
+
   /**
    * KHOA hang phieu roi doc lai ba cot phan bo can — TU TRONG giao dich. `null` = phieu khong con.
    *

@@ -140,7 +140,7 @@ export function TollCandidateQueue({
   const vehicleLabelOf = tollVehicleLabelOf(vehicles);
   const vehicleOptions = toTollVehicleOptions(vehicles);
   const page = candidates.data;
-  const model = page === undefined ? null : toTollQueueModel(page, navigation.role);
+  const model = page === undefined ? null : toTollQueueModel(page, navigation);
   const rawById = new Map((page?.items ?? []).map((item) => [item.id, item]));
 
   const rowLabelOf = (candidate: TollCandidate): string => {

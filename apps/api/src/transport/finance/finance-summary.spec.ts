@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { SettlementBuckets } from '../analytics/operating-metrics.js';
+import { buildCompanyMargin } from './company-margin.js';
 import {
   coverCurrency,
   foldDriverBalances,
@@ -103,17 +104,14 @@ describe('hinh dang cua bang tai chinh', () => {
    * qua cac tang.
    */
   it('bien truc tiep luon mang theo `fixedCostsIncluded: false` va mot cau cong bo', () => {
+    // `#385` — tong la tong CA CONG TY, dung boi `buildCompanyMargin`: cau cong bo di theo no.
     const view: Pick<FinanceSummaryView, 'directMargin'> = {
-      directMargin: {
-        revenueAmount: 10_000_000,
-        deductionAmount: 6_000_000,
-        marginAmount: 4_000_000,
-        marginBasisPoints: 4000,
-        tripCount: 3,
-        skippedTripCount: 1,
-        fixedCostsIncluded: false,
-        disclosure: 'Chưa gồm chi phí cố định',
-      },
+      directMargin: buildCompanyMargin({
+        legacy: [],
+        runFirst: [],
+        projectedOrderCount: 0,
+        unassignedRunFirstCost: { amount: 0, runCount: 0 },
+      }).totals,
     };
 
     expect(view.directMargin.fixedCostsIncluded).toBe(false);

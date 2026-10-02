@@ -2,13 +2,16 @@ import { Inject, Injectable, Optional } from '@nestjs/common';
 import { TelemetryService } from '../../observability/telemetry.service.js';
 import { toBusinessDate } from '../business-date.js';
 import { TRANSPORT_CORE_POLICY, type TransportCorePolicy } from '../transport-policy.js';
+import { buildCompanyMargin, type CompanyMarginView } from './company-margin.js';
 import { FINANCE_DECISIONS } from './finance-decisions.js';
 import { FinanceDriverBalanceFacts, FinanceSettlementFacts } from './finance-facts.port.js';
+import { FinanceRunFirstFacts } from './finance-run-first.port.js';
 import {
   coverCurrency,
   foldDriverBalances,
   sumPayable,
   type DriverBalanceRow,
+  type FinanceMarginView,
   type FinanceSource,
   type FinanceSummaryView,
 } from './finance-summary.js';
@@ -32,6 +35,8 @@ import type { SettlementFlow } from '../settlement/settlement-flows.js';
 export class FinanceReadService {
   constructor(
     private readonly settlement: FinanceSettlementFacts,
+    /** `#385` — viec Run-first. Bat buoc: `transport-settlement` phu thuoc ca core/costing/fuel. */
+    private readonly runFirst: FinanceRunFirstFacts,
     @Inject(TRANSPORT_CORE_POLICY) private readonly corePolicy: TransportCorePolicy,
     @Optional() private readonly driverBalances?: FinanceDriverBalanceFacts,
     @Optional() private readonly telemetry?: TelemetryService,
@@ -40,15 +45,16 @@ export class FinanceReadService {
   async summary(now?: Date): Promise<FinanceSummaryView> {
     const generatedFor = toBusinessDate(now ?? new Date(), this.corePolicy.timeZone);
 
-    const [receivable, receivableCurrencies, directMargin, fuel, carrier, commission] =
-      await Promise.all([
+    const [receivable, receivableCurrencies, margin, fuel, carrier, commission] = await Promise.all(
+      [
         this.settlement.receivable(generatedFor),
         this.settlement.receivableCurrencies(generatedFor),
-        this.settlement.directMargin(),
+        this.companyMargin(),
         this.settlement.payable('FUEL_SUPPLIER'),
         this.settlement.payable('CARRIER_SERVICE'),
         this.settlement.payable('PARTNER_COMMISSION'),
-      ]);
+      ],
+    );
 
     const unavailableSources: FinanceSource[] = [];
     const driverRows = await this.readDriverBalances(unavailableSources);
@@ -94,17 +100,60 @@ export class FinanceReadService {
       point: 'finance.summary',
       outcome: 'allowed',
       reason: 'FINANCE_SUMMARY_COMPILED',
-      detail: { trips: directMargin.tripCount, skippedTrips: directMargin.skippedTripCount },
+      detail: basisDetail(margin),
     });
 
     return {
       generatedFor,
       buckets: { flows, ...driver },
-      directMargin,
+      directMargin: margin.totals,
       receivable,
       currency,
       unavailableSources,
     };
+  }
+
+  /**
+   * HIEU QUA TUNG VIEC — `#381`/`#385`. Cung MOT ham gop voi `summary()`, nen tong o hai man khong
+   * the lech nhau: man hinh doc `totals`, khong tu cong cac dong.
+   */
+  async margin(now?: Date): Promise<FinanceMarginView> {
+    const generatedFor = toBusinessDate(now ?? new Date(), this.corePolicy.timeZone);
+    const view = await this.companyMargin();
+    this.telemetry?.decision({
+      vocabulary: FINANCE_DECISIONS,
+      point: 'finance.margin',
+      outcome: 'allowed',
+      reason: 'FINANCE_MARGIN_COMPILED',
+      detail: basisDetail(view),
+    });
+    return { generatedFor, ...view };
+  }
+
+  /**
+   * Chuyen cu + don Run-first. Phan bo Run-first nam tren vong xe CHIEU cua mot chuyen cu di vao
+   * DONG CHUYEN DO; neu chuyen khong con trong danh sach (khong the xay ra hom nay) thi no vao
+   * `unassigned` chu khong roi mat — mot dong tien khong co cho dung van phai hien ra.
+   */
+  private async companyMargin(): Promise<CompanyMarginView> {
+    const [legacy, runFirst] = await Promise.all([
+      this.settlement.tripMargins(),
+      this.runFirst.runFirstMargins(),
+    ]);
+    const tripIds = new Set(legacy.map((row) => row.trip.id));
+    const orphaned = [...runFirst.legacyTripFuelCost].filter(([tripId]) => !tripIds.has(tripId));
+    return buildCompanyMargin({
+      legacy: legacy.map((row) => ({
+        ...row,
+        runFirstFuelCost: runFirst.legacyTripFuelCost.get(row.trip.id) ?? 0,
+      })),
+      runFirst: runFirst.orders,
+      projectedOrderCount: runFirst.projectedOrderCount,
+      unassignedRunFirstCost: {
+        amount: orphaned.reduce((total, [, amount]) => total + amount, runFirst.unassigned.amount),
+        runCount: runFirst.unassigned.runCount + orphaned.length,
+      },
+    });
   }
 
   private async readDriverBalances(
@@ -132,3 +181,17 @@ export class FinanceReadService {
     }
   }
 }
+
+/** Chi so dem va ma — KHONG mot so tien nao di vao trace (`finance-decisions.ts`). */
+const basisDetail = (view: CompanyMarginView): Record<string, number> => ({
+  trips: view.totals.basis.legacyTrips.counted,
+  skippedTrips: view.totals.basis.legacyTrips.skipped,
+  runFirstOrders: view.totals.basis.runFirstOrders.counted,
+  excludedRunFirstOrders: Object.values(view.totals.basis.runFirstOrders.excluded).reduce(
+    (total, count) => total + count,
+    0,
+  ),
+  projectedOrders: view.totals.basis.projectedOrderCount,
+  pendingFuelEntries: view.totals.basis.pendingFuelCost.entryCount,
+  unassignedRuns: view.totals.basis.unassignedRunFirstCost.runCount,
+});

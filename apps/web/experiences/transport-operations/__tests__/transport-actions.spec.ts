@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import {
   actionsForRole,
   canPerform,
+  DIRECTOR_ONLY_ACTIONS,
   hasDriverScope,
   hasOperationsScope,
   roleCanPerform,
@@ -77,6 +78,10 @@ describe('cau bridge GD-22 — web guong dung bang cua API', () => {
       // khoi ho so ho dang doi soat. To giay do co the la can cu cua chinh lan `Da ket thuc` ma ho
       // sap bam.
       'transport.operational_document.withdraw',
+      // Issue #395 — ghi BU chung tu van hanh. Truoc day chi song trong `@Roles` cua route (chi
+      // Giam doc); nay bang vai la noi duy nhat noi dieu do: ghi bu la THEM can cu vao ho so ma
+      // Ke toan sap duyet tien.
+      'transport.operational_document.record',
       // Issue #235 Lane B — hai quyen SUA trong mien chung cu. Doi soat la doc mot ho so roi noi
       // no khop hay khong; rut mot chung cu, va doi ban kinh mot hang rao (duoc cham LUC DOC, nen
       // no doi phan quyet cua ca lich su), la sua chinh ho so dang duoc doi soat.
@@ -91,6 +96,26 @@ describe('cau bridge GD-22 — web guong dung bang cua API', () => {
     for (const action of denied) {
       expect(roleCanPerform('ACCOUNTING', action as never)).toBe(false);
       expect(roleCanPerform('ADMIN', action as never)).toBe(true);
+    }
+  });
+
+  /**
+   * CHI GIAM DOC (`#395`). Ban guong quen tru danh sach nay thi man hinh hien nut cho Ke toan ma
+   * may chu tra 403 — dung loi `DriverSettlementView` tung co voi dao quyet toan. Bai nay so CA
+   * danh sach lan hau qua cua no tren bang vai.
+   */
+  it('bon hanh dong chi Giam doc khop tung ma, va Ke toan khong co ma nao', () => {
+    const directorOnly = literalsInArray(source, 'DIRECTOR_ONLY_ACTIONS');
+    expect([...DIRECTOR_ONLY_ACTIONS]).toEqual(directorOnly);
+    expect(directorOnly).toEqual([
+      'transport.costing.period.reopen',
+      'transport.fuel.reconciliation.reopen',
+      'transport.driver_settlement.reverse',
+      'transport.account_link.manage',
+    ]);
+    for (const action of directorOnly) {
+      expect(roleCanPerform('ACCOUNTING', action as never), action).toBe(false);
+      expect(roleCanPerform('ADMIN', action as never), action).toBe(true);
     }
   });
 

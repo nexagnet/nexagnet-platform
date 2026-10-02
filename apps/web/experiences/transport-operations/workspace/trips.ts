@@ -1,4 +1,3 @@
-import type { AuthRole } from '../../../lib/auth';
 import {
   entityLabel,
   formatBusinessDate,
@@ -11,7 +10,7 @@ import {
   type StatusTone,
 } from '../customer-view';
 import type { TripFilterQuery } from '../navigation';
-import { canPerform, type TransportAction } from '../transport-actions';
+import { canPerform, type TransportAction, type TransportViewerInput } from '../transport-actions';
 import {
   TRIP_KINDS,
   TRIP_STATUSES,
@@ -218,7 +217,7 @@ const D_STROKE = /[Đđ]/g;
  * Tim theo ma chuyen, hai dau tuyen, va mo ta hang — BO DAU truoc khi so.
  * Nguoi dieu hanh go nhanh va thuong khong bo dau; go "thai nguyen" phai tim ra "Thái Nguyên".
  */
-const normalise = (value: string): string =>
+export const normalise = (value: string): string =>
   value.normalize('NFD').replace(COMBINING_MARKS, '').replace(D_STROKE, 'd').toLowerCase().trim();
 
 export const filterTrips = (trips: readonly Trip[], filter: TripFilter): readonly Trip[] => {
@@ -337,7 +336,7 @@ const startBlockedReason = (trip: Trip, assignment: TripAssignment | null): stri
 export const tripActionOffers = (
   trip: Trip,
   assignment: TripAssignment | null,
-  role: AuthRole | null,
+  viewer: TransportViewerInput,
 ): readonly TripActionOffer[] => {
   const reachable = ALLOWED_EDGES[trip.status];
   const offers: TripActionOffer[] = [];
@@ -387,7 +386,7 @@ export const tripActionOffers = (
     });
   }
 
-  return offers.filter((offer) => canPerform(role, offer.requiredAction));
+  return offers.filter((offer) => canPerform(viewer, offer.requiredAction));
 };
 
 /**

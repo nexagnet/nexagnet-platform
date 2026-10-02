@@ -18,7 +18,20 @@ import {
   TRANSPORT_PLANNING_DECISIONS,
   type TransportPlanningDecisionReason,
 } from './planning-decisions.js';
-import { TRANSPORT_PLANNING_POLICY, resolveDepot, usableDepot } from './planning-policy.js';
+import {
+  DepotDirectoryHub,
+  depotSourceOf,
+  readDepots,
+  type DepotDirectory,
+  type DepotEntry,
+  type DepotSource,
+} from './depot-directory.js';
+import {
+  TRANSPORT_PLANNING_POLICY,
+  resolveDepotFrom,
+  usableDepot,
+  type DepotResolution,
+} from './planning-policy.js';
 import {
   ORDER_RUN_PLAN_ACTIVE_ORDER,
   ORDER_RUN_PLAN_IDEMPOTENCY,
@@ -92,6 +105,11 @@ export interface RunClosureAttempt {
    * duong goi khong co nguon ngoai nao (`transport-core` chay mot minh), khong phai mot loi tat.
    */
   readonly recheckBlockers?: () => Promise<readonly RunClosureBlocker[]>;
+  /**
+   * DANH BA BAI XE da doc san cho thao tac nay (`#395`). Luot quet doc MOT lan roi truyen cho moi
+   * ung vien; vang mat thi `settleRunClosure()` tu doc — van MOT lan, truoc khoa hang vong chay.
+   */
+  readonly depots?: readonly DepotEntry[];
 }
 
 /**
@@ -134,21 +152,33 @@ export class PlanningService {
     @Inject(TRANSPORT_PLANNING_POLICY) private readonly policy: TransportPlanningPolicy,
     @Optional() private readonly telemetry?: TelemetryService,
     @Optional() @Inject(TRANSPORT_CLOCK) private readonly clock?: () => Date,
+    /*
+     * DANH BA BAI XE (`#395`) — cuoi va tuy chon: 13 spec dung dich vu nay theo vi tri. Vang mat thi
+     * doc cau hinh goi khach, dung nhu truoc #395. Trong ung dung that day la `DepotDirectoryHub`
+     * cua `transport-core`, noi `transport-proof` dang ky bai xe duoc quan ly.
+     */
+    @Optional() @Inject(DepotDirectoryHub) private readonly depots?: DepotDirectory,
   ) {}
 
   /* ------------------------------------------------------------------ *
    * DOC — khong ghi mot hang nao
    * ------------------------------------------------------------------ */
 
-  /** Chinh sach dang ap dung. Be mat CHAN DOAN — `#276` L1: khong phai mot nut cho lai xe. */
-  describePolicy(): {
+  /**
+   * Chinh sach dang ap dung. Be mat CHAN DOAN — `#276` L1: khong phai mot nut cho lai xe.
+   *
+   * `depot.source` (`#395`) noi bai xe den tu dau: `MANAGED` = man "Dia diem van hanh",
+   * `TENANT_CONFIG` = cau hinh goi khach. Bat dong bo vi danh ba bai xe la mot lan doc kho.
+   */
+  async describePolicy(): Promise<{
     readonly grouping: TransportPlanningPolicy['grouping'];
-    readonly depot: ReturnType<typeof resolveDepot>;
+    readonly depot: DepotResolution & { readonly source: DepotSource };
     readonly closure: TransportPlanningPolicy['closure'];
-  } {
+  }> {
+    const depots = await this.depotList();
     return {
       grouping: this.policy.grouping,
-      depot: resolveDepot(this.policy),
+      depot: { ...resolveDepotFrom(depots), source: depotSourceOf(depots) },
       closure: this.policy.closure,
     };
   }
@@ -190,7 +220,7 @@ export class PlanningService {
   async projectVehicle(vehicleId: string): Promise<VehicleRunProjection> {
     await this.requireVehicle(vehicleId);
     const run = await this.movement.latestRunForVehicle(vehicleId);
-    const depot = usableDepot(resolveDepot(this.policy));
+    const depot = usableDepot(resolveDepotFrom(await this.depotList()));
 
     if (run === null || isTerminalRunStatus(run.status)) {
       return {
@@ -271,7 +301,8 @@ export class PlanningService {
     blockers: readonly RunClosureBlocker[] = [],
   ): Promise<RunClosureVerdict> {
     const detail = await this.movement.getRun(runId);
-    return evaluateRunClosure(await this.closureFacts(detail.run, detail.legs, blockers));
+    const depots = await this.depotList();
+    return evaluateRunClosure(await this.closureFacts(detail.run, detail.legs, blockers, depots));
   }
 
   /* ------------------------------------------------------------------ *
@@ -495,8 +526,11 @@ export class PlanningService {
     attempt: RunClosureAttempt = {},
   ): Promise<RunClosureOutcome> {
     const detail = await this.movement.getRun(runId);
+    // Danh ba bai xe doc TRUOC khoa hang vong chay va dung cho CA HAI lan phan xu: khoa cua vong
+    // chay khong khoa hang rao nao, nen doc lai ben trong chi ton mot ket noi thu hai luc giu khoa.
+    const depots = attempt.depots ?? (await this.depotList());
     const verdict = evaluateRunClosure(
-      await this.closureFacts(detail.run, detail.legs, attempt.blockers ?? []),
+      await this.closureFacts(detail.run, detail.legs, attempt.blockers ?? [], depots),
     );
     // `cause` di vao MOI nhanh cua so quyet dinh, ke ca nhanh khong dong duoc: cau hoi "vi sao lan
     // phan xu nay chay" phai tra loi duoc ke ca khi cau tra loi la "chua den luc".
@@ -541,6 +575,7 @@ export class PlanningService {
             snapshot.run,
             snapshot.legs,
             (await attempt.recheckBlockers?.()) ?? attempt.blockers ?? [],
+            depots,
           ),
         );
         return sealed.closable
@@ -595,7 +630,9 @@ export class PlanningService {
    * ------------------------------------------------------------------ */
 
   private async buildProposal(order: Order, command: PlanOrderCommand) {
-    const depotResolution = resolveDepot(this.policy);
+    // MOT lan doc danh ba cho mot de xuat — truoc moi lan ghi, truoc moi khoa.
+    const depots = await this.depotList();
+    const depotResolution = resolveDepotFrom(depots);
     this.decide(
       'planning.depot',
       depotResolution.kind === 'AMBIGUOUS' ? 'denied' : 'allowed',
@@ -604,7 +641,12 @@ export class PlanningService {
         : depotResolution.kind === 'NOT_CONFIGURED'
           ? 'DEPOT_NOT_CONFIGURED'
           : 'DEPOT_AMBIGUOUS',
-      depotResolution.kind === 'AMBIGUOUS' ? { codes: depotResolution.codes } : {},
+      {
+        // Ba ly do giu nguyen; NGUON va MA bai di trong `detail` de trace noi bai nao, tu dau.
+        source: depotSourceOf(depots),
+        code: depotResolution.kind === 'RESOLVED' ? depotResolution.depot.code : null,
+        ...(depotResolution.kind === 'AMBIGUOUS' ? { codes: depotResolution.codes } : {}),
+      },
     );
 
     const latest = await this.latestRunFacts(command.vehicleId);
@@ -711,6 +753,7 @@ export class PlanningService {
     run: VehicleRun,
     legs: readonly RunLeg[],
     additionalBlockers: readonly RunClosureBlocker[],
+    depots: readonly DepotEntry[],
   ) {
     const open = await this.plans.listActiveForRun(run.id);
     const openPlanCount = open.filter((plan) => {
@@ -731,11 +774,16 @@ export class PlanningService {
       runStatus: run.status,
       legs: closureLegs,
       openPlanCount,
-      depot: usableDepot(resolveDepot(this.policy)),
+      depot: usableDepot(resolveDepotFrom(depots)),
       policy: this.policy.closure,
       now: this.now(),
       ...(additionalBlockers.length === 0 ? {} : { additionalBlockers }),
     };
+  }
+
+  /** Danh ba bai xe cho MOT thao tac — xem `readDepots()`. */
+  private depotList(): Promise<readonly DepotEntry[]> {
+    return readDepots(this.depots, this.policy);
   }
 
   private async requirePlannableOrder(orderId: string): Promise<Order> {

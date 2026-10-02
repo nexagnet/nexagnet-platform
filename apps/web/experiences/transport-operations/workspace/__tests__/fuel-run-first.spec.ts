@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import type { DriverFuelRunView, FuelEntryCostAttributionView } from '../../transport-types';
-import { fuelContextLabel } from '../fuel';
+import {
+  FUEL_PAYMENT_METHODS,
+  type DriverFuelRunView,
+  type FuelEntryCostAttributionView,
+} from '../../transport-types';
+import { fuelContextLabel, verifyConsequence } from '../fuel';
 import { toFuelCostAttributionModel } from '../fuel-cost-attribution';
 import {
-  allowsDriverCash,
+  DRIVER_PAYMENT_METHOD_HINT,
   driverFuelContextOptions,
   toDriverFuelContext,
   toDriverFuelSubmission,
@@ -113,19 +117,40 @@ describe('o khai phieu cua lai xe — viec duoc dieu di truoc, chuyen cu la loi 
     ).toEqual([]);
   });
 
-  it('lua chon + chang -> ngu canh; tien mat lai xe ung CHI cho chuyen cu', () => {
+  it('lua chon + chang -> ngu canh cho ca vong xe lan chuyen cu', () => {
     const [runOption, tripOption] = driverFuelContextOptions({
       runs: [run()],
       legacyTrip: { id: 'chuyen-1', code: 'CH-01', vehicleId: 'xe-1', vehiclePlate: null },
     });
     const runContext = toDriverFuelContext(runOption!, 'chang-2');
     expect(runContext).toEqual({ kind: 'RUN', runId: 'vong-1', legId: 'chang-2' });
-    expect(allowsDriverCash(runContext)).toBe(false);
 
     const tripContext = toDriverFuelContext(tripOption!, null);
     expect(tripContext).toEqual({ kind: 'LEGACY_TRIP', tripId: 'chuyen-1', vehicleId: 'xe-1' });
-    expect(allowsDriverCash(tripContext)).toBe(true);
-    expect(allowsDriverCash(null)).toBe(false);
+  });
+
+  it('#380 — vong xe gui duoc DRIVER_CASH: than mang runId/legId + DRIVER_CASH, khong tripId', () => {
+    // `#369` R-4 da go cong `FUEL_ENTRY_DRIVER_CASH_REQUIRES_LEGACY_TRIP`. Ban truoc khoa o chon va
+    // chan luc gui; gio than yeu cau di thang len may chu, va may chu vao Quy bang `RUN_EXPENSE`.
+    const body = toDriverFuelSubmission({
+      form: { ...FORM, paymentMethod: 'DRIVER_CASH' },
+      context: { kind: 'RUN', runId: 'vong-1', legId: 'chang-2' },
+      correlationKey: 'khoa-cash',
+      timeZone: 'Asia/Ho_Chi_Minh',
+    });
+    expect(body).toMatchObject({ runId: 'vong-1', legId: 'chang-2', paymentMethod: 'DRIVER_CASH' });
+    for (const forbidden of ['tripId', 'vehicleId', 'driverId']) {
+      expect(body).not.toHaveProperty(forbidden);
+    }
+  });
+
+  it('#380 — moi cach tra co MOT cau noi tien di dau; khong cau nao con noi "chuyen cu"', () => {
+    for (const method of FUEL_PAYMENT_METHODS) {
+      expect(DRIVER_PAYMENT_METHOD_HINT[method].length).toBeGreaterThan(0);
+      expect(DRIVER_PAYMENT_METHOD_HINT[method]).not.toMatch(/chuyến cũ/);
+    }
+    expect(DRIVER_PAYMENT_METHOD_HINT.DRIVER_CASH).toContain('quỹ lái xe');
+    expect(DRIVER_PAYMENT_METHOD_HINT.DRIVER_CASH).toContain('không ghi nợ cây xăng');
   });
 });
 
@@ -237,5 +262,27 @@ describe('panel gia thanh cua ke toan — lop RIENG, mot phieu mot so cai', () =
     );
     expect(model.lines.map((line) => line.isActiveAllocation)).toEqual([false, false]);
     expect(model.lines[1]!.kindLabel).toBe('Đảo');
+  });
+});
+
+describe('#385 — hop xac nhan duyet noi DUNG tien di dau theo cach tra', () => {
+  it('tien mat lai xe tren vong xe: tru quy, KHONG vao cong no cay xang, gia thanh phan bo sau', () => {
+    const text = verifyConsequence({ paymentMethod: 'DRIVER_CASH', amount: 460_000, tripId: null });
+    expect(text).toContain('trừ vào quỹ lái xe');
+    expect(text).toContain('không vào công nợ cây xăng');
+    expect(text).toContain('phân bổ sau');
+    expect(text).not.toContain('kỳ đối soát bảng kê');
+  });
+
+  it('tien mat lai xe tren chuyen cu: tru quy va vao chi phi chuyen', () => {
+    expect(
+      verifyConsequence({ paymentMethod: 'DRIVER_CASH', amount: 1, tripId: 'chuyen-1' }),
+    ).toContain('chi phí của chuyến');
+  });
+
+  it('ghi no cay xang: van la ky doi soat bang ke', () => {
+    expect(
+      verifyConsequence({ paymentMethod: 'SUPPLIER_ACCOUNT', amount: 1, tripId: null }),
+    ).toContain('kỳ đối soát bảng kê');
   });
 });

@@ -188,6 +188,34 @@ test('PDF trong thu muc ban-giao ma KHONG co nguon HTML thi van bi chan', () => 
   assert.equal(violations[0].code, VIOLATION_CODES.SOURCE_FILE_MISSING);
 });
 
+// Anh minh hoa cho tai lieu ban giao la dau ra cua chung ta. Ngoai le mo DUNG mot hinh dang: .jpg,
+// trong `ban-giao/assets/<vai>/`, ten `NN-...`, va cung thu muc co so nguon goc anh.
+test('anh ban giao co so nguon goc thi qua, thieu so thi van chan', () => {
+  const shot = 'docs/khach-hang/x/ban-giao/assets/lanh-dao/01-tong-quan.jpg';
+  const manifest = 'docs/khach-hang/x/ban-giao/assets/lanh-dao/NGUON-ANH.md';
+  assert.deepEqual(findViolations([shot, manifest]), []);
+
+  const violations = findViolations([shot]);
+  assert.deepEqual(paths(violations), [shot]);
+  assert.equal(violations[0].code, VIOLATION_CODES.SOURCE_FILE_MISSING);
+});
+
+test('ngoai le anh ban giao khong mo png, ten tu do, hay thu muc khac', () => {
+  const blocked = [
+    'docs/khach-hang/x/ban-giao/assets/lanh-dao/01-tong-quan.png',
+    'docs/khach-hang/x/ban-giao/assets/lanh-dao/anh-khach-gui.jpg',
+    'docs/khach-hang/x/ban-giao/assets/lanh-dao/01-Anh-Zalo.jpg',
+    'docs/khach-hang/x/ban-giao/anh/01-tong-quan.jpg',
+    'docs/khach-hang/x/trao-doi/assets/lanh-dao/01-tong-quan.jpg',
+  ];
+  const manifests = [
+    'docs/khach-hang/x/ban-giao/assets/lanh-dao/NGUON-ANH.md',
+    'docs/khach-hang/x/ban-giao/anh/NGUON-ANH.md',
+    'docs/khach-hang/x/trao-doi/assets/lanh-dao/NGUON-ANH.md',
+  ];
+  assert.deepEqual(paths(findViolations([...blocked, ...manifests])), [...blocked].sort());
+});
+
 // CO CHE `digest` van duoc khoa lai, du hom nay KHONG con dong ALLOWLIST nao dung no — xem
 // header cua guardrail.mjs: ngoai le xlsx da bi go vi ghim hash chi chung minh "van la tep do",
 // khong chung minh "tep do duoc phep cong khai". Bai test dung mot dong ngoai le TU DUNG de co
@@ -295,6 +323,22 @@ test('khong con ngoai le nao da het tac dung', () => {
     findStaleAllowlistEntries(tracked).map((entry) => String(entry.pattern)),
     [],
   );
+});
+
+// So nguon goc la bang chung cua ngoai le tren — no chi co nghia khi ghi DUNG TEN tung anh. Mot anh
+// moi them vao thu muc ma khong ai khai nguon thi bai nay do, du guardrail cau truc van qua.
+test('moi anh ban giao dang theo doi deu duoc khai trong so nguon goc cung thu muc', () => {
+  const shots = tracked.filter((path) =>
+    /^docs\/khach-hang\/[^/]+\/ban-giao\/assets\/[a-z0-9-]+\/\d{2}-[a-z0-9-]+\.jpg$/.test(path),
+  );
+  for (const shot of shots) {
+    const folder = shot.slice(0, shot.lastIndexOf('/'));
+    const manifest = readFileSync(`${folder}/NGUON-ANH.md`, 'utf8');
+    assert.ok(
+      manifest.includes(shot.slice(folder.length + 1)),
+      `${shot} chua duoc khai trong ${folder}/NGUON-ANH.md`,
+    );
+  }
 });
 
 /* ------------------------------------------------------------------ *

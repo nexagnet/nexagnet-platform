@@ -1,5 +1,15 @@
 # Kịch bản demo — 30–45 phút
 
+> **Tài liệu demo/legacy** — xem [“Giới thiệu hệ thống cho lãnh đạo”](gioi-thieu-he-thong-cho-lanh-dao.md) để biết luồng hiện tại.
+>
+> Kịch bản này đo ngày 06/09/2026 theo cách làm dựa trên **chuyến** (Lập chuyến → Phân công →
+> Bắt đầu chuyến → Đã giao). Luồng hiện hành đi từ **Đơn hàng** (chọn điểm trên bản đồ) → **Vòng
+> xe** → **Chặng** → mốc hiện trường → **Kết thúc đơn**; số liệu kỳ vọng bên dưới không còn khớp.
+>
+> **Không chạy lệnh làm lại dữ liệu** (`reset-transport-demo.mjs`) trên bản demo hiện tại: lệnh
+> này không xoá được dữ liệu đơn hàng và vòng xe nên dừng giữa chừng, và bản demo hiện tại không
+> chạy trên máy ảo mô tả ở đây.
+
 Kịch bản **tất định**: mọi con số dưới đây là số thật của bản demo sau khi làm lại dữ liệu, đo trên
 bản đang chạy ngày 06/09/2026. Nếu màn hình ra số khác, hoặc là chưa làm lại dữ liệu, hoặc là có
 người vừa thao tác trên đó.

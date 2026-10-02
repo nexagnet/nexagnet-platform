@@ -190,11 +190,21 @@ export const toDriverFuelContext = (
       };
 
 /**
- * `DRIVER_CASH` chi ghi duoc tren chuyen v1 (so quy di theo chuyen) — may chu tu choi phieu theo
- * vong xe mang tien mat ung (`FUEL_ENTRY_DRIVER_CASH_REQUIRES_LEGACY_TRIP`), nen o chon an no di.
+ * CAU GIAI THICH duoi o "Thanh toán" — noi tien DI DAU, theo dung hop dong may chu.
+ *
+ * `#369` R-4 da go `FUEL_ENTRY_DRIVER_CASH_REQUIRES_LEGACY_TRIP`: ca chuyen cu lan vong xe deu nhan
+ * `DRIVER_CASH`. Phieu vong xe tra tien mat vao Quy lai xe bang MOT but toan `RUN_EXPENSE` luc ke toan
+ * duyet, va KHONG BAO GIO vao cong no cay xang — nen o chon khong con khoa theo ngu canh nua. Cau nay
+ * noi dieu do cho lai xe truoc khi bam, thay vi de ho doan tien cua minh co duoc hoan hay khong.
  */
-export const allowsDriverCash = (context: DriverFuelContext | null): boolean =>
-  context?.kind === 'LEGACY_TRIP';
+export const DRIVER_PAYMENT_METHOD_HINT = {
+  DRIVER_CASH:
+    'Bạn tự trả tiền mặt: khi kế toán duyệt, khoản này trừ vào quỹ lái xe của bạn để công ty ' +
+    'hoàn lại — không ghi nợ cây xăng.',
+  SUPPLIER_ACCOUNT:
+    'Cây xăng ghi nợ công ty: khoản này vào công nợ cây xăng sau khi đối chiếu bảng kê, không ' +
+    'đụng tới quỹ của bạn.',
+} as const satisfies Record<FuelPaymentMethod, string>;
 
 /** Than `POST /transport/me/fuel/slips`. Ham THUAN: cung dau vao, cung than — dieu kien de gui lai. */
 export const toDriverFuelSubmission = (input: {

@@ -554,6 +554,123 @@ As-built: `USER_ROLES = ['SALE','MANAGER','ACCOUNTING','ADMIN']` — enum **toà
 Nghĩa là §11.1–11.3 **chưa thực thi được** hôm nay → `PG-02`. Chỉ thị workstream §10 nói rõ *"không
 tự xây IAM mới trong task này"*, nên T1 dừng ở mức hợp đồng. Đường đi cho giai đoạn demo: `GD-22`.
 
+> **Cập nhật `#395` (25/09/2026):** đoạn trên mô tả nền tảng lúc T1. Mô hình as-built hiện hành —
+> vai khởi điểm + quyền riêng từng tài khoản, do máy chủ tính ở mỗi yêu cầu — ở §11.5; bất biến nối
+> tài khoản với hồ sơ lái xe ở §11.6. Hợp đồng HTTP: [api-http.md](api-http.md) §3.4 và §3.11.
+
+### 11.5. `#395` as-built — vai khởi điểm + quyền riêng
+
+**Dữ liệu.** `User.role` (`SALE | MANAGER | ACCOUNTING | ADMIN`) là **vai khởi điểm**. Bảng
+`UserPermissionGrant { userId, permission, effect: ALLOW | DENY, grantedBy, createdAt }` chồng lên nó,
+`UNIQUE (userId, permission)` (một mã chỉ một dòng), `ON DELETE CASCADE` theo `User`. Di trú
+`20260925100000_auth_user_access` **chỉ thêm**: không dòng quyền riêng nào = đúng vai khởi điểm, nên
+mọi tài khoản cũ giữ nguyên quyền. Miền sở hữu mã quyền quyết dòng nào hợp lệ; DB chỉ giữ hình dạng.
+
+**Bốn vai khởi điểm** (nhãn trong danh mục `transport-permission-catalog.ts`):
+
+| Vai | Nhãn | Tập khởi điểm | Quyền riêng |
+|---|---|---|---|
+| `ADMIN` | Giám đốc | Mọi việc vận hành (`OPERATIONS_ACTIONS`) + quyền nền tảng `platform.accounts.manage` | **Không nhận** (`ADMIN_PRESET_IS_FULL`); dòng lọt vào DB bị bỏ qua |
+| `ACCOUNTING` | Kế toán | `OPERATIONS_ACTIONS` − `ACCOUNTING_DENIED` − `DIRECTOR_ONLY_ACTIONS` | ALLOW / DENY |
+| `MANAGER` | Điều hành / Quản lý | **Trống** — Giám đốc chọn nhóm quyền cho từng người. Chủ xe / bên góp vốn cũng dùng vai này, không quyền riêng, rồi nối hồ sơ bên góp vốn | ALLOW / DENY |
+| `SALE` | Lái xe | Chỉ `SELF_SCOPE_ACTIONS`, và chỉ có nghĩa khi tài khoản nối một hồ sơ lái xe (§11.6) | **Không nhận** (`DRIVER_PRESET_IS_SELF_SCOPE_ONLY`) |
+
+Các tập khởi điểm tái tạo **đúng** quyền thực tế trước `#395`: `transport-behaviour-preservation.spec.ts`
+so chuỗi guard mới với chuỗi cũ đóng băng trên từng route vận tải × bốn vai.
+
+**Tập quyền hiệu lực** (`effectiveTransportActions`, `transport-permission-rules.ts` — hàm thuần):
+
+```text
+ADMIN, SALE            → đúng vai khởi điểm (quyền riêng bị bỏ qua)
+ACCOUNTING, MANAGER    → (khởi điểm − DENY ∩ khởi điểm) ∪ (ALLOW ∩ cấp được − khởi điểm); mã lạ bị bỏ qua
+phòng thủ thêm tầng     → nếu tập kết quả giữ CẢ một quyết định tiền LẪN một thao tác sửa căn cứ,
+                          các thao tác sửa căn cứ đến từ ALLOW bị gỡ ra
+```
+
+Máy chủ tính tập này ở **mỗi yêu cầu** từ `User.role` + quyền riêng đọc lại cùng phiên
+(`validateSession`) — đổi quyền có hiệu lực ở yêu cầu kế tiếp, không cần đăng nhập lại; khoá tài
+khoản hoặc đặt lại mật khẩu làm phiên cũ chết. `TransportActionGuard` và mọi chỗ kiểm quyền trong mã
+hỏi cùng một hàm `canPerformTransportAction`; `GET /auth/me.permissions` trả chính tập này, web chỉ
+hiện lại. Route vận tải có cổng miền thì `RolesGuard` nhường cho cổng đó (xem
+[api-http.md](api-http.md) §3.11) — `@Roles` không còn là trần.
+
+**Cái gì cấp được.** `GRANTABLE_ACTIONS` = `OPERATIONS_ACTIONS` − `DIRECTOR_ONLY_ACTIONS`, và **chỉ** cho
+`ACCOUNTING` / `MANAGER`. Không bao giờ cấp được:
+
+- **Chỉ Giám đốc** (`DIRECTOR_ONLY_ACTIONS`, bốn mã): mở lại kỳ chi phí (`costing.period.reopen`),
+  mở lại kỳ đối soát nhiên liệu (`fuel.reconciliation.reopen`), đảo một lần chi quyết toán lái xe
+  (`driver_settlement.reverse`), nối tài khoản với hồ sơ (`account_link.manage`) → `DIRECTOR_ONLY_ACTION`.
+- **Phạm vi đến từ liên kết**: `driver.self.*` và `stakeholder.self.*` → `SCOPE_ACTION_NOT_GRANTABLE`.
+- **Quyền nền tảng** `platform.accounts.manage` → `PLATFORM_PERMISSION_NOT_GRANTABLE`.
+
+**Tách nhiệm (SoD).** Ba quyết định biến căn cứ thành tiền (`FINANCIAL_DECISION_ACTIONS`:
+`commercial_acceptance.decide`, `waiting_allowance.decide`, `customer_reconciliation.confirm`) ⟂ bảy
+thao tác sửa chính căn cứ đó (`EVIDENCE_MUTATION_ACTIONS`: `checkpoint.record`, `waiting.close`,
+`operational_document.record`, `operational_document.withdraw`, `proof.withdraw`,
+`telematics.observation.ingest`, `geofence.manage`). Một bộ quyền mà tập kết quả giữ cả hai vế của
+một cặp, với ít nhất một vế đến từ ALLOW, bị từ chối `SOD_CONFLICT` (`detail: { decision, evidence }`).
+Cặp mà cả hai vế đều đến từ vai khởi điểm không bị tính.
+
+**Leo thang.** `ESCALATION_ACTIONS` = `ACCOUNTING_DENIED` − `DIRECTOR_ONLY_ACTIONS` (chín mã: huỷ
+chuyến, xem lịch sử vị trí, ghi mốc, đóng phiên chờ, ghi / rút chứng từ vận hành, rút chứng cứ, nhập
+vị trí thiết bị, quản lý địa điểm vận hành). ALLOW một mã trong đó — và nâng một tài khoản lên
+`ADMIN` — đòi `confirmEscalation: true` (thiếu → `ESCALATION_CONFIRMATION_REQUIRED`) và ghi thêm dòng
+kiểm toán `auth.user.access.escalate` nêu từng mã.
+
+**Mã từ chối một bộ quyền** (`validateTransportGrants`, bộ quyền là **toàn bộ** sau thay đổi, không
+phải phần chênh): `ADMIN_PRESET_IS_FULL` · `DRIVER_PRESET_IS_SELF_SCOPE_ONLY` · `UNKNOWN_PERMISSION` ·
+`SCOPE_ACTION_NOT_GRANTABLE` · `DIRECTOR_ONLY_ACTION` · `GRANT_REDUNDANT` (ALLOW một mã vai khởi điểm
+đã có, hoặc DENY một mã nó không có) · `GRANT_DUPLICATED` · `SOD_CONFLICT` ·
+`ESCALATION_CONFIRMATION_REQUIRED`. API trả chúng trong `409 ACCESS_INVALID`
+(`detail.violations`).
+
+**Danh mục cho màn hình.** 14 nhóm theo công việc (`dieu-hanh` … `bao-cao`, `quan-tri`, và hai nhóm
+**không cấp được** `lai-xe` "Việc của chính lái xe", `chu-xe` "Xe mình có cổ phần"); mỗi mã
+`TRANSPORT_ACTIONS` nằm trong đúng một nhóm (spec khoá). Nhóm `quan-tri` chỉ chứa một mã chỉ-Giám-đốc.
+Loại của mỗi mã **suy từ quy tắc**, không gõ tay: `NHAY_CAM` (chỉ Giám đốc hoặc leo thang) · `DUYET`
+(quyết định tiền) · `XEM` (`.read`) · `THAO_TAC`.
+
+**Quyền kèm theo để dùng được** (`TransportPermissionGroup.needs`, trả trong `PermissionGroupView.needs`).
+Việc của một số nhóm hiện trên màn hình của nhóm khác — lịch bảo dưỡng cần biển số xe, quỹ lái xe
+chọn theo hồ sơ lái xe, mốc hiện trường nằm trên chặng của một vòng chạy trong một đơn. Mỗi nhóm
+khai các **phép XEM của nhóm khác** mà màn hình của nó cần. Luật "mỗi mã đúng một nhóm" không đổi: mã
+kèm theo vẫn thuộc nhóm của nó, và chỉ được là phép xem thường — không leo thang, không chỉ Giám đốc,
+không tách nhiệm (spec khoá). Trình chỉnh quyền bật kèm khi Giám đốc bật nhóm, ghi rõ "Kèm theo để
+dùng được …"; "Người này làm được gì?" nói khi một nhóm đang dùng mà còn thiếu mã kèm theo.
+
+**Màn hình web mở một mục khi đọc được dữ liệu chính của nó.** Mỗi mục của thanh bên khai
+`requiredActions` (mọi mã mà các lần đọc chính của mục đòi) và `optionalActions` (phần phụ: không hỏi
+máy chủ khi thiếu quyền, nói "Bạn chưa được cấp quyền xem …" thay vì một ô trống). Bộ mã không gõ theo
+cảm tính: `section-access.spec.ts` dựng lại chuỗi controller API (`@RequiresTransportAction`) → hàm
+client → `useQuery` (`queryFn` + cổng `enabled`) → component → `SectionBody` từ mã nguồn, và đòi (1)
+cổng của mỗi query bằng đúng mã route, (2) mỗi lần đọc của mục đã khai, (3) mỗi mã phụ được phần vẽ
+xử lý, (4) mọi nhóm cấp được — cộng quyền kèm theo — mở ít nhất một mục. `preset-sections.spec.ts`
+chứng minh bốn vai khởi điểm vẫn thấy đúng các mục như trước khi đổi cổng.
+
+### 11.6. `#395` — bất biến nối tài khoản với hồ sơ lái xe
+
+Phạm vi "việc của chính lái xe" đặt trên `TransportDriver.authUserId`. Một ô nhập tự do ở hồ sơ lái
+xe từng là đường cấp phạm vi đó cho bất kỳ tài khoản nào mà không kiểm gì, nên từ `#395`:
+
+| Bất biến | Cưỡng chế ở |
+|---|---|
+| Chỉ tài khoản vai **Lái xe** (`SALE`) nối được với hồ sơ lái xe | `DriverAccountLinkService` → `ACCOUNT_LINK_ROLE_MISMATCH` |
+| Một tài khoản nối **tối đa một** hồ sơ lái xe | kiểm trong dịch vụ + unique `TransportDriver_authUserId_key` của DB; hai lần nối đua nhau đều ra `DRIVER_ACCOUNT_TAKEN` |
+| Tài khoản văn phòng **không được giữ** liên kết | miền `transport` trả `ACCOUNT_LINKED_TO_DRIVER` cho mọi lần đổi vai / quyền sang vai khác `SALE` khi còn nối — kể cả khi vai không đổi (dữ liệu cũ đã sai thì một lần sửa quyền không hợp thức hoá nó). Muốn đổi vai: gỡ nối trước |
+| Nối mới cần hồ sơ đang hoạt động, tài khoản tồn tại và đang hoạt động | `ACCOUNT_LINK_DRIVER_INACTIVE`, `ACCOUNT_LINK_USER_NOT_FOUND`, `ACCOUNT_LINK_USER_DISABLED`. **Gỡ nối** luôn được, kể cả hồ sơ đã ngừng |
+| Chỉ Giám đốc nối / gỡ | mã `transport.account_link.manage` (chỉ Giám đốc) trên `PUT /transport/drivers/:driverId/account` — đường ghi HTTP duy nhất; tạo / sửa hồ sơ lái xe từ chối `authUserId` (`400`) |
+
+Mỗi thay đổi ghi `transport.driver.account_link` / `account_unlink` (`before`/`after` là hồ sơ lái
+xe) và quyết định `driver.account_link` (từ vựng `fleet/account-link-decisions.ts`). Liên kết **bên
+góp vốn** (`PUT /transport/asset-ownership/stakeholders/:id/account`) dùng cùng mã quyền, không giới
+hạn vai, và cũng một tài khoản — một hồ sơ (`ASSET_STAKEHOLDER_ACCOUNT_TAKEN`).
+
+Màn "Người này làm được gì?" đọc liên kết qua **một** chỗ — `TransportAccountLinkDirectory`, cùng
+nguồn với `GET /transport/account-links/:authUserId` — thành hai phạm vi `lai-xe` / `chu-xe`; tài khoản
+Lái xe chưa nối nhận câu "Chưa nối hồ sơ lái xe — chưa làm được gì". Bộ dữ liệu mẫu chỉ tự nối lại
+một tài khoản `lx.*` khi nó là `SALE`, đang hoạt động, chưa nối hồ sơ khác, và hồ sơ chưa từng bị gỡ
+nối (`transport.driver.account_unlink`) — Giám đốc gỡ nối thì lần khởi động sau không nối lại.
+
 ---
 
 ## 12. Hợp đồng experience
@@ -1489,7 +1606,7 @@ Hai nguồn ngoài đến qua `@Optional()`; khi vắng mặt, `unavailableSourc
 | ID | Khoảng cách | Bằng chứng đo được | Ảnh hưởng |
 |---|---|---|---|
 | `PG-01` | Một tenant chỉ khai được **một** experience | `tenant.schema.ts` `experience: experienceIdSchema`; `resolveExperience()` render một component | **Chặn T7** — vận tải cần 2 bề mặt (VT-100). Demo: `GD-23` |
-| `PG-02` | Không có mô hình action/permission; role là enum toàn cục phẳng, không có `DRIVER`, không có giới hạn theo dòng | `auth.types.ts:1`, `roles.guard.ts` | **Chặn T2**. Demo: `GD-22` |
+| `PG-02` | Không có mô hình action/permission; role là enum toàn cục phẳng, không có `DRIVER`, không có giới hạn theo dòng | `auth.types.ts:1`, `roles.guard.ts` | **Chặn T2**. Demo: `GD-22`. **`#395` đóng phần quyền theo tài khoản** (vai khởi điểm + quyền riêng, §11.5); vai vẫn là enum toàn cục, chưa có `DRIVER` riêng |
 | `PG-03` | Không có primitive tiền/làm tròn/phân bổ | Tiền as-built là `Int` (`schema.prisma:372`), không có `Money`, không có `currency` | Chặn `INV-24`; demo: `GD-03` |
 | `PG-04` | Không có primitive sổ cái append-only + reversal | Không model nào trong `schema.prisma` có hình dạng ledger | Chặn `INV-20`; ảnh hưởng T3 |
 | `PG-05` | Không có primitive chứng từ/bằng chứng có vòng đời (quét, trạng thái, liên kết đa hình, retention) | `MediaStore` phục vụ ảnh chat, không phải chứng từ nghiệp vụ | Chặn T4; demo: `GD-20` |

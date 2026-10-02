@@ -1,6 +1,15 @@
 import type { CapabilityId } from '@netviet/tenant';
 import type { AuthRole } from '../../lib/auth';
-import { canPerform, type TransportAction } from './transport-actions';
+import {
+  canPerform,
+  canPerformAll,
+  hasOperationsScope,
+  hasPlatformPermission,
+  STAKEHOLDER_SCOPE_ACTIONS,
+  type PlatformPermission,
+  type TransportAction,
+  type TransportViewer,
+} from './transport-actions';
 
 /**
  * KIEN TRUC THONG TIN cua be mat van hanh van tai — mot HOP DONG kiem tra duoc bang ham thuan.
@@ -13,7 +22,8 @@ import { canPerform, type TransportAction } from './transport-actions';
  * HAI truc long nhau, va chung KHONG the gop lam mot:
  *
  *   1. `requiredCapabilities` — khach co MUA nghiep vu nay khong (`CapabilityId`, dong kin).
- *   2. `requiredAction`       — vai nay co lam duoc viec do khong (`GD-22`, theo hanh dong).
+ *   2. `requiredActions`      — nguoi nay doc duoc DU LIEU CHINH cua muc khong (`GD-22`, theo hanh
+ *      dong; `#395`: mot BO ma, khong phai mot ma — xem `TransportSection.requiredActions`).
  *
  * Va mot truc VI TRI tach han khoi hai truc quyen: `supersededBy` (#339) — muc da co duong thay the
  * rut khoi danh muc chinh nhung dia chi cu van mo duoc. No khong bao gio cap hay tuoc quyen.
@@ -46,6 +56,7 @@ export type TransportSectionId =
   | 'payroll'
   | 'driver-settlement'
   | 'asset-ownership'
+  | 'my-vehicles'
   | 'finance'
   | 'margin'
   | 'ar-ap'
@@ -54,21 +65,54 @@ export type TransportSectionId =
   | 'routes'
   | 'fleet-dashboard'
   | 'executive'
-  | 'exports';
+  | 'exports'
+  | 'admin-accounts'
+  | 'admin-places';
 
-export type TransportSectionGroupId = 'root' | 'dispatch' | 'cost' | 'assets' | 'reports';
+export type TransportSectionGroupId =
+  'root' | 'dispatch' | 'receivable' | 'payable' | 'driver-money' | 'reports' | 'assets' | 'admin';
 
 export interface TransportSectionGroup {
   readonly id: TransportSectionGroupId;
   readonly label: string;
 }
 
+/**
+ * NHOM TIEN LA CAU HOI NGHIEP VU, khong phai ten phan he (#341).
+ *
+ * Truoc day tien nam rai trong ba nhom tron lan (`CHI PHÍ & ĐỐI SOÁT`, `TÀI SẢN & NHÂN SỰ`,
+ * `BÁO CÁO`), va bon nhan — `Công nợ & quyết toán`, `AR/AP`, `Bảng tài chính`, `Quyết toán lái xe`
+ * — cung doc len nhu "cong no". Ke toan phai hieu ten phan he moi biet bam vao dau.
+ *
+ * Gio bon nhom tien la bon cau ke toan hoi moi ngay, va moi cau chi co MOT cho tra loi:
+ *
+ *   · `receivable`   — thu tien khach o dau (ket thuc don → phai thu khach hang);
+ *   · `payable`      — cong ty con no ai: doi tac, nha xe, cay xang, phi duong bo;
+ *   · `driver-money` — tien dang o tay lai xe, va cong ty con no lai xe bao nhieu;
+ *   · `reports`      — ca cong ty dang o dau ve tien, chuyen/xe/tuyen nao hieu qua.
+ *
+ * Bon nhom tien dung LIEN mot mach ngay sau `dispatch`, theo dong tien (thu → tra → lai xe → tong
+ * hop), va `assets` xuong CUOI. Do bang anh 1440×900 cua bo E2E: danh muc cuon trong thanh ben, va
+ * khi `assets` con chen giua thi `Tổng hợp tài chính` lan `Hiệu quả từng chuyến` roi xuong duoi
+ * mep cuon — ke toan phai cuon moi thay cau tra loi. Hai muc tai san la so dang ky it mo; canh bao
+ * bao duong/giay to van dan thang vao muc cua no tu hang viec cua `Bảng điều hành`.
+ *
+ * Doi nhom KHONG doi quyen — nhom chi la VI TRI tren thanh ben. Hai truc quyen cua tung muc giu
+ * nguyen, va `__tests__/navigation.spec.ts` khoa ban do cong quyen cua ca danh muc.
+ */
 export const TRANSPORT_SECTION_GROUPS = [
   { id: 'root', label: '' },
   { id: 'dispatch', label: 'ĐIỀU HÀNH' },
-  { id: 'cost', label: 'CHI PHÍ & ĐỐI SOÁT' },
-  { id: 'assets', label: 'TÀI SẢN & NHÂN SỰ' },
-  { id: 'reports', label: 'BÁO CÁO' },
+  { id: 'receivable', label: 'PHẢI THU' },
+  { id: 'payable', label: 'PHẢI TRẢ' },
+  { id: 'driver-money', label: 'QUỸ & LƯƠNG LÁI XE' },
+  { id: 'reports', label: 'TỔNG HỢP & HIỆU QUẢ' },
+  { id: 'assets', label: 'TÀI SẢN' },
+  /*
+   * `#395` — QUAN TRI o CUOI CUNG: tai khoan, quyen va dia diem van hanh la viec Giam doc lam it khi,
+   * khong phai viec hang ngay; no khong duoc chen giua cac nhom tien ke toan doc moi sang.
+   */
+  { id: 'admin', label: 'QUẢN TRỊ' },
 ] as const satisfies readonly TransportSectionGroup[];
 
 export interface TransportSection {
@@ -77,7 +121,30 @@ export interface TransportSection {
   readonly group: TransportSectionGroupId;
   readonly summary: string;
   readonly requiredCapabilities: readonly CapabilityId[];
-  readonly requiredAction: TransportAction;
+  /**
+   * TRUC QUYEN — DUNG MOT trong hai (`#395`; bai spec khoa dieu do):
+   *
+   *   · `requiredActions` — MOI hanh dong van tai ma DU LIEU CHINH cua muc can (`GD-22`). Muc chi
+   *     hien khi nguoi xem giu DU ca bo: mot muc hien ra ma du lieu chinh bi `403` la mot man trang
+   *     (hoac mot cau "chua co du lieu" sai). Bo nay KHONG go tay theo cam tinh — no la dung cac ma
+   *     ma route cua cac query chinh doi o may chu, va `section-access.spec.ts` doc ma nguon (API
+   *     controller → ham client → hook → component) de khoa dieu do;
+   *   · `requiredPlatformPermission` — mot quyen cua NEN TANG (vd quan tri tai khoan), thu khong
+   *     thuoc mien nao nen khong the la mot `TransportAction`.
+   *
+   * Ca hai cung luat voi `canPerform(null)`: chua biet nguoi xem la ai thi HIEN.
+   */
+  readonly requiredActions?: readonly TransportAction[];
+  readonly requiredPlatformPermission?: PlatformPermission;
+  /**
+   * PHAN PHU cua muc — khoi, cot ten, bang phu can THEM mot quyen ngoai bo chinh (`#395`).
+   *
+   * Khong giu thi muc van hien, nhung phan do KHONG hoi may chu va noi mot cau nghiep vu
+   * ("Bạn chưa được cấp quyền xem …", `components/PermissionGate.tsx`) thay vi mot o trong. Bai
+   * `section-access.spec.ts` khoa hai chieu: moi query cua muc co ma nam trong `requiredActions`
+   * hoac o day, va moi ma o day duoc phan VE hoi (`canPerform` / `PermissionGate`).
+   */
+  readonly optionalActions?: readonly TransportAction[];
   /**
    * MUC DA CO DUONG THAY THE — truc thu BA, va no KHONG phai mot truc quyen (#339).
    *
@@ -92,6 +159,15 @@ export interface TransportSection {
    * `if role === ...`.
    */
   readonly supersededBy?: TransportSectionId;
+  /**
+   * TEN CU cua muc da doi ten (#341) — CHI de o loc danh muc tim ra muc bang chu nguoi dung da quen
+   * go. Khong bao gio hien ra man hinh, va khong phai mot truc quyen.
+   *
+   * Day la ban tuong ung cho CHU cua dieu ma `id` on dinh lam cho DIA CHI: doi nhan khong duoc bien
+   * mot thoi quen cu thanh mot o loc rong. Go "cong no" truoc day ra `Công nợ & quyết toán`; gio no
+   * phai ra dung man do duoi ten moi, chu khong phai "Không có mục nào khớp".
+   */
+  readonly formerLabels?: readonly string[];
 }
 
 export const TRANSPORT_SECTIONS = [
@@ -101,7 +177,18 @@ export const TRANSPORT_SECTIONS = [
     group: 'root',
     summary: 'Đơn hàng, vòng chạy đang chạy, đội xe, và những việc đang chờ người xử lý.',
     requiredCapabilities: [],
-    requiredAction: 'transport.trip.read',
+    /**
+     * Du lieu CHINH cua Tong quan la thap dieu hanh (`#348`/`#351`: vong chay, doi xe, hang viec).
+     * Truoc `#395` cong la `transport.trip.read` — ma cua dong thong tin PHU ve chuyen lap tay —
+     * nen mot nguoi chi doc duoc chuyen cu thay mot Tong quan trong. Don, chuyen cu va ky doi soat
+     * la the PHU: thieu quyen thi the do noi mot cau, ca trang van dung.
+     */
+    requiredActions: ['transport.control_tower.read'],
+    optionalActions: [
+      'transport.order.read',
+      'transport.trip.read',
+      'transport.fuel.reconciliation.read',
+    ],
   },
   /*
    * NHOM DIEU HANH doc theo THU TU MOT NGAY LAM VIEC (#339): nhan don → nhin toan canh → chon xe →
@@ -123,11 +210,19 @@ export const TRANSPORT_SECTIONS = [
       'Nơi việc hằng ngày bắt đầu: đơn hàng là đối tượng chính; vòng chạy và chặng chạy rỗng là phần vận hành, do hệ thống lập và tự đóng theo sự thật vận hành.',
     requiredCapabilities: ['transport-core'],
     /**
-     * Van la `transport.run.read` chu khong `transport.order.read`, va do la co y: man hinh doc CA
-     * hai truc, nen quyen hep hon phai la quyen quyet dinh. Doi sang quyen doc don se cho mot
-     * nguoi khong duoc phep xem vong chay nhin thay bang vong chay o nua duoi.
+     * DON la du lieu chinh (`#274`: man hinh di tu don) — `useTransportOrders` chan ca trang khi
+     * khong doc duoc don. Truoc `#395` cong la `transport.run.read` de mot nguoi khong duoc xem vong
+     * chay khong thay bang vong chay o nua duoi; gio dieu do duoc giu O CHINH PHAN DO: khong co
+     * `transport.run.read` thi query vong chay khong chay va khoi vong chay noi mot cau thay vi
+     * hien bang. Ten khach, bien so va danh sach dia diem cua man tao don la phan phu cung luat.
      */
-    requiredAction: 'transport.run.read',
+    requiredActions: ['transport.order.read'],
+    optionalActions: [
+      'transport.run.read',
+      'transport.customer.read',
+      'transport.vehicle.read',
+      'transport.order.manage',
+    ],
   },
   {
     /**
@@ -146,7 +241,16 @@ export const TRANSPORT_SECTIONS = [
     summary:
       'Chuyến lập tay theo cách làm trước đây — vẫn mở được để xem và xử lý chuyến đã có; việc mới bắt đầu từ Đơn hàng & vòng chạy.',
     requiredCapabilities: ['transport-core'],
-    requiredAction: 'transport.trip.read',
+    requiredActions: ['transport.trip.read'],
+    /** Danh ba ten (khach, doi tac, xe, lai xe) va hai khoi tien cua chi tiet chuyen. */
+    optionalActions: [
+      'transport.customer.read',
+      'transport.partner.read',
+      'transport.vehicle.read',
+      'transport.driver.read',
+      'transport.costing.expense.read',
+      'transport.fuel.entry.read',
+    ],
     supersededBy: 'movement',
   },
   {
@@ -161,7 +265,7 @@ export const TRANSPORT_SECTIONS = [
      * ở đây sẽ giấu cả bảng khỏi một khách vẫn dùng được phần lớn nó.
      */
     requiredCapabilities: ['transport-core'],
-    requiredAction: 'transport.control_tower.read',
+    requiredActions: ['transport.control_tower.read'],
   },
   {
     id: 'dispatch',
@@ -174,9 +278,17 @@ export const TRANSPORT_SECTIONS = [
      * Muc nam o nhom DIEU HANH chu khong o nhom BAO CAO: day la mot man hinh nguoi truc dung de
      * LAM VIEC, khong phai mot bao cao de doc. Lenh gan xe di sau `transport.run.manage` va duoc
      * kiem lai o may chu.
+     *
+     * `#395`: man hinh doc DON de chon va CHE DO VAN HANH (`GET /transport/planning/policy`,
+     * `transport.run.read`) truoc khi moi bam "Tìm xe". Chi co ma de nghi thi man treo o "Đang đọc
+     * chế độ vận hành…" mai mai — nen ca ba deu la du lieu chinh.
      */
     requiredCapabilities: ['transport-core'],
-    requiredAction: 'transport.dispatch.suggest.read',
+    requiredActions: [
+      'transport.dispatch.suggest.read',
+      'transport.order.read',
+      'transport.run.read',
+    ],
   },
   {
     id: 'fleet',
@@ -184,111 +296,187 @@ export const TRANSPORT_SECTIONS = [
     group: 'dispatch',
     summary: 'Hồ sơ xe, hồ sơ lái xe, lịch sử phụ trách và số km đồng hồ.',
     requiredCapabilities: ['transport-core'],
-    requiredAction: 'transport.vehicle.read',
+    requiredActions: ['transport.vehicle.read'],
+    /** Bang lai xe va suc khoe vi tri cua mot xe la phan phu, moi phan mot ma. */
+    optionalActions: ['transport.driver.read', 'transport.tracking.read'],
+  },
+  /*
+   * THU TU MANG VAN LA THU TU TREN THANH BEN (#341): moi nhom dung LIEN mot khoi, theo dung thu tu
+   * cua `TRANSPORT_SECTION_GROUPS`. `__tests__/navigation.spec.ts` khoa dieu do, nen doc tep nay tu
+   * tren xuong la doc thanh ben tu tren xuong.
+   */
+  {
+    /**
+     * BUOC DAU cua viec thu tien khach, nen dung dau nhom PHẢI THU (#341): doi soat voi khach chi
+     * nhan don da `Đã kết thúc` (`customer-ar` doi `completion.state === 'APPROVED'`).
+     */
+    id: 'order-completion',
+    label: 'Kết thúc đơn',
+    group: 'receivable',
+    summary:
+      'Đơn đã giao xong, chờ kế toán xác nhận chứng từ. Chỉ đơn đã kết thúc mới vào kỳ đối soát mới.',
+    requiredCapabilities: ['transport-acceptance'],
+    requiredActions: ['transport.commercial_acceptance.read'],
+    /** Chung tu van hanh cua don, doc khi mo hop quyet dinh. */
+    optionalActions: ['transport.operational_document.read'],
+  },
+  {
+    id: 'settlement',
+    /**
+     * `Phải thu khách hàng`, KHONG con `Công nợ & quyết toán` (#341).
+     *
+     * Tu #337 man nay giu DUNG MOT dong tien — cuoc khach hang: tuoi no, so phai thu, doi soat,
+     * ghi nhan va phan bo tien ve. Nhan cu hua "nam dong tien" va dung chu `quyết toán` cua man lai
+     * xe; ke toan doc len tuong ca cong no nha xe, cay xang, lai xe deu o day.
+     *
+     * `id` giu nguyen: `?section=settlement` la dia chi da nam trong dau trang va trong bai E2E
+     * cong no khach — doi nhan khong duoc lam chet dia chi.
+     */
+    label: 'Phải thu khách hàng',
+    group: 'receivable',
+    summary:
+      'Tiền khách hàng nợ công ty: ai nợ, nợ bao nhiêu, quá hạn bao lâu — và việc kế toán phải làm để thu về.',
+    requiredCapabilities: ['transport-settlement'],
+    /**
+     * SO CONG NO KHACH (`customer-ar`: cho doi soat, lo doi soat, so theo tien te) la du lieu chinh.
+     * Truoc `#395` cong la `transport.costing.period.read` — mot ma KHONG route nao cua man nay doi:
+     * nguoi chi co ma do thay trang nay va nhan `403` o ca ba lan doc. Bang tuoi no
+     * (`transport.settlement.report.read`) va danh ba ten la phan phu.
+     */
+    requiredActions: ['transport.customer_reconciliation.read'],
+    optionalActions: [
+      'transport.settlement.report.read',
+      'transport.customer.read',
+      'transport.partner.read',
+      'transport.order.read',
+    ],
+    formerLabels: ['Công nợ & quyết toán'],
+  },
+  {
+    id: 'ar-ap',
+    /**
+     * `AR/AP` la ten phan he, khong phai cau hoi (#341). Man nay KHONG co tuoi no phai thu cua
+     * khach — no la ba dong PHAI TRA (cay xang, nha xe, hoa hong nguon don) va vi the hai chieu
+     * cua MOT doi tac. Nen nhan noi thang: tra cho ai.
+     */
+    label: 'Phải trả đối tác & cây xăng',
+    group: 'payable',
+    summary:
+      'Công ty còn nợ ai — cây xăng, nhà xe, hoa hồng nguồn đơn — theo từng đối tác, cùng vị thế hai chiều của một đối tác.',
+    requiredCapabilities: ['transport-settlement'],
+    /**
+     * Ba dong phai tra va vi the doi tac deu la bao cao quyet toan (`GET /transport/settlement/ap`,
+     * `.../partners/:id/position`). Truoc `#395` cong la `transport.costing.period.read` va man hien
+     * ra khong mot lan doc nao cho nguoi chi co ma do.
+     */
+    requiredActions: ['transport.settlement.report.read'],
+    optionalActions: ['transport.partner.read', 'transport.customer.read'],
+    formerLabels: ['AR/AP'],
+  },
+  {
+    /**
+     * Nam o PHẢI TRẢ (#341): dong ky doi soat bang ke o day la cho sinh ra khoan cong ty no cay
+     * xang (`FUEL_SUPPLIER`, qua vong quet ban giao cua `transport-settlement`).
+     */
+    id: 'fuel',
+    label: 'Nhiên liệu',
+    group: 'payable',
+    summary: 'Phiếu đổ dầu, xác thực phiếu, nhập bảng kê cây xăng và đối soát.',
+    requiredCapabilities: ['transport-fuel'],
+    requiredActions: ['transport.fuel.entry.read'],
+    /** Ky doi soat bang ke, hang soat chung tu may doc va o chon xe cua bang tieu hao. */
+    optionalActions: [
+      'transport.fuel.reconciliation.read',
+      'transport.fuel.document.read',
+      'transport.vehicle.read',
+    ],
+  },
+  {
+    /** Canh Nhien lieu: cung mot viec — nap bang ke cua nha cung cap roi doi soat tung dong. */
+    id: 'toll',
+    label: 'Phí đường bộ (ETC)',
+    group: 'payable',
+    summary:
+      'Tài khoản VETC/ePass, sổ xe nhận chi trả, nạp bảng kê và hàng chờ đối soát từng dòng.',
+    requiredCapabilities: ['transport-toll'],
+    requiredActions: ['transport.toll.account.read'],
+    /** Nap bang ke, hang cho doi soat, bao cao chi phi va bien so xe. */
+    optionalActions: ['transport.toll.review.read', 'transport.vehicle.read'],
   },
   {
     id: 'driver-fund',
-    label: 'Quỹ lái xe / Chi phí',
-    group: 'cost',
+    /**
+     * `Quỹ lái xe`, khong con `/ Chi phí` (#341). Man nay la SO QUY: so du, tam ung, hoan quy, ky
+     * quy. Chu `Chi phí` dung mot minh doc nhu "moi chi phi cua cong ty o day", trong khi nhien lieu
+     * va ETC la chi phi cong ty va KHONG BAO GIO tru vao quy lai xe.
+     */
+    label: 'Quỹ lái xe',
+    group: 'driver-money',
     summary: 'Số dư quỹ từng lái xe, tạm ứng, hoàn quỹ, chi phí chuyến và kỳ quỹ.',
     requiredCapabilities: ['transport-costing'],
-    requiredAction: 'transport.costing.driver_fund.read',
+    /**
+     * So quy doc THEO TUNG LAI XE, chon tu danh sach ho so lai xe (`GET /transport/drivers`). Khong
+     * doc duoc danh sach do thi man nay noi "Chưa có hồ sơ lái xe nào" — mot cau sai (`#395`).
+     */
+    requiredActions: ['transport.costing.driver_fund.read', 'transport.driver.read'],
+    /** Ky quy da dong cua lai xe dang chon. */
+    optionalActions: ['transport.costing.period.read'],
+    formerLabels: ['Quỹ lái xe / Chi phí'],
   },
   {
     id: 'expense-claims',
     label: 'Duyệt chi lái xe',
-    group: 'cost',
+    group: 'driver-money',
     summary: 'Đề nghị chi lái xe gửi lên — chỉ khoản được duyệt mới vào giá thành và sổ quỹ.',
     requiredCapabilities: ['transport-costing'],
-    requiredAction: 'transport.expense.claim.read',
-  },
-  {
-    id: 'order-completion',
-    label: 'Kết thúc đơn',
-    group: 'cost',
-    summary:
-      'Đơn đã giao xong, chờ kế toán xác nhận chứng từ. Chỉ đơn đã kết thúc mới vào kỳ đối soát mới.',
-    requiredCapabilities: ['transport-acceptance'],
-    requiredAction: 'transport.commercial_acceptance.read',
-  },
-  {
-    id: 'fuel',
-    label: 'Nhiên liệu',
-    group: 'cost',
-    summary: 'Phiếu đổ dầu, xác thực phiếu, nhập bảng kê cây xăng và đối soát.',
-    requiredCapabilities: ['transport-fuel'],
-    requiredAction: 'transport.fuel.entry.read',
-  },
-  {
-    id: 'toll',
-    label: 'Phí đường bộ (ETC)',
-    group: 'cost',
-    summary:
-      'Tài khoản VETC/ePass, sổ xe nhận chi trả, nạp bảng kê và hàng chờ đối soát từng dòng.',
-    requiredCapabilities: ['transport-toll'],
-    requiredAction: 'transport.toll.account.read',
-  },
-  {
-    id: 'settlement',
-    label: 'Công nợ & quyết toán',
-    group: 'cost',
-    summary: 'Năm dòng tiền giữ riêng: khách hàng, nhà xe, nguồn đơn, cây xăng, lái xe.',
-    requiredCapabilities: ['transport-settlement'],
-    requiredAction: 'transport.costing.period.read',
-  },
-  {
-    id: 'maintenance',
-    label: 'Bảo dưỡng & giấy tờ',
-    group: 'assets',
-    summary: 'Lịch bảo dưỡng đến hạn, lệnh sửa chữa, giấy tờ sắp hết hạn.',
-    requiredCapabilities: ['transport-core', 'transport-asset-compliance'],
-    requiredAction: 'transport.vehicle.read',
-  },
-  {
-    /**
-     * `TX-08` — so dang ky so huu. MUC RIENG, khong phai mot tab trong "Doi xe & lai xe".
-     *
-     * Hai man tra loi hai cau hoi khac nhau cho hai nguoi khac nhau: "Doi xe" tra loi *xe nay chay
-     * duoc khong* (dieu do vien), con man nay tra loi *ai la chu chiec xe nay* (giam doc/ke toan).
-     * Va chung co hai ma quyen rieng, nen gop lam mot tab se lam mot nguoi chi duoc xem ho so xe
-     * nhin thay ca so dang ky so huu.
-     */
-    id: 'asset-ownership',
-    label: 'Sở hữu tài sản',
-    group: 'assets',
-    summary: 'Quyền điều hành, sổ đăng ký sở hữu từng xe, hồ sơ bên hữu quan và lịch sử.',
-    requiredCapabilities: ['transport-core'],
-    requiredAction: 'transport.asset_ownership.read',
+    requiredActions: ['transport.expense.claim.read'],
+    optionalActions: ['transport.driver.read'],
   },
   {
     id: 'payroll',
     label: 'Lương',
-    group: 'assets',
+    group: 'driver-money',
     summary: 'Kỳ lương, bảng tính thử, phiếu lương và các khoản cấu thành.',
     requiredCapabilities: ['transport-costing', 'transport-workforce'],
-    requiredAction: 'transport.costing.period.read',
+    /**
+     * `transport.payroll.period.read` — ma cua MOI route luong. Truoc `#395` cong la
+     * `transport.costing.period.read` (ky KE TOAN), va nguoi chi co ma do thay "Chưa có kỳ lương
+     * nào được mở." trong khi may chu co ky luong: mot cau sai, khong phai mot man trong.
+     */
+    requiredActions: ['transport.payroll.period.read'],
+    optionalActions: ['transport.driver.read', 'transport.vehicle.read'],
   },
   {
     id: 'driver-settlement',
     label: 'Quyết toán lái xe',
-    group: 'assets',
+    group: 'driver-money',
     summary: 'Lương đã ghi nhận theo tháng, các lần chi và phân bổ, hoàn ứng công ty còn nợ.',
     /**
      * HAI capability, cung bo voi man Luong: nguon cua moi khoan da ghi nhan la phieu luong
      * (`transport-workforce`), va hoan ung doc tu so quy (`transport-costing`).
      *
-     * `requiredAction` la ma DOC rieng cua `TX-07b`, khong phai `transport.payroll.period.read`:
-     * bang nay noi tien da RA KHOI cong ty luc nao va bang duong nao, va do la mot cau hoi khac
-     * voi "thang nay lai xe duoc bao nhieu".
+     * Cong la ma DOC rieng cua `TX-07b`, khong phai `transport.payroll.period.read`: bang nay noi
+     * tien da RA KHOI cong ty luc nao va bang duong nao, va do la mot cau hoi khac voi "thang nay
+     * lai xe duoc bao nhieu".
      */
     requiredCapabilities: ['transport-costing', 'transport-workforce'],
-    requiredAction: 'transport.driver_settlement.read',
+    requiredActions: ['transport.driver_settlement.read'],
+    optionalActions: ['transport.driver.read', 'transport.vehicle.read'],
   },
   {
     id: 'finance',
-    label: 'Bảng tài chính',
+    /**
+     * `Tổng hợp tài chính`, khong con `Bảng tài chính` (#341) — va day la muc DUY NHAT dat sau dong
+     * tien canh nhau. Hai muc `Phải thu …`/`Phải trả …` moi dong mot chieu; muc nay tra loi "ca cong
+     * ty dang o dau ve tien", roi dan tung dong sang dung muc chi tiet cua no (`workspace/finance.ts`).
+     *
+     * Khac `executive`: man do ghep xe + tien + viec de doc trong 5 phut; man nay CHI co tien, du sau
+     * dong va phan qua han.
+     */
+    label: 'Tổng hợp tài chính',
     group: 'reports',
-    summary: 'Doanh thu, biên trực tiếp, và sáu dòng tiền giữ riêng — không cộng chung.',
+    summary:
+      'Chỉ phần tiền, cho cả công ty: doanh thu, biên trực tiếp và sáu dòng phải thu/phải trả đặt cạnh nhau — không cộng chung, mỗi dòng mở sang mục chi tiết.',
     /**
      * KHONG mot ma quyen moi: bang doc chinh `arAging`/`apByCounterparty`/`directMarginRollup` cua
      * bao cao quyet toan, roi bay chung canh nhau. Xem `FinanceController`.
@@ -297,7 +485,28 @@ export const TRANSPORT_SECTIONS = [
      * khong tinh luong van co bang, chi thieu hai o cuoi va bang noi ra dieu do.
      */
     requiredCapabilities: ['transport-settlement'],
-    requiredAction: 'transport.settlement.report.read',
+    requiredActions: ['transport.settlement.report.read'],
+    formerLabels: ['Bảng tài chính'],
+  },
+  {
+    id: 'margin',
+    /**
+     * `Hiệu quả từng chuyến`, khong con `Biên trực tiếp` (#341), va dung NGAY SAU tong hop tai
+     * chinh: tong hop noi bien cua CA cong ty, muc nay tach ra tung chuyen de biet chuyen nao lam ra
+     * tien. Chu `biên trực tiếp` van o tom tat va tren tung the so — `#244` G5 cam goi no la lai.
+     */
+    label: 'Hiệu quả từng chuyến',
+    group: 'reports',
+    summary:
+      'Chuyến nào làm ra tiền: biên trực tiếp của từng chuyến — doanh thu trừ chi phí trực tiếp, chưa gồm chi phí cố định.',
+    requiredCapabilities: ['transport-settlement'],
+    /**
+     * Du lieu duy nhat la `GET /transport/finance/margin` — ma `transport.settlement.report.read`.
+     * Truoc `#395` cong la `transport.trip.read` (con lai tu khi man doc tung chuyen), va nguoi co
+     * quyen Dieu hanh thay mot trang TRANG: khong so, khong cau nao.
+     */
+    requiredActions: ['transport.settlement.report.read'],
+    formerLabels: ['Biên trực tiếp'],
   },
   {
     id: 'executive',
@@ -325,9 +534,11 @@ export const TRANSPORT_SECTIONS = [
      * Man nay khong co lan goi API rieng nao: no ghep ba read model da nghiem thu. Ma quyen o day
      * la ma cua PHAN LOI (thap dieu hanh); hai phan con lai — tien va doi xe — tu tat o may chu neu
      * nguoi dung khong co quyen doc chung, va man hinh chi thieu mot khoi thay vi tu choi ca trang.
+     * `#395`: khoi thieu NOI mot cau "Bạn chưa được cấp quyền xem …" thay vi bien mat.
      */
     requiredCapabilities: ['transport-core'],
-    requiredAction: 'transport.control_tower.read',
+    requiredActions: ['transport.control_tower.read'],
+    optionalActions: ['transport.settlement.report.read', 'transport.analytics.read'],
   },
   {
     id: 'fleet-dashboard',
@@ -335,7 +546,7 @@ export const TRANSPORT_SECTIONS = [
     group: 'reports',
     summary: 'Km có hàng, km rỗng, tỷ lệ sử dụng và xe chạy rỗng nhiều nhất.',
     requiredCapabilities: ['transport-core'],
-    requiredAction: 'transport.analytics.read',
+    requiredActions: ['transport.analytics.read'],
   },
   {
     id: 'routes',
@@ -343,7 +554,7 @@ export const TRANSPORT_SECTIONS = [
     group: 'reports',
     summary: 'Mỗi tuyến chạy bao nhiêu chuyến, dài bao nhiêu, kéo theo bao nhiêu km rỗng.',
     requiredCapabilities: ['transport-core'],
-    requiredAction: 'transport.analytics.read',
+    requiredActions: ['transport.analytics.read'],
   },
   {
     id: 'journey',
@@ -357,28 +568,13 @@ export const TRANSPORT_SECTIONS = [
      * chua bat hai capability do VAN doc duoc bao cao: chang, km co hang/rong, ma don. Khai ca ba o
      * day se lam muc bien mat khoi menu thay vi hien ra kem mot cau noi ro thieu gi.
      *
-     * `requiredAction` la `transport.run.read` — quyen cua BAO CAO. Toa do di sau mot ma khac
+     * Cong la `transport.run.read` — quyen cua BAO CAO. Toa do di sau mot ma khac
      * (`transport.location.history.read`) va duoc kiem o may chu, khong o menu: ke toan van mo duoc
      * muc nay, chi khong thay ban do. Xem `JourneyController`.
      */
     requiredCapabilities: ['transport-core'],
-    requiredAction: 'transport.run.read',
-  },
-  {
-    id: 'margin',
-    label: 'Biên trực tiếp',
-    group: 'reports',
-    summary: 'Doanh thu trừ chi phí trực tiếp của từng chuyến — chưa gồm chi phí cố định.',
-    requiredCapabilities: ['transport-settlement'],
-    requiredAction: 'transport.trip.read',
-  },
-  {
-    id: 'ar-ap',
-    label: 'AR/AP',
-    group: 'reports',
-    summary: 'Tuổi nợ phải thu và phải trả theo từng đối tác.',
-    requiredCapabilities: ['transport-settlement'],
-    requiredAction: 'transport.costing.period.read',
+    requiredActions: ['transport.run.read'],
+    optionalActions: ['transport.location.history.read'],
   },
   {
     id: 'exports',
@@ -386,7 +582,121 @@ export const TRANSPORT_SECTIONS = [
     group: 'reports',
     summary: 'Kết xuất sổ sách để đối chiếu ngoài hệ thống.',
     requiredCapabilities: ['transport-core'],
-    requiredAction: 'transport.trip.read',
+    /**
+     * Ban xuat chuyen xe la ban xuat CHINH (va cong truoc `#395`); moi ban xuat con lai la mot khoi
+     * rieng voi ma cua no — thieu quyen thi khoi do noi mot cau, khong con mot nut xam khong ly do.
+     */
+    requiredActions: ['transport.trip.read'],
+    optionalActions: [
+      'transport.customer.read',
+      'transport.partner.read',
+      'transport.vehicle.read',
+      'transport.driver.read',
+      'transport.settlement.report.read',
+      'transport.costing.driver_fund.read',
+      'transport.fuel.entry.read',
+      'transport.payroll.period.read',
+    ],
+  },
+  /* TAI SAN o CUOI danh muc (#341) — xem ghi chu cua `TRANSPORT_SECTION_GROUPS`. */
+  {
+    id: 'maintenance',
+    label: 'Bảo dưỡng & giấy tờ',
+    group: 'assets',
+    summary: 'Lịch bảo dưỡng đến hạn, lệnh sửa chữa, giấy tờ sắp hết hạn.',
+    requiredCapabilities: ['transport-core', 'transport-asset-compliance'],
+    /**
+     * Lich bao duong den han va lenh sua chua (`transport.maintenance.plan.read`) la du lieu chinh.
+     * Truoc `#395` cong la `transport.vehicle.read`: nguoi co quyen Doi xe thay ba cau "chưa có …"
+     * sai, con nguoi co dung nhom Bao duong khong thay muc nao. Giay to, canh bao, tinh trang doi
+     * xe va danh ba ten xe/lai xe la phan phu.
+     */
+    requiredActions: ['transport.maintenance.plan.read'],
+    optionalActions: [
+      'transport.compliance.document.read',
+      'transport.fleet_status.read',
+      'transport.alerts.read',
+      'transport.vehicle.read',
+      'transport.driver.read',
+    ],
+  },
+  {
+    /**
+     * `TX-08` — so dang ky so huu. MUC RIENG, khong phai mot tab trong "Doi xe & lai xe".
+     *
+     * Hai man tra loi hai cau hoi khac nhau cho hai nguoi khac nhau: "Doi xe" tra loi *xe nay chay
+     * duoc khong* (dieu do vien), con man nay tra loi *ai la chu chiec xe nay* (giam doc/ke toan).
+     * Va chung co hai ma quyen rieng, nen gop lam mot tab se lam mot nguoi chi duoc xem ho so xe
+     * nhin thay ca so dang ky so huu.
+     */
+    id: 'asset-ownership',
+    label: 'Sở hữu tài sản',
+    group: 'assets',
+    summary: 'Quyền điều hành, sổ đăng ký sở hữu từng xe, hồ sơ bên hữu quan và lịch sử.',
+    requiredCapabilities: ['transport-core'],
+    requiredActions: ['transport.asset_ownership.read'],
+    /** So dang ky doc THEO XE — o chon xe can danh sach xe. */
+    optionalActions: ['transport.vehicle.read'],
+  },
+  {
+    /**
+     * `#395` — "Xe toi co co phan" cho nguoi VUA co viec van hanh VUA la ben gop von.
+     *
+     * Truoc `#395` ben gop von la tai khoan KHONG co quyen van hanh nao, va man cua ho hien THANG
+     * khi danh muc rong (`TransportOperations`). Gio Giam doc cap duoc quyen rieng cho mot `MANAGER`
+     * da noi ho so ben gop von — danh muc cua nguoi do khong con rong, va khong co muc nay thi ho
+     * mat duong vao xe cua chinh minh.
+     *
+     * Chi hien khi may chu DA xac nhan pham vi (`stakeholderLinked`) VA nguoi do co viec van hanh
+     * (`sectionPermitted`). Ben gop von thuan tuy (khong quyen nao) giu nguyen man hien thang, khong
+     * mot thanh ben chi co mot muc.
+     */
+    id: 'my-vehicles',
+    label: 'Xe tôi có cổ phần',
+    group: 'assets',
+    summary: 'Những xe bạn góp vốn: tỷ lệ của bạn, tình trạng xe và hoạt động gần đây.',
+    requiredCapabilities: ['transport-core'],
+    requiredActions: ['transport.stakeholder.self.vehicle.read'],
+  },
+  /*
+   * `#395` — QUAN TRI. Hai muc, hai truc quyen KHAC NHAU va do la co y:
+   *
+   *   · `admin-accounts` doi quyen NEN TANG `platform.accounts.manage` — chi Giam doc co, khong cap
+   *     duoc bang quyen rieng (nguoi cap duoc quyen thi tu cap duoc moi quyen cho minh);
+   *   · `admin-places` doi `transport.geofence.read` (danh sach dia diem) VA `transport.geofence
+   *     .manage` — hanh dong SUA hang rao, thu Ke toan KHONG co (hang rao cham LUC DOC, sua no doi
+   *     phan quyet cua chung cu cu). Nen danh muc Ke toan van bang dung danh muc Giam doc TRU hai
+   *     muc quan tri. Truoc `#395` cong chi co ma sua, va nguoi chi duoc sua nhan `403` o chinh lan
+   *     doc danh sach.
+   */
+  {
+    id: 'admin-accounts',
+    label: 'Tài khoản & quyền',
+    group: 'admin',
+    summary: 'Ai đăng nhập được, mỗi người làm được gì, mật khẩu tạm và khoá tài khoản.',
+    requiredCapabilities: ['transport-core'],
+    requiredPlatformPermission: 'platform.accounts.manage',
+    /** Noi tai khoan voi ho so lai xe / ben gop von. */
+    optionalActions: [
+      'transport.account_link.manage',
+      'transport.driver.read',
+      'transport.asset_ownership.read',
+    ],
+  },
+  {
+    id: 'admin-places',
+    label: 'Địa điểm vận hành',
+    group: 'admin',
+    summary:
+      'Bãi xe, kho khách hàng và nhà máy đối tác — một nguồn cho tạo đơn, lập kế hoạch và hiện trường.',
+    requiredCapabilities: ['transport-core', 'transport-proof'],
+    requiredActions: ['transport.geofence.read', 'transport.geofence.manage'],
+    /** Chon chu dia diem (khach hang / don vi) va tim dia diem theo ten. */
+    optionalActions: [
+      'transport.customer.read',
+      'transport.counterparty.read',
+      'transport.order.manage',
+    ],
   },
 ] as const satisfies readonly TransportSection[];
 
@@ -499,9 +809,14 @@ const DEFAULT_DRIVER_SCREEN: DriverScreenId = 'home';
  * `role: null` nghia la CHUA BIET vai — `AuthGate` con dang doi `/auth/me`, hoac tenant chay che do
  * khong phien. Xem `transport-actions.canPerform`: khi do khong duoc an bot gi.
  */
-export interface NavigationInput {
+export interface NavigationInput extends TransportViewer {
   readonly capabilities: readonly CapabilityId[];
   readonly role: AuthRole | null;
+  /**
+   * Tap quyen HIEU LUC tu `/auth/me` (`#395`). Co thi MOI cong quyen cua man hinh doc no; thieu
+   * (may chu cu, bai test cu) thi roi ve ban guong theo vai. Xem `transport-actions.TransportViewer`.
+   */
+  readonly permissions?: ReadonlySet<string> | null;
   readonly blockedCapabilityKeys?: readonly string[];
 }
 
@@ -518,7 +833,41 @@ export const isSectionEnabled = (section: TransportSection, input: NavigationInp
   !section.requiredCapabilities.some((capability) =>
     input.blockedCapabilityKeys?.includes(capability),
   ) &&
-  canPerform(input.role, section.requiredAction);
+  sectionPermitted(section, input);
+
+/**
+ * Truc quyen cua mot muc — DUNG MOT trong hai (xem `TransportSection.requiredActions`). Muc khai
+ * thieu ca hai (hoac mot bo ma RONG) la muc SAI, va o day no bi DONG (fail-closed); bai spec bat no
+ * truoc khi toi day.
+ */
+export function sectionPermitted(section: TransportSection, viewer: TransportViewer): boolean {
+  const actions = section.requiredActions ?? [];
+  if (actions.length > 0) {
+    // Muc cua ben gop von CHI nam tren thanh ben cua nguoi CO viec van hanh; ben gop von thuan tuy
+    // co man hien thang khi danh muc rong (xem muc `my-vehicles`).
+    const permitted = canPerformAll(viewer, actions);
+    return actions.some(isStakeholderScoped) ? permitted && hasOperationsScope(viewer) : permitted;
+  }
+  if (section.requiredPlatformPermission !== undefined) {
+    return hasPlatformPermission(viewer, section.requiredPlatformPermission);
+  }
+  return false;
+}
+
+const isStakeholderScoped = (action: TransportAction): boolean =>
+  STAKEHOLDER_SCOPE_ACTIONS.includes(action);
+
+/**
+ * CO NEN HOI may chu "nguoi nay co phai ben gop von khong" (`GET /transport/me/vehicles`) de dat muc
+ * `my-vehicles` len thanh ben. Chi khi: khach bat `transport-core`, may chu DA tra tap quyen (tuc
+ * che do phien, may chu `#395`), va nguoi do co viec van hanh — ben gop von thuan tuy da co man hien
+ * thang, con khi chua biet ai thi chua co gi de hoi.
+ */
+export const shouldProbeStakeholderScope = (input: NavigationInput): boolean =>
+  (input.capabilities as readonly string[]).includes('transport-core') &&
+  input.permissions !== undefined &&
+  input.permissions !== null &&
+  hasOperationsScope(input);
 
 export const findSection = (id: string): TransportSection | undefined =>
   TRANSPORT_SECTIONS.find((section) => section.id === id);
@@ -611,12 +960,18 @@ const foldForSearch = (value: string): string =>
  *   1. **Chuoi rong tra ve NGUYEN danh sach.** O loc la mot loi tat, khong phai mot cong. Neu no
  *      an bot khi chua ai go gi, thi mot nguoi khong nhin thay o do se ket luan la minh mat quyen.
  *   2. **Loc theo NHAN, khong theo `id`.** `id` la ma ky thuat (`driver-fund`, `ar-ap`); go "quy"
- *      phai tim ra "Quỹ lái xe / Chi phí", va go "ar-ap" khong duoc la cach duy nhat tim ra "AR/AP".
- *      Nhan la thu nguoi dung doc duoc, nen nhan la thu duoc so.
+ *      phai tim ra "Quỹ lái xe", va go "ar-ap" khong bao gio la cach tim ra "Phải trả đối tác & cây
+ *      xăng". Nhan la thu nguoi dung doc duoc, nen nhan la thu duoc so — cung voi TEN CU cua muc
+ *      da doi ten (`formerLabels`, #341), vi do cung la chu nguoi dung da tung doc tren man hinh.
  *
  * Nhom rong sau khi loc bi bo han — cung luat voi `navigationGroups`: khong de lai mot tieu de
  * nhom khong con muc nao ben duoi.
  */
+const matchesQuery = (section: TransportSection, needle: string): boolean =>
+  [section.label, ...(section.formerLabels ?? [])].some((text) =>
+    foldForSearch(text).includes(needle),
+  );
+
 export const filterNavigationGroups = (
   groups: readonly TransportNavigationGroup[],
   query: string,
@@ -626,14 +981,14 @@ export const filterNavigationGroups = (
   return groups
     .map((entry) => ({
       group: entry.group,
-      sections: entry.sections.filter((section) => foldForSearch(section.label).includes(needle)),
+      sections: entry.sections.filter((section) => matchesQuery(section, needle)),
     }))
     .filter((entry) => entry.sections.length > 0);
 };
 
 export const isDriverScreenEnabled = (screen: DriverScreen, input: NavigationInput): boolean =>
   capabilitiesSatisfied(screen.requiredCapabilities, input.capabilities) &&
-  canPerform(input.role, screen.requiredAction);
+  canPerform(input, screen.requiredAction);
 
 export const findDriverScreen = (id: string): DriverScreen | undefined =>
   DRIVER_SCREENS.find((screen) => screen.id === id);
@@ -725,13 +1080,21 @@ export interface ResolvedNavigation {
   readonly tripFilter: TripFilterQuery;
 }
 
+/**
+ * Muc khong mo duoc roi ve MAC DINH — va neu chinh muc mac dinh cung khong mo duoc (`#395`: mot
+ * `MANAGER` chi duoc cap nhom "Đội xe & lái xe" khong co `Tổng quan`), roi ve muc DAU TIEN nguoi do
+ * mo duoc. Khong lam vay thi dia chi `/` cua ho la mot man hinh ho khong co quyen.
+ */
 export const resolveSection = (
   requested: string | null,
   input: NavigationInput,
-): TransportSectionId =>
-  requested !== null && canNavigateTo(requested, input)
-    ? (requested as TransportSectionId)
-    : DEFAULT_SECTION;
+): TransportSectionId => {
+  if (requested !== null && canNavigateTo(requested, input)) {
+    return requested as TransportSectionId;
+  }
+  if (canNavigateTo(DEFAULT_SECTION, input)) return DEFAULT_SECTION;
+  return visibleSections(input)[0]?.id ?? DEFAULT_SECTION;
+};
 
 export const resolveDriverScreen = (
   requested: string | null,

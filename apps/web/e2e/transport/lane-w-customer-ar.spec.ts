@@ -38,6 +38,9 @@ interface OrderRow {
   readonly customerId: string | null;
   readonly originLabel: string;
   readonly destinationLabel: string;
+  /** `#379` — vang mat o don cu (mock cu khong co truong), co o don tao tu giao dien. */
+  readonly originPoint?: { readonly latitude: number; readonly longitude: number } | null;
+  readonly destinationPoint?: { readonly latitude: number; readonly longitude: number } | null;
   readonly cargoDescription: string | null;
   readonly freightAmount: number | null;
   readonly currencyCode: 'VND';
@@ -84,6 +87,36 @@ const CUSTOMERS = [
   { id: 'cus-nam-phong', name: 'Công ty Nam Phong' },
   { id: 'cus-hai-ha', name: 'Hải Hà Logistics' },
 ];
+
+/*
+ * `#379` — don moi mang TOA DO hai dau tuyen. Diem giao den tu mot KET QUA TIM gia (mock
+ * `POST /transport/places/search`), diem lay tu dia diem da biet — hai duong chon khac nhau, cung
+ * mot quy tac "chon gi thi vao o dang chon".
+ */
+const KHO_HAI_PHONG = { latitude: 20.8449, longitude: 106.6881 };
+const NINH_BINH = { latitude: 20.2506, longitude: 105.9745 };
+
+const KNOWN_PLACES = {
+  available: true,
+  places: [
+    {
+      id: 'gf-kho-hp',
+      kind: 'COUNTERPARTY_SITE',
+      name: 'Kho Hải Phòng',
+      detail: 'Công ty Nam Phong',
+      point: KHO_HAI_PHONG,
+      radiusMetres: 300,
+    },
+  ],
+};
+
+const SEARCH_NINH_BINH = {
+  status: 'OK',
+  reason: null,
+  results: [{ label: 'Ninh Bình', address: 'Thành phố Ninh Bình, Ninh Bình', point: NINH_BINH }],
+  attribution: '© OpenStreetMap contributors',
+  fromCache: false,
+};
 
 const json = async (route: Route, body: unknown, status = 200): Promise<void> => {
   await route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
@@ -214,6 +247,8 @@ async function mockCustomerAr(page: Page, initialOrders: OrderRow[]): Promise<Ar
   );
 
   await page.route('**/transport/customers', (route) => json(route, CUSTOMERS.map(customerRow)));
+  await page.route('**/transport/places/known', (route) => json(route, KNOWN_PLACES));
+  await page.route('**/transport/places/search', (route) => json(route, SEARCH_NINH_BINH));
   await page.route('**/transport/partners', (route) => json(route, []));
   await page.route('**/transport/vehicles', (route) =>
     json(route, [{ id: 'veh-one', registrationPlate: '15C-123.45' }]),
@@ -249,6 +284,8 @@ async function mockCustomerAr(page: Page, initialOrders: OrderRow[]): Promise<Ar
       customerId: typeof body.customerId === 'string' ? body.customerId : null,
       originLabel: String(body.originLabel),
       destinationLabel: String(body.destinationLabel),
+      originPoint: (body.originPoint as OrderRow['originPoint'] | undefined) ?? null,
+      destinationPoint: (body.destinationPoint as OrderRow['destinationPoint'] | undefined) ?? null,
       cargoDescription: typeof body.cargoDescription === 'string' ? body.cargoDescription : null,
       freightAmount: typeof body.freightAmount === 'number' ? body.freightAmount : null,
       currencyCode: 'VND',
@@ -398,20 +435,35 @@ test.describe('Lane W — tu don go tay den tien da phan bo', () => {
 
     /* --- 1. TAO DON: chon khach bang TEN, nhap cuoc --- */
     await page.goto('/?section=movement');
+    await page.getByRole('button', { name: 'Tạo đơn mới' }).click();
     const create = page.getByRole('form', { name: 'Tạo đơn hàng' });
     await expect(create).toBeVisible();
+
+    // Diem lay: dia diem da biet. Diem giao: mot ket qua tim (gia) — chon, khong go.
+    // Ten nut mang TEN dia diem (`#379`): moi nut "Chọn làm …" mot ten rieng.
+    await page
+      .getByRole('button', { name: 'Chọn làm điểm lấy hàng: Kho Hải Phòng', exact: true })
+      .click();
+    const finder = page.getByRole('search', { name: 'Tìm địa điểm' });
+    await finder.getByRole('searchbox').fill('Ninh Bình');
+    await finder.getByRole('button', { name: 'Tìm' }).click();
+    await page
+      .getByRole('button', {
+        name: 'Chọn làm điểm giao hàng: Ninh Bình (kết quả 1)',
+        exact: true,
+      })
+      .click();
 
     // Man hinh KHONG hoi mot ma khach nao — no hoi mot cai ten.
     await expect(create.getByLabel('Mã khách hàng')).toHaveCount(0);
     await create.getByLabel('Mã đơn').fill('W-AR-UI-01');
     await create.getByLabel('Khách hàng').selectOption({ label: 'Công ty Nam Phong' });
-    await create.getByLabel('Điểm lấy hàng').fill('Kho Hải Phòng');
-    await create.getByLabel('Điểm giao hàng').fill('Ninh Bình');
     await create.getByLabel('Ngày vận hành').fill('2026-09-20');
     await create.getByLabel('Cước (đ)').fill('5000000');
     await create.getByLabel('Hàng hoá (tuỳ chọn)').fill('Gạch men 12 pallet');
-    await create.getByRole('button', { name: 'Tạo đơn' }).click();
+    await page.getByRole('button', { name: 'Tạo đơn', exact: true }).click();
 
+    await expect(page.getByText('Đã tạo đơn W-AR-UI-01')).toBeVisible();
     await expect(page.getByRole('rowheader', { name: 'W-AR-UI-01' })).toBeVisible();
     expect(state.createBodies).toHaveLength(1);
     expect(state.createBodies[0]).toMatchObject({
@@ -419,6 +471,10 @@ test.describe('Lane W — tu don go tay den tien da phan bo', () => {
       customerId: 'cus-nam-phong',
       freightAmount: 5_000_000,
       cargoDescription: 'Gạch men 12 pallet',
+      originLabel: 'Kho Hải Phòng',
+      destinationLabel: 'Ninh Bình',
+      originPoint: KHO_HAI_PHONG,
+      destinationPoint: NINH_BINH,
     });
 
     // Don vua tao doc ra bang TEN khach va SO cuoc, khong phai mot `cuid`.

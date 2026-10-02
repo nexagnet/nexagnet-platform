@@ -66,6 +66,15 @@ export const updateVehicleSchema = createVehicleSchema
   .partial()
   .strict();
 
+/**
+ * Ho so lai xe — KHONG co `authUserId` (`#395` §1.8).
+ *
+ * Truoc day truong nay nam o day: ai co `transport.driver.manage` (ca Ke toan) go mot ma tai khoan
+ * bat ky vao la noi duoc, khong kiem vai, khong kiem tai khoan co that hay dang bi khoa. Noi tai
+ * khoan la mot thao tac PHAN QUYEN, nen no co route rieng (`PUT /transport/drivers/:driverId/account`,
+ * chi Giam doc) va luat rieng (`DriverAccountLinkService`). `strict` bien mot client cu con gui
+ * truong nay thanh `400` ro rang, khong am tham bo qua.
+ */
 export const createDriverSchema = z
   .object({
     fullName: nonEmpty.max(120),
@@ -73,12 +82,15 @@ export const createDriverSchema = z
     licenceClass: nonEmpty.max(10),
     licenceExpiry: businessDate,
     status: z.enum(DRIVER_STATUSES).optional(),
-    /** Cau noi user dang nhap -> ho so lai xe. Xem `Driver.authUserId`. */
-    authUserId: z.string().min(1).nullable().optional(),
   })
   .strict();
 
 export const updateDriverSchema = createDriverSchema.partial().strict();
+
+/** `PUT /transport/drivers/:driverId/account` — `null` la GO noi, mot gia tri MINH THI. */
+export const linkDriverAccountSchema = z
+  .object({ authUserId: z.string().trim().min(1).max(100).nullable() })
+  .strict();
 
 export const assignVehicleDriverSchema = z.object({ driverId: nonEmpty }).strict();
 

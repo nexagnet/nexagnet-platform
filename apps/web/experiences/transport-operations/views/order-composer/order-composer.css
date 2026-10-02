@@ -1,0 +1,790 @@
+/*
+ * ===========================================================================
+ * MAN TAO DON (#379) — phieu tuyen + ban do chon diem. Nam canh component, moi selector `.tx-`.
+ *
+ * HE MAU: dung LAI token cua `.tx-shell` (khong bang mau moi). Mau la NGHIA: Lay = `--tx-go`,
+ * Giao = `--tx-done`; dia diem da biet = muc nhat; ket qua tim = `--tx-wait`; vi tri = `--tx-accent`.
+ * Chu nho (< 18px) KHONG dung `--tx-ink-faint`: 3,5–4:1 tren nen trang/nen rua, duoi muc 4,5:1 cua
+ * WCAG AA. Chu phu dung `--tx-ink-soft` (~7,9:1).
+ *
+ * BO CUC theo BE RONG CUA CHINH BE MAT (container query), khong theo be rong cua so: thanh ben 232px
+ * an bot mot phan, nen "man rong" la khi VUNG CHINH >= 900px.
+ *
+ * THU TU DOM (OrderComposer.tsx) = thu tu nhin o man hep, va KHONG mot quy tac nao duoi day dao no
+ * (khong `order`, khong `display: contents`) — Tab va trinh doc man hinh di dung duong mat nhin:
+ *
+ *   phieu tuyen -> [the tim, bang "Đang đặt…", ban do, nut vi tri, the vi tri, chu giai] -> thong
+ *   tin don -> loi -> thanh gui
+ *
+ *   hep  : mot cot; thanh gui dinh day man hinh.
+ *   rong : o luoi hai cot — phieu/thong tin/thanh gui ben trai, ban do DINH (sticky) ben phai; cac
+ *          lop tren ban do nam trong o luoi CUA BAN DO nen khong bao gio de len nhau.
+ *
+ * Diem nhan DUY NHAT la phieu tuyen (hai cuong + duong ray dut). Moi thu khac yen lang.
+ * ===========================================================================
+ */
+
+.tx-visually-hidden {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.tx-composer {
+  /* Chieu cao thanh gui dinh day: o nhap duoc tieu diem phai cuon len TREN no (WCAG 2.4.11). */
+  --tx-composer-submit-h: 4.4rem;
+  container: tx-composer / inline-size;
+  display: flex;
+  flex-direction: column;
+  gap: var(--tx-space-block);
+  min-width: 0;
+}
+
+.tx-composer .tx-pagehead h1:focus-visible {
+  outline: 2px solid var(--tx-accent);
+  outline-offset: 4px;
+  border-radius: var(--tx-radius-sm);
+}
+
+/*
+ * Moi o nhap/nut ben tren thanh gui: khi trinh duyet cuon toi no (Tab, hoac bam), chua mot khoang
+ * bang thanh gui o mep duoi — Firefox/Safari dua o duoc tieu diem sat mep duoi, dung cho thanh che.
+ */
+.tx-composer__body :is(input, select, textarea, button, [tabindex]):not(.tx-composer__create) {
+  scroll-margin-bottom: calc(var(--tx-composer-submit-h) + 0.75rem);
+}
+
+/* ---------------------------------------------------------------- *
+ * Khung — mac dinh la man HEP (mot cot theo thu tu DOM); man rong o cuoi tep
+ * ---------------------------------------------------------------- */
+
+.tx-composer__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--tx-space-block);
+  min-width: 0;
+}
+
+.tx-ticket,
+.tx-composer__facts {
+  background: var(--tx-paper);
+  border-radius: var(--tx-radius);
+  box-shadow: var(--tx-lift);
+}
+
+/*
+ * Be mat ban do la MOT o luoi: the tim, ban do (bang trang thai + nut vi tri de len trong o cua ban
+ * do), the vi tri, chu giai, ghi chu nen. Cac lop cung o voi ban do co `z-index` rieng: ban do la
+ * phan tu co `position`, nen neu khong chung se nam DUOI no.
+ */
+.tx-composer__stage {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas:
+    'finder'
+    'map'
+    'locate'
+    'card'
+    'legend'
+    'notice';
+  min-width: 0;
+}
+
+.tx-composer__finder {
+  grid-area: finder;
+  min-width: 0;
+  margin-bottom: 0.6rem;
+}
+
+.tx-composer__canvas {
+  grid-area: map;
+  position: relative;
+  height: max(320px, 55vh);
+  min-height: 0;
+}
+
+.tx-composer__canvas > .tx-picker,
+.tx-composer__canvas > .tx-state {
+  position: absolute;
+  inset: 0;
+}
+
+.tx-composer__notice {
+  grid-area: notice;
+  margin: 0.4rem 0 0;
+  color: var(--tx-ink-soft);
+}
+
+/* ---------------------------------------------------------------- *
+ * PHIEU TUYEN — hai cuong, mot duong ray
+ * ---------------------------------------------------------------- */
+
+.tx-ticket {
+  --tx-ticket-rail-x: 1.95rem;
+  --tx-ticket-node-top: 0.8rem;
+  --tx-ticket-node-h: 1.5rem;
+  min-width: 0;
+  margin: 0;
+  padding: 0.85rem 0.6rem 0.6rem;
+  border: 0;
+}
+
+/* `float` dua chu thich VAO trong hop cua fieldset (mac dinh no ngoi tren duong vien). */
+.tx-ticket__legend {
+  float: left;
+  width: 100%;
+  padding: 0 0.5rem;
+  margin-bottom: 0.45rem;
+  font-size: 0.76rem;
+  color: var(--tx-ink-soft);
+}
+
+.tx-ticket__slot {
+  position: relative;
+  clear: both;
+}
+
+/* Duong ray: tu dau cuong LAY, qua dong duong chim bay, toi dau cuong GIAO. */
+.tx-ticket__slot:first-of-type::after,
+.tx-ticket__slot:last-of-type .tx-ticket__stub::before {
+  content: '';
+  position: absolute;
+  left: calc(var(--tx-ticket-rail-x) - 1px);
+  border-left: 2px dashed var(--tx-line-strong);
+  pointer-events: none;
+}
+
+.tx-ticket__slot:first-of-type::after {
+  top: calc(var(--tx-ticket-node-top) + var(--tx-ticket-node-h) + 3px);
+  bottom: 0;
+}
+
+.tx-ticket__slot:last-of-type .tx-ticket__stub::before {
+  top: 0;
+  height: calc(var(--tx-ticket-node-top) - 3px);
+}
+
+.tx-ticket__stub {
+  --tx-ticket-mark: var(--tx-go);
+  --tx-ticket-wash: var(--tx-go-wash);
+  position: relative;
+  padding: 0.7rem 0.75rem 0.8rem 3.6rem;
+  border-radius: var(--tx-radius-sm);
+  transition: background-color 140ms ease;
+}
+
+.tx-ticket__stub--destination {
+  --tx-ticket-mark: var(--tx-done);
+  --tx-ticket-wash: var(--tx-done-wash);
+}
+
+/* Cuong DANG CHON: vien day mau cua no + nen rua mau. Khong bong, khong loe. */
+.tx-ticket__stub[data-active] {
+  background: var(--tx-ticket-wash);
+  box-shadow: inset 3px 0 0 var(--tx-ticket-mark);
+}
+
+.tx-ticket__stub:not([data-active]):hover {
+  background: color-mix(in srgb, var(--tx-ticket-wash) 55%, transparent);
+}
+
+.tx-ticket__stub:has(.tx-ticket__radio:focus-visible) {
+  outline: 2px solid var(--tx-accent);
+  outline-offset: 1px;
+}
+
+.tx-ticket__pick {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  cursor: pointer;
+}
+
+.tx-ticket__radio {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  pointer-events: none;
+}
+
+/* Dau cuong = cung hinh voi coc tren ban do: the chu "Lấy"/"Giao". Rong = vien dut, chua dong. */
+.tx-ticket__node {
+  position: absolute;
+  top: var(--tx-ticket-node-top);
+  left: calc(var(--tx-ticket-rail-x) - 1.2rem);
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.4rem;
+  height: var(--tx-ticket-node-h);
+  border-radius: var(--tx-radius-sm);
+  border: 1.5px dashed var(--tx-ticket-mark);
+  background: var(--tx-paper);
+  color: var(--tx-ticket-mark);
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.tx-ticket__stub[data-filled] .tx-ticket__node {
+  border-style: solid;
+  background: var(--tx-ticket-mark);
+  color: var(--tx-paper);
+}
+
+.tx-ticket__role {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--tx-ticket-mark);
+}
+
+.tx-ticket__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.12rem;
+  min-width: 0;
+}
+
+.tx-ticket__place {
+  font-family: var(--font-display);
+  font-size: 1.3rem;
+  line-height: 1.2;
+  color: var(--tx-ink);
+  overflow-wrap: anywhere;
+}
+
+/* "Chưa chọn" nhat hon ten da chot — nhung van du tuong phan de doc (khong phai chu trang tri). */
+.tx-ticket__stub:not([data-filled]) .tx-ticket__place {
+  color: var(--tx-ink-soft);
+  font-style: italic;
+}
+
+.tx-ticket__source {
+  font-size: 0.8rem;
+  line-height: 1.4;
+  color: var(--tx-ink-soft);
+}
+
+.tx-ticket__detail {
+  font-size: 0.76rem;
+  line-height: 1.4;
+  color: var(--tx-ink-soft);
+  overflow-wrap: anywhere;
+}
+
+/* Toa do la SU THAT cua don — nho, nhung phai doc duoc tren nen rua mau cua cuong dang chon. */
+.tx-ticket__coords {
+  margin-top: 0.1rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.01em;
+  color: var(--tx-ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+.tx-ticket__edit {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.4rem;
+  margin-top: 0.6rem;
+}
+
+.tx-ticket__name {
+  flex: 1 1 auto;
+}
+
+/* `#395` §2.3 — ten bai xe khoa: nen giay, khong vien nhap, kem mot dong noi vi sao. */
+.tx-ticket__name input[readonly] {
+  background: var(--tx-canvas);
+  border-style: dashed;
+  color: var(--tx-ink-soft);
+}
+
+.tx-ticket__lock {
+  font-size: 0.74rem;
+  color: var(--tx-ink-faint);
+}
+
+.tx-ticket__name input[aria-invalid='true'] {
+  border-color: var(--tx-stop);
+}
+
+.tx-ticket__clear {
+  flex: none;
+  margin-bottom: 0.1rem;
+}
+
+.tx-ticket__leg {
+  min-height: 1.4rem;
+  padding: 0.35rem 0.75rem 0.45rem 3.6rem;
+}
+
+.tx-ticket__leg > p {
+  margin: 0;
+}
+
+.tx-ticket__distance {
+  font-size: 0.82rem;
+  color: var(--tx-ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------------------------------------------------------------- *
+ * Thong tin don + thanh gui
+ * ---------------------------------------------------------------- */
+
+.tx-composer__facts {
+  padding: 1rem 1.1rem 1.1rem;
+}
+
+.tx-composer__facts-title {
+  margin: 0 0 0.7rem;
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+}
+
+.tx-composer__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.7rem 0.75rem;
+}
+
+.tx-composer__wide {
+  grid-column: 1 / -1;
+}
+
+.tx-composer__facts > .tx-note {
+  margin-top: 0.75rem;
+}
+
+.tx-composer__submit {
+  position: sticky;
+  bottom: 0;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: var(--tx-composer-submit-h);
+  padding: 0.7rem 1rem;
+  background: var(--tx-paper);
+  border-radius: var(--tx-radius);
+  box-shadow:
+    0 -1px 0 var(--tx-line),
+    0 -8px 18px rgb(27 26 23 / 8%);
+}
+
+.tx-composer__missing {
+  flex: 1 1 auto;
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  color: var(--tx-ink-soft);
+}
+
+.tx-composer__create {
+  flex: none;
+  padding: 0.55rem 1.4rem;
+}
+
+/* ---------------------------------------------------------------- *
+ * Lop tren ban do: bang "Đang đặt…", nut vi tri, the vi tri
+ * ---------------------------------------------------------------- */
+
+/* Man hep: bang trang thai o DAU ban do (chua cho nut phong to ben phai), nut vi tri goc duoi-trai. */
+.tx-composer__banner {
+  --tx-composer-mark: var(--tx-go);
+  grid-area: map;
+  align-self: start;
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.6rem;
+  margin: 0.6rem 3.1rem 0 0.6rem;
+  padding: 0.5rem 0.6rem;
+  background: var(--tx-paper);
+  border-radius: var(--tx-radius);
+  box-shadow:
+    inset 4px 0 0 var(--tx-composer-mark),
+    var(--tx-lift-strong);
+}
+
+.tx-composer__banner[data-endpoint='DESTINATION'] {
+  --tx-composer-mark: var(--tx-done);
+}
+
+.tx-composer__banner-tag {
+  flex: none;
+  margin-left: 0.3rem;
+  padding: 0.16rem 0.45rem;
+  border-radius: var(--tx-radius-sm);
+  background: var(--tx-composer-mark);
+  color: var(--tx-paper);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.tx-composer__banner-text {
+  flex: 1 1 11rem;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  color: var(--tx-ink-soft);
+}
+
+.tx-composer__banner-text strong {
+  font-size: 0.88rem;
+  color: var(--tx-ink);
+}
+
+.tx-composer__switch {
+  flex: none;
+}
+
+/*
+ * Man HEP: nut vi tri la mot HANG RIENG ngay duoi ban do, KHONG de len ban do. Duoi 640px MapLibre
+ * thu ghi nguon OpenFreeMap / OSM thanh nut (i); mo ra thi no chiem ca be ngang day ban do va xuong
+ * 2–3 dong (do 23/09: cao 44px o 360–390px). Mot nut de len goc duoi-trai luc do che chu ghi nguon —
+ * ma ghi nguon la bat buoc (#374). Man rong dat lai nut vao o `locate` TRONG ban do (ghi nguon o
+ * goc phai, khong chung cho).
+ */
+.tx-composer__locate-btn {
+  grid-area: locate;
+  align-self: start;
+  justify-self: start;
+  position: relative;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.6rem 0 0;
+  box-shadow: var(--tx-lift);
+}
+
+/* Dang lay vi tri: nut VAN nhan tieu diem (khong `disabled`), chi trong nhu dang ban. */
+.tx-composer__locate-btn[aria-busy='true'] {
+  cursor: progress;
+}
+
+.tx-composer__locate-btn[aria-busy='true'] .tx-composer__locate-icon {
+  animation: tx-composer-locating 1s ease-in-out infinite alternate;
+}
+
+@keyframes tx-composer-locating {
+  to {
+    opacity: 0.35;
+  }
+}
+
+.tx-composer__locate-icon {
+  width: 0.85rem;
+  height: 0.85rem;
+  border-radius: 50%;
+  border: 2px solid var(--tx-accent);
+  background: radial-gradient(circle, var(--tx-accent) 0 30%, transparent 34%);
+}
+
+/* The vi tri: man hep nam DUOI ban do (khong de len ban do); man rong nam trong cot trai. */
+.tx-composer__me {
+  grid-area: card;
+  position: relative;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-top: 0.6rem;
+  padding: 0.65rem 0.75rem;
+  background: var(--tx-paper);
+  border-radius: var(--tx-radius);
+  box-shadow: var(--tx-lift-strong);
+  font-size: 0.8rem;
+}
+
+.tx-composer__me p {
+  margin: 0;
+}
+
+.tx-composer__me-title {
+  font-weight: 600;
+}
+
+.tx-composer__me-note {
+  font-size: 0.74rem;
+  color: var(--tx-ink-soft);
+}
+
+.tx-composer__me-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.tx-composer__me--busy {
+  color: var(--tx-ink-soft);
+}
+
+.tx-composer__me--failed {
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 0.5rem;
+  box-shadow:
+    inset 3px 0 0 var(--tx-stop),
+    var(--tx-lift-strong);
+  color: var(--tx-stop);
+}
+
+.tx-composer__me--failed p {
+  flex: 1 1 auto;
+  line-height: 1.45;
+}
+
+/* ---------------------------------------------------------------- *
+ * Chu giai — DUOI ban do o moi be rong: khong mot ghim nao bi khung vao duoi no
+ * ---------------------------------------------------------------- */
+
+.tx-composer__legend {
+  grid-area: legend;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.9rem;
+  margin: 0.6rem 0 0;
+  padding: 0;
+  font-size: 0.76rem;
+  color: var(--tx-ink-soft);
+}
+
+.tx-composer__legend li {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.tx-composer__legend .tx-pin {
+  width: 1.2rem;
+  height: 1.2rem;
+  cursor: default;
+}
+
+.tx-composer__legend .tx-pin--result .tx-pin__mark {
+  width: 1rem;
+  height: 1rem;
+  border-width: 1.5px;
+  font-size: 0.58rem;
+}
+
+.tx-composer__legend .tx-pin--me .tx-pin__mark {
+  width: 10px;
+  height: 10px;
+}
+
+.tx-composer__key {
+  padding: 0.05rem 0.3rem;
+  border-radius: 4px;
+  color: var(--tx-paper);
+  font-size: 0.64rem;
+  font-weight: 700;
+}
+
+.tx-composer__key--origin {
+  background: var(--tx-go);
+}
+
+.tx-composer__key--destination {
+  background: var(--tx-done);
+}
+
+/* ---------------------------------------------------------------- *
+ * Vung cham tren man hep: moi thu bam duoc >= 40px
+ * ---------------------------------------------------------------- */
+
+@container tx-composer (max-width: 899px) {
+  .tx-composer .tx-btn,
+  .tx-finder__input,
+  .tx-finder__tab {
+    min-height: 2.9rem;
+  }
+
+  /* Ghim nho de khong che ban do, nhung VUNG BAM cua nut ghim du mot dau ngon tay. */
+  .tx-composer .tx-picker__canvas :is(.tx-pin--known, .tx-pin--result) {
+    width: 2.9rem;
+    height: 2.9rem;
+  }
+
+  .tx-finder__panel {
+    max-height: 18rem;
+  }
+
+  .tx-composer__submit {
+    margin-inline: calc(-1 * min(var(--tx-gutter), 0.75rem));
+    border-radius: var(--tx-radius) var(--tx-radius) 0 0;
+  }
+}
+
+@container tx-composer (max-width: 26rem) {
+  .tx-composer__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .tx-ticket__edit {
+    flex-wrap: wrap;
+  }
+}
+
+/* ---------------------------------------------------------------- *
+ * MAN RONG — cot phieu ben trai, ban do dinh ben phai
+ * ---------------------------------------------------------------- */
+
+@container tx-composer (min-width: 900px) {
+  /*
+   * Hang cuoi (`1fr`, toi thieu bang thanh gui) an phan con trong khi ban do cao hon noi dung cot
+   * trai, va giu cho cho thanh gui khi cuon toi cuoi — thanh khong bao gio de len o nhap cuoi cung.
+   */
+  .tx-composer__body {
+    display: grid;
+    grid-template-columns: minmax(340px, 390px) minmax(0, 1fr);
+    grid-template-rows: auto auto auto minmax(var(--tx-composer-submit-h), 1fr);
+    column-gap: var(--tx-space-block);
+    row-gap: 0;
+    align-items: start;
+  }
+
+  /* Nen giay LIEN MACH cho ca cot trai: phieu, thong tin don va thanh gui la mot to phieu. */
+  .tx-composer__body::before {
+    content: '';
+    grid-column: 1;
+    grid-row: 1 / -1;
+    align-self: stretch;
+    background: var(--tx-paper);
+    border-radius: var(--tx-radius);
+    box-shadow: var(--tx-lift-strong);
+  }
+
+  .tx-ticket {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .tx-composer__facts {
+    grid-column: 1;
+    grid-row: 2;
+    border-top: 1px solid var(--tx-line);
+  }
+
+  .tx-ticket,
+  .tx-composer__facts {
+    background: transparent;
+    box-shadow: none;
+    border-radius: 0;
+  }
+
+  .tx-composer__error {
+    grid-column: 1;
+    grid-row: 3;
+    padding: 0 1rem 0.75rem;
+  }
+
+  /*
+   * Thanh gui trai tren CA cot (hang 1 -> cuoi) va neo day: `sticky` cua mot o luoi chi chay trong
+   * o cua no, nen o phai la ca cot thi thanh moi dinh duoc day man hinh khi cot dai hon man hinh.
+   */
+  .tx-composer__submit {
+    grid-column: 1;
+    grid-row: 1 / -1;
+    align-self: end;
+    border-radius: 0 0 var(--tx-radius) var(--tx-radius);
+    box-shadow:
+      0 -1px 0 var(--tx-line),
+      0 -6px 14px rgb(27 26 23 / 5%);
+  }
+
+  /*
+   * Ban do DINH khi trang cuon (cot trai dai hon man hinh): cao bang phan man hinh duoi dau trang.
+   * Ben trong la mot o luoi: ban do phu hang 1–3; the tim (hang 1), the vi tri (hang 2) va nut vi
+   * tri (hang 3) chung COT TRAI, bang trang thai o hang 3 ben phai nut. Hang 1 la `1fr`: the vi tri
+   * mo ra thi the tim NGAN LAI (danh sach cua no tu cuon) — hai the khong bao gio de len nhau.
+   */
+  .tx-composer__stage {
+    grid-column: 2;
+    grid-row: 1 / -1;
+    position: sticky;
+    top: var(--tx-gutter);
+    align-self: start;
+    height: max(34rem, calc(100dvh - 7.6rem - 2 * var(--tx-gutter)));
+    grid-template-columns: min(22rem, calc(100% - 12rem)) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto auto auto auto;
+    grid-template-areas:
+      'finder .'
+      'card .'
+      'locate .'
+      'legend legend'
+      'notice notice';
+  }
+
+  .tx-composer__canvas {
+    grid-row: 1 / 4;
+    grid-column: 1 / -1;
+    height: auto;
+  }
+
+  .tx-composer__finder {
+    position: relative;
+    z-index: 3;
+    align-self: start;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    max-height: calc(100% - 1.35rem);
+    margin: 0.75rem 0 0.6rem 0.75rem;
+  }
+
+  .tx-composer__me {
+    margin: 0 0 0.6rem 0.75rem;
+  }
+
+  .tx-composer__locate-btn {
+    grid-area: locate;
+    margin: 0 0 2rem 0.75rem;
+    box-shadow: var(--tx-lift-strong);
+  }
+
+  /*
+   * Giua-duoi ban do, trai het be ngang nhung CHUA le trai bang nut vi tri (+ khe): canh giua trong
+   * phan con lai, khong bao gio de len nut. Le duoi chua cho ghi nguon nen o goc phai-duoi.
+   */
+  .tx-composer__banner {
+    grid-row: 3;
+    grid-column: 1 / -1;
+    align-self: end;
+    justify-self: center;
+    max-width: 30rem;
+    margin: 0 0.75rem 2rem 10.5rem;
+  }
+
+  .tx-composer__legend {
+    margin-top: 0.5rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tx-ticket__stub {
+    transition: none;
+  }
+
+  .tx-composer__locate-btn[aria-busy='true'] .tx-composer__locate-icon {
+    animation: none;
+    opacity: 0.5;
+  }
+}

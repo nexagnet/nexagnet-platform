@@ -2,35 +2,46 @@
 
 import { useMemo, useState } from 'react';
 import { useTenantRuntime } from '../../../lib/tenant-runtime-context';
-import { DataTable, MetricCard, PageHeader, StatusBadge } from '../components/primitives';
+import { PermissionGate, PermissionNote } from '../components/PermissionGate';
+import {
+  DataTable,
+  MetricCard,
+  PageHeader,
+  StatusBadge,
+  type DataColumn,
+} from '../components/primitives';
 import { EmptyState, ErrorState, LoadingState } from '../components/SectionState';
-import { EMPTY_VALUE } from '../customer-view';
-import { buildSectionUrl } from '../navigation';
+import { EMPTY_VALUE, formatBusinessDate } from '../customer-view';
+import { buildSectionUrl, findSection } from '../navigation';
 import {
   toSectionQuery,
   useApByFlow,
   useArAging,
   useCustomers,
-  useDirectMarginRollup,
+  useFinanceMargin,
   useNavigationInput,
   usePartnerPosition,
   usePartners,
-  useTripDirectMargin,
-  useTrips,
 } from '../hooks/useTransportWorkspace';
+import { canPerform } from '../transport-actions';
 import { SETTLEMENT_FLOWS, type SettlementFlow } from '../transport-types';
 import {
-  REVENUE_MISSING_NOTE,
-  ROLLUP_BATCH_LIMIT,
+  filterMarginRows,
+  marginFilterOptions,
+  toMarginRow,
+  toMarginTotals,
+  type MarginFilter,
+  type MarginRowModel,
+} from '../workspace/company-margin';
+import {
   toApFlow,
   toArAging,
-  toDirectMargin,
-  toDirectMarginRollup,
   toPartnerPosition,
   toSettlementDirectory,
 } from '../workspace/settlement';
 import { businessTodayIn } from './business-today';
 import { useCustomerArBook } from './customer-ar-book';
+import { MarginNotes, MarginSourceSplit } from './CompanyMarginParts';
 import { CustomerArWorkspace } from './CustomerArWorkspace';
 
 /**
@@ -60,7 +71,7 @@ function useSettlementDirectory() {
 }
 
 /* ------------------------------------------------------------------ *
- * Cong no & quyet toan — tuoi no phai thu
+ * Phai thu khach hang — tuoi no phai thu (ten cu: Cong no & quyet toan)
  * ------------------------------------------------------------------ */
 
 /**
@@ -101,6 +112,13 @@ export function SettlementView() {
 
   const model = toArAging(aging.data ?? null, directory);
   const arBook = book.model;
+  /**
+   * `#395` — BANG TUOI NO la bao cao quyet toan (`transport.settlement.report.read`), PHAN PHU cua
+   * man nay: nguoi duoc cap nhom Ke toan nhung chua duoc xem bao cao van lam viec voi so doi soat
+   * ben duoi. Thieu quyen thi hai the dau, cau tom tat va bang tuoi no nhuong cho mot cau noi ro —
+   * KHONG con "Không có chứng từ nào còn nợ tính đến —." (cau sai do chay that bat duoc).
+   */
+  const canReadAging = canPerform(navigation, 'transport.settlement.report.read');
   /** Chi khi co DUNG MOT so tien te thi cac con so dau trang moi cong chung duoc (`GD-15`). */
   const singleLedger =
     arBook !== null && arBook.combinedTotalsAllowed ? (arBook.currencyGroups[0] ?? null) : null;
@@ -108,14 +126,22 @@ export function SettlementView() {
   return (
     <>
       <PageHeader
-        title="Công nợ & quyết toán"
+        /*
+         * Ten trang = nhan o danh muc (#341). Hai lien ket duoi LAY NHAN tu chinh danh muc: muc kia
+         * doi ten thi cau nay doi theo, khong con mot ban chep tay `AR/AP` nao de lech.
+         */
+        title="Phải thu khách hàng"
         summary="Tiền khách hàng nợ công ty: ai nợ, nợ bao nhiêu, quá hạn bao lâu — và việc kế toán phải làm để thu về."
         context={
           <p className="tx-note">
             Màn này giữ <strong>một dòng tiền: cước khách hàng</strong>. Ba dòng phải trả — nhà xe,
-            hoa hồng nguồn đơn, cây xăng — đọc ở <a href={buildSectionUrl('ar-ap')}>AR/AP</a>; tiền
-            đã ra với lái xe ở <a href={buildSectionUrl('driver-settlement')}>Quyết toán lái xe</a>.
-            Năm dòng không cộng chung.
+            hoa hồng nguồn đơn, cây xăng — đọc ở{' '}
+            <a href={buildSectionUrl('ar-ap')}>{findSection('ar-ap')?.label}</a>; tiền đã ra với lái
+            xe ở{' '}
+            <a href={buildSectionUrl('driver-settlement')}>
+              {findSection('driver-settlement')?.label}
+            </a>
+            . Năm dòng không cộng chung.
           </p>
         }
       />
@@ -157,6 +183,11 @@ export function SettlementView() {
         </div>
       </form>
 
+      <PermissionNote
+        viewer={navigation}
+        actions={['transport.customer.read', 'transport.partner.read', 'transport.order.read']}
+      />
+
       {aging.errorMessage === null ? null : (
         <ErrorState message={aging.errorMessage} onRetry={aging.refetch} />
       )}
@@ -170,8 +201,12 @@ export function SettlementView() {
         nao chua thanh cong no, va tien nao da ve ma chua tru vao dau.
       */}
       <section className="tx-cards tx-cards--lead" aria-label="Tiền khách đang nợ">
-        <MetricCard label="Tổng còn nợ" value={model.outstandingLabel} />
-        <MetricCard label="Trong đó quá hạn" value={model.overdueLabel} tone="stop" />
+        {canReadAging ? (
+          <>
+            <MetricCard label="Tổng còn nợ" value={model.outstandingLabel} />
+            <MetricCard label="Trong đó quá hạn" value={model.overdueLabel} tone="stop" />
+          </>
+        ) : null}
         <MetricCard
           label="Chờ đối soát"
           value={arBook?.pendingAmountLabel ?? EMPTY_VALUE}
@@ -186,45 +221,51 @@ export function SettlementView() {
         />
       </section>
 
-      <p className="tx-note" role="status">
-        {model.headline}
-      </p>
+      {canReadAging ? (
+        <>
+          <p className="tx-note" role="status">
+            {model.headline}
+          </p>
 
-      <section className="tx-cards tx-cards--quiet" aria-label="Chia theo tuổi nợ">
-        {model.buckets.map((bucket) => (
-          <MetricCard key={bucket.bucket} label={bucket.label} value={bucket.amountLabel} />
-        ))}
-      </section>
+          <section className="tx-cards tx-cards--quiet" aria-label="Chia theo tuổi nợ">
+            {model.buckets.map((bucket) => (
+              <MetricCard key={bucket.bucket} label={bucket.label} value={bucket.amountLabel} />
+            ))}
+          </section>
 
-      {model.rows.length === 0 && !aging.isLoading ? (
-        <EmptyState title={`Không có chứng từ nào còn nợ tính đến ${model.asOfLabel}.`} />
+          {model.rows.length === 0 && !aging.isLoading ? (
+            <EmptyState title={`Không có chứng từ nào còn nợ tính đến ${model.asOfLabel}.`} />
+          ) : (
+            <DataTable
+              caption={`Chứng từ còn nợ tính đến ${model.asOfLabel}`}
+              rows={model.rows}
+              rowKey={(row) => row.documentId}
+              columns={[
+                {
+                  key: 'customer',
+                  header: 'Khách hàng',
+                  isRowHeader: true,
+                  render: (row) => row.counterpartyLabel,
+                },
+                { key: 'date', header: 'Ngày chứng từ', render: (row) => row.businessDateLabel },
+                { key: 'due', header: 'Hạn thanh toán', render: (row) => row.dueDateLabel },
+                {
+                  key: 'amount',
+                  header: 'Còn nợ',
+                  isNumeric: true,
+                  render: (row) => row.outstandingLabel,
+                },
+                {
+                  key: 'bucket',
+                  header: 'Tuổi nợ',
+                  render: (row) => <StatusBadge label={row.bucketLabel} tone={row.tone} />,
+                },
+              ]}
+            />
+          )}
+        </>
       ) : (
-        <DataTable
-          caption={`Chứng từ còn nợ tính đến ${model.asOfLabel}`}
-          rows={model.rows}
-          rowKey={(row) => row.documentId}
-          columns={[
-            {
-              key: 'customer',
-              header: 'Khách hàng',
-              isRowHeader: true,
-              render: (row) => row.counterpartyLabel,
-            },
-            { key: 'date', header: 'Ngày chứng từ', render: (row) => row.businessDateLabel },
-            { key: 'due', header: 'Hạn thanh toán', render: (row) => row.dueDateLabel },
-            {
-              key: 'amount',
-              header: 'Còn nợ',
-              isNumeric: true,
-              render: (row) => row.outstandingLabel,
-            },
-            {
-              key: 'bucket',
-              header: 'Tuổi nợ',
-              render: (row) => <StatusBadge label={row.bucketLabel} tone={row.tone} />,
-            },
-          ]}
-        />
+        <PermissionGate viewer={navigation} action="transport.settlement.report.read" />
       )}
 
       {/*
@@ -268,7 +309,7 @@ export function SettlementView() {
 }
 
 /* ------------------------------------------------------------------ *
- * AR/AP — nam dong giu RIENG
+ * Phai tra doi tac & cay xang — ba dong phai tra giu RIENG (ten cu: AR/AP)
  * ------------------------------------------------------------------ */
 
 function ApFlowPanel({ flow }: { readonly flow: SettlementFlow }) {
@@ -377,17 +418,30 @@ function PartnerPositionPanel() {
 }
 
 export function ArApView() {
+  const navigation = useNavigationInput();
   return (
     <>
       <PageHeader
-        title="AR/AP"
-        summary="Tuổi nợ phải thu và phải trả theo từng đối tác."
+        /*
+         * KHONG con "tuoi no phai thu" o tom tat (#341): man nay khong co bang tuoi no cua khach nao.
+         * Va la BA dong phai tra chu khong phai bon — dong thu tu cua `SETTLEMENT_FLOWS` la cuoc
+         * khach hang, bi loc ra ngay ben duoi.
+         */
+        title="Phải trả đối tác & cây xăng"
+        summary="Công ty còn nợ ai — cây xăng, nhà xe, hoa hồng nguồn đơn — theo từng đối tác, cùng vị thế hai chiều của một đối tác."
         context={
           <p className="tx-note">
-            Bốn dòng tiền phải trả được giữ riêng, không cộng chung: một đối tác có thể vừa là nhà
-            xe vừa là nguồn đơn, nên khoá phân biệt là vai chứ không phải đối tác.
+            Ba dòng tiền phải trả được giữ riêng, không cộng chung: một đối tác có thể vừa là nhà xe
+            vừa là nguồn đơn, nên khoá phân biệt là vai chứ không phải đối tác. Tiền khách hàng nợ
+            công ty đọc ở{' '}
+            <a href={buildSectionUrl('settlement')}>{findSection('settlement')?.label}</a>.
           </p>
         }
+      />
+      {/* `#395` — ten doi tac, khach la danh ba RIENG: thieu quyen thi noi ra, khong in `id`. */}
+      <PermissionNote
+        viewer={navigation}
+        actions={['transport.partner.read', 'transport.customer.read']}
       />
       <PartnerPositionPanel />
       {SETTLEMENT_FLOWS.filter((flow) => flow !== 'CUSTOMER_FREIGHT').map((flow) => (
@@ -398,114 +452,177 @@ export function ArApView() {
 }
 
 /* ------------------------------------------------------------------ *
- * Bien truc tiep
+ * Hieu qua tung chuyen — `#381`/`#385`: chuyen cu CONG don theo vong xe
  * ------------------------------------------------------------------ */
 
+/**
+ * HIEU QUA — cho giam doc/ke toan doc NGAY: tong, doanh thu den tu nguon nao, dieu gi lam tong chua
+ * du, roi tung don/chuyen kem nguon cua con so.
+ *
+ * Ban cu chon "tung chuyen" bang `useTrips` roi goi route cong don theo lo `tripId`: don giao theo vong
+ * xe khong bao gio hien ra (`#381`), va trinh duyet quyet tap nao duoc cong. Gio MOT lan doc
+ * `GET /transport/finance/margin`: dong va tong deu cua may chu, cung ham gop voi `Tổng hợp tài chính`.
+ */
 export function MarginView() {
   const navigation = useNavigationInput();
-  const trips = toSectionQuery(useTrips(navigation));
-  const [tripId, setTripId] = useState<string | null>(null);
+  const margin = toSectionQuery(useFinanceMargin(navigation));
+  const [filter, setFilter] = useState<MarginFilter>('ALL');
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
 
-  // Cong don chay tren DUNG danh sach chuyen dang xem. Tran mot lo la cua may chu (route cong don
-  // lap tung chuyen); o day chi lay lo dau, va cau duoi NOI RA dieu do thay vi im lang cat bot.
-  const tripIds = useMemo(
-    () => (trips.data ?? []).map((trip) => trip.id).slice(0, ROLLUP_BATCH_LIMIT),
-    [trips.data],
-  );
-  const rollup = toSectionQuery(useDirectMarginRollup(navigation, tripIds));
-  const margin = toSectionQuery(useTripDirectMargin(navigation, tripId));
-
-  const rollupModel = toDirectMarginRollup(rollup.data ?? null);
-  const marginModel = toDirectMargin(margin.data ?? null);
-  const totalTrips = (trips.data ?? []).length;
+  const totals = margin.data === undefined ? null : toMarginTotals(margin.data.totals);
+  const allRows = useMemo(() => margin.data?.rows ?? [], [margin.data]);
+  const rows = useMemo(() => filterMarginRows(allRows, filter).map(toMarginRow), [allRows, filter]);
+  const selected = rows.find((row) => row.key === selectedKey) ?? null;
 
   return (
     <>
       <PageHeader
-        title="Biên trực tiếp"
-        summary="Doanh thu trừ chi phí trực tiếp của từng chuyến — chưa gồm chi phí cố định."
+        title="Hiệu quả từng chuyến"
+        summary="Mỗi đơn giao theo vòng xe và mỗi chuyến cũ là một dòng: doanh thu, chi phí trực tiếp và biên. Tổng do máy chủ cộng, chưa gồm chi phí cố định."
+        context={
+          margin.data === undefined
+            ? undefined
+            : `Số liệu ngày ${formatBusinessDate(margin.data.generatedFor)}`
+        }
       />
 
-      {rollup.errorMessage === null ? null : (
-        <ErrorState message={rollup.errorMessage} onRetry={rollup.refetch} />
+      {margin.errorMessage === null ? null : (
+        <ErrorState message={margin.errorMessage} onRetry={margin.refetch} />
       )}
-      {rollup.isLoading ? <LoadingState label="Đang cộng dồn biên trực tiếp…" /> : null}
+      {margin.isLoading ? <LoadingState label="Đang cộng doanh thu và biên…" /> : null}
 
-      {rollupModel === null ? null : (
+      {totals === null ? null : (
         <section className="tx-panel" aria-label="Cộng dồn biên trực tiếp">
-          <h2>Cộng dồn</h2>
-          <div className="tx-cards">
-            <MetricCard label="Doanh thu" value={rollupModel.revenueLabel} />
-            <MetricCard label="Trừ chi phí trực tiếp" value={rollupModel.deductionLabel} />
+          <h2>Toàn công ty</h2>
+          <div className="tx-cards tx-cards--lead">
+            <MetricCard label="Doanh thu" value={totals.revenueLabel} />
+            <MetricCard label="Chi phí trực tiếp" value={totals.deductionLabel} />
             <MetricCard
               label="Biên trực tiếp"
-              value={rollupModel.marginLabel}
-              hint={rollupModel.disclosure}
+              value={totals.marginLabel}
+              hint={totals.disclosure}
+              tone={totals.isNegative ? 'stop' : undefined}
             />
-            <MetricCard label="Tỷ suất" value={rollupModel.marginRateLabel} />
+            <MetricCard label="Tỷ suất biên" value={totals.rateLabel} />
           </div>
-          <p className="tx-note">{rollupModel.coverageNote}</p>
-          {totalTrips > tripIds.length ? (
-            <p className="tx-note tx-note--warn">
-              Đang cộng trên {tripIds.length} chuyến đầu tiên trong {totalTrips} chuyến đang xem.
-            </p>
-          ) : null}
+          <p className="tx-note">{totals.coverage}</p>
+          <MarginSourceSplit sources={totals.sources} />
+          <MarginNotes notes={totals.notes} />
         </section>
       )}
 
-      <section className="tx-panel" aria-label="Biên của một chuyến">
-        <h2>Theo từng chuyến</h2>
-        <label className="tx-field">
-          <span>Chuyến</span>
-          <select
-            aria-label="Chuyến"
-            value={tripId ?? ''}
-            onChange={(event) => setTripId(event.target.value === '' ? null : event.target.value)}
-          >
-            <option value="">Chọn một chuyến</option>
-            {(trips.data ?? []).map((trip) => (
-              <option key={trip.id} value={trip.id}>
-                {trip.code} · {trip.originLabel} → {trip.destinationLabel}
-              </option>
+      {margin.data === undefined ? null : (
+        <section className="tx-panel" aria-label="Từng đơn và chuyến">
+          <h2>Từng đơn và chuyến</h2>
+          <p className="tx-panel__lead">
+            Mới nhất trước. Đơn giao theo vòng xe hiện bằng mã đơn, kèm mã vòng xe đã chạy nó. Bấm
+            một dòng để xem con số đến từ sổ nào.
+          </p>
+          <div className="tx-tabs" role="group" aria-label="Lọc theo nguồn">
+            {marginFilterOptions(allRows).map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                className="tx-tab"
+                aria-pressed={filter === option.value}
+                onClick={() => {
+                  setFilter(option.value);
+                  setSelectedKey(null);
+                }}
+              >
+                {option.label}
+              </button>
             ))}
-          </select>
-        </label>
+          </div>
+          {rows.length === 0 ? (
+            <EmptyState title="Chưa có đơn hay chuyến nào có doanh thu." />
+          ) : (
+            <DataTable<MarginRowModel>
+              caption="Hiệu quả từng đơn và chuyến"
+              rows={rows}
+              rowKey={(row) => row.key}
+              selectedKey={selectedKey}
+              onSelect={(row) => setSelectedKey(row.key)}
+              onShowAll={() => setSelectedKey(null)}
+              columns={MARGIN_COLUMNS}
+            />
+          )}
+        </section>
+      )}
 
-        {margin.isLoading ? <LoadingState label="Đang đọc biên của chuyến…" /> : null}
-        {margin.errorMessage === null ? null : (
-          <ErrorState message={margin.errorMessage} onRetry={margin.refetch} />
-        )}
-
-        {marginModel === null ? (
-          tripId === null ? (
-            <EmptyState title="Chọn một chuyến để xem biên trực tiếp." />
-          ) : null
-        ) : (
-          <>
-            <div className="tx-cards">
-              <MetricCard label="Loại chuyến" value={marginModel.tripKindLabel} />
-              <MetricCard label="Doanh thu" value={marginModel.revenueLabel} />
-              <MetricCard label="Chi phí trực tiếp" value={marginModel.directCostLabel} />
-              <MetricCard label="Cước nhà xe" value={marginModel.carrierPayableLabel} />
-              <MetricCard label="Hoa hồng nguồn đơn" value={marginModel.commissionLabel} />
-              <MetricCard
-                label="Biên trực tiếp"
-                value={marginModel.marginLabel}
-                hint={marginModel.disclosure}
-              />
-              <MetricCard label="Tỷ suất" value={marginModel.marginRateLabel} />
-            </div>
-            {marginModel.isRevenueMissing ? (
-              <p className="tx-note tx-note--warn">{REVENUE_MISSING_NOTE}</p>
-            ) : null}
-            {marginModel.inconsistencyNote === null ? null : (
-              <p className="tx-note tx-note--warn" role="alert">
-                {marginModel.inconsistencyNote}
-              </p>
-            )}
-          </>
-        )}
-      </section>
+      {selected === null ? null : (
+        <MarginRowDetail row={selected} disclosure={totals?.disclosure} />
+      )}
     </>
+  );
+}
+
+const MARGIN_COLUMNS: readonly DataColumn<MarginRowModel>[] = [
+  {
+    key: 'code',
+    header: 'Mã',
+    isRowHeader: true,
+    render: (row) => (
+      <span className="tx-margin__code">
+        <span>{row.code}</span>
+        <span className="tx-margin__context">{row.context}</span>
+      </span>
+    ),
+  },
+  {
+    key: 'source',
+    header: 'Nguồn',
+    render: (row) => <StatusBadge label={row.sourceLabel} tone={row.sourceTone} />,
+  },
+  { key: 'date', header: 'Ngày', render: (row) => row.dateLabel },
+  { key: 'route', header: 'Tuyến', render: (row) => row.routeLabel },
+  { key: 'revenue', header: 'Doanh thu', isNumeric: true, render: (row) => row.revenueLabel },
+  { key: 'cost', header: 'Chi phí', isNumeric: true, render: (row) => row.costLabel },
+  {
+    key: 'margin',
+    header: 'Biên',
+    isNumeric: true,
+    render: (row) => (
+      <span className={row.isNegative ? 'tx-amount--out' : undefined}>{row.marginLabel}</span>
+    ),
+  },
+  { key: 'rate', header: 'Tỷ suất', isNumeric: true, render: (row) => row.rateLabel },
+  {
+    key: 'flag',
+    header: 'Ghi chú',
+    render: (row) =>
+      row.flag === null ? EMPTY_VALUE : <StatusBadge label={row.flag.label} tone={row.flag.tone} />,
+  },
+];
+
+/** NGUON CUA CON SO cua mot dong: tung khoan, kem so cai no den tu. */
+function MarginRowDetail({
+  row,
+  disclosure,
+}: {
+  readonly row: MarginRowModel;
+  readonly disclosure: string | undefined;
+}) {
+  return (
+    <section className="tx-detail" aria-label={`Nguồn con số ${row.code}`}>
+      <div className="tx-detail__head">
+        <div>
+          <h2>{row.code}</h2>
+          <p>{row.detail.title}</p>
+        </div>
+        <StatusBadge label={row.sourceLabel} tone={row.sourceTone} />
+      </div>
+      <dl className="tx-costlines">
+        {row.detail.lines.map((line) => (
+          <div key={line.label} className="tx-costlines__row">
+            <dt>{line.label}</dt>
+            <dd className="tx-costlines__value">{line.value}</dd>
+            <dd className="tx-costlines__source">{line.source}</dd>
+          </div>
+        ))}
+      </dl>
+      {disclosure === undefined ? null : <p className="tx-note">{disclosure}</p>}
+      <MarginNotes notes={row.detail.notes} />
+    </section>
   );
 }

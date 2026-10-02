@@ -1,0 +1,168 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 980 668" width="980" height="668" font-family="Segoe UI, Arial, Helvetica, sans-serif" role="img" aria-labelledby="t d">
+  <title id="t">Một đơn hàng đi qua công ty</title>
+  <desc id="d">Ba dòng: vận hành (đơn, vòng xe, chặng, mốc hiện trường, giao xong), tiền thu (kết thúc đơn, đối soát, tiền về, gắn tiền vào nợ) và nhiên liệu với hai đường tiền tách riêng.</desc>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10z" fill="#7d858b"/>
+    </marker>
+    <style>
+      .lane{font-size:15px;font-weight:700;fill:#1f2a30}
+      .lane-sub{font-size:12.5px;fill:#5d666c}
+      .h{font-size:14.5px;font-weight:700;fill:#1f2a30}
+      .h2{font-size:13px;font-weight:700;fill:#1f2a30}
+      .b{font-size:12.5px;fill:#3b454b}
+      .who{font-size:11.5px;font-weight:600}
+      .box{fill:#fff;stroke-width:1.4}
+      .ln{stroke:#7d858b;stroke-width:1.6;fill:none;marker-end:url(#a)}
+      .vp{fill:#1f5566}.lx{fill:#b0661a}.kt{fill:#56652a}.ht{fill:#6d7277}
+    </style>
+  </defs>
+
+  <rect x="0.5" y="0.5" width="979" height="667" rx="14" fill="#faf8f4" stroke="#ddd6ca"/>
+
+  <!-- ============ 1. VAN HANH ============ -->
+  <text class="lane" x="24" y="32">1. Vận hành</text>
+  <text class="lane-sub" x="118" y="32">đơn đi qua xe và hiện trường</text>
+
+  <!-- B1 Don hang -->
+  <rect class="box" x="24" y="48" width="172" height="98" rx="8" stroke="#1f5566"/>
+  <rect x="24" y="48" width="6" height="98" rx="3" class="vp"/>
+  <text class="h" x="40" y="72">Đơn hàng</text>
+  <text class="b" x="40" y="93">Điểm lấy và điểm giao</text>
+  <text class="b" x="40" y="110">chọn trên bản đồ</text>
+  <text class="who vp" x="40" y="135">Văn phòng</text>
+
+  <!-- B2 Vong xe -->
+  <rect class="box" x="214" y="48" width="172" height="98" rx="8" stroke="#1f5566"/>
+  <rect x="214" y="48" width="6" height="98" rx="3" class="vp"/>
+  <text class="h" x="230" y="72">Vòng xe</text>
+  <text class="b" x="230" y="93">Chọn xe; hệ thống lập</text>
+  <text class="b" x="230" y="110">chặng, giao lái xe của xe</text>
+  <text class="who vp" x="230" y="135">Văn phòng</text>
+
+  <!-- B3 Chang -->
+  <rect class="box" x="404" y="48" width="172" height="46" rx="8" stroke="#6d7277" stroke-dasharray="4 3"/>
+  <text class="h2" x="418" y="67">Chặng rỗng</text>
+  <text class="b" x="418" y="84">Bãi xe → điểm lấy</text>
+  <rect class="box" x="404" y="100" width="172" height="46" rx="8" stroke="#6d7277" stroke-dasharray="4 3"/>
+  <text class="h2" x="418" y="119">Chặng có hàng</text>
+  <text class="b" x="418" y="136">Điểm lấy → điểm giao</text>
+
+  <!-- B4 Moc hien truong -->
+  <rect class="box" x="594" y="48" width="172" height="98" rx="8" stroke="#b0661a"/>
+  <rect x="594" y="48" width="6" height="98" rx="3" class="lx"/>
+  <text class="h" x="610" y="72">Mốc hiện trường</text>
+  <text class="b" x="610" y="93">Tới điểm lấy, rời điểm,</text>
+  <text class="b" x="610" y="110">khách nhận, biên nhận</text>
+  <text class="who lx" x="610" y="135">Lái xe (điện thoại)</text>
+
+  <!-- B5 Giao xong -->
+  <rect class="box" x="784" y="48" width="172" height="98" rx="8" stroke="#1f5566"/>
+  <rect x="784" y="48" width="6" height="98" rx="3" class="vp"/>
+  <text class="h" x="800" y="72">Giao xong</text>
+  <text class="b" x="800" y="93">Văn phòng tiến chặng,</text>
+  <text class="b" x="800" y="110">xác nhận đơn đã giao</text>
+  <text class="who vp" x="800" y="135">Văn phòng</text>
+
+  <path class="ln" d="M196 97H212"/>
+  <path class="ln" d="M386 97H402"/>
+  <path class="ln" d="M576 97H592"/>
+  <path class="ln" d="M766 97H782"/>
+
+  <!-- He thong tu dong vong xe -->
+  <rect x="214" y="160" width="552" height="34" rx="8" fill="#f1efea" stroke="#6d7277" stroke-dasharray="4 3"/>
+  <text class="b" x="228" y="182"><tspan class="who ht">Hệ thống</tspan> tự đóng vòng xe khi xe về bãi, hoặc 12 giờ sau chặng cuối</text>
+
+  <!-- noi sang dong 2 -->
+  <path class="ln" d="M870 146V212H40V252"/>
+
+  <!-- ============ 2. TIEN THU ============ -->
+  <text class="lane" x="60" y="240">2. Tiền thu</text>
+  <text class="lane-sub" x="148" y="240">từ giao xong tới tiền về — tách khỏi việc đóng vòng xe</text>
+
+  <rect class="box" x="24" y="256" width="212" height="86" rx="8" stroke="#56652a"/>
+  <rect x="24" y="256" width="6" height="86" rx="3" class="kt"/>
+  <text class="h" x="40" y="280">Kết thúc đơn</text>
+  <text class="b" x="40" y="300">Đối chiếu chứng từ giao</text>
+  <text class="b" x="40" y="317">hàng, bấm “Đã kết thúc”</text>
+  <text class="who kt" x="40" y="335">Kế toán</text>
+
+  <rect class="box" x="264" y="256" width="212" height="86" rx="8" stroke="#56652a"/>
+  <rect x="264" y="256" width="6" height="86" rx="3" class="kt"/>
+  <text class="h" x="280" y="280">Đối soát với khách</text>
+  <text class="b" x="280" y="300">Chốt số — thành khoản</text>
+  <text class="b" x="280" y="317">phải thu có hạn thanh toán</text>
+  <text class="who kt" x="280" y="335">Kế toán</text>
+
+  <rect class="box" x="504" y="256" width="212" height="86" rx="8" stroke="#56652a"/>
+  <rect x="504" y="256" width="6" height="86" rx="3" class="kt"/>
+  <text class="h" x="520" y="280">Tiền về</text>
+  <text class="b" x="520" y="300">Ghi nhận tiền khách trả</text>
+  <text class="b" x="520" y="317">(tiền nhận trước)</text>
+  <text class="who kt" x="520" y="335">Kế toán</text>
+
+  <rect class="box" x="744" y="256" width="212" height="86" rx="8" stroke="#56652a"/>
+  <rect x="744" y="256" width="6" height="86" rx="3" class="kt"/>
+  <text class="h" x="760" y="280">Gắn tiền vào nợ</text>
+  <text class="b" x="760" y="300">Đến bước này khoản</text>
+  <text class="b" x="760" y="317">phải thu mới giảm</text>
+  <text class="who kt" x="760" y="335">Kế toán</text>
+
+  <path class="ln" d="M236 299H262"/>
+  <path class="ln" d="M476 299H502"/>
+  <path class="ln" d="M716 299H742"/>
+
+  <!-- ============ 3. NHIEN LIEU ============ -->
+  <text class="lane" x="24" y="386">3. Nhiên liệu</text>
+  <text class="lane-sub" x="128" y="386">hai đường tiền, không trộn vào nhau</text>
+
+  <rect class="box" x="24" y="402" width="206" height="150" rx="8" stroke="#b0661a"/>
+  <rect x="24" y="402" width="6" height="150" rx="3" class="lx"/>
+  <text class="h" x="40" y="428">Phiếu đổ dầu</text>
+  <text class="b" x="40" y="450">Lái xe khai trên vòng xe</text>
+  <text class="b" x="40" y="467">đang chạy: số lít, số tiền,</text>
+  <text class="b" x="40" y="484">ảnh phiếu, và ai trả tiền</text>
+  <text class="who lx" x="40" y="538">Lái xe</text>
+
+  <!-- duong a: tien mat -->
+  <rect class="box" x="264" y="402" width="196" height="66" rx="8" stroke="#b0661a"/>
+  <text class="h2" x="278" y="428">Lái xe trả tiền mặt</text>
+  <text class="b" x="278" y="449">tiền túi của lái xe</text>
+  <rect class="box" x="490" y="402" width="210" height="66" rx="8" stroke="#56652a"/>
+  <text class="h2" x="504" y="428">Kế toán xác thực phiếu</text>
+  <text class="b" x="504" y="449">đối chiếu ảnh và số liệu</text>
+  <rect class="box" x="730" y="402" width="226" height="66" rx="8" stroke="#56652a"/>
+  <text class="h2" x="744" y="428">Ghi vào quỹ lái xe</text>
+  <text class="b" x="744" y="449">chi quá tạm ứng thì công ty hoàn</text>
+
+  <!-- duong b: ghi no cay xang -->
+  <rect class="box" x="264" y="486" width="196" height="66" rx="8" stroke="#b0661a"/>
+  <text class="h2" x="278" y="512">Ghi nợ cây xăng</text>
+  <text class="b" x="278" y="533">cây xăng cho công ty nợ</text>
+  <rect class="box" x="490" y="486" width="210" height="66" rx="8" stroke="#56652a"/>
+  <text class="h2" x="504" y="512">Xác thực → đối soát</text>
+  <text class="b" x="504" y="533">khớp với bảng kê cây xăng</text>
+  <rect class="box" x="730" y="486" width="226" height="66" rx="8" stroke="#56652a"/>
+  <text class="h2" x="744" y="512">Phải trả cây xăng</text>
+  <text class="b" x="744" y="533">chỉ ghi khi kế toán đóng kỳ</text>
+
+  <path class="ln" d="M230 435H262"/>
+  <path class="ln" d="M230 519H262"/>
+  <path class="ln" d="M460 435H488"/>
+  <path class="ln" d="M460 519H488"/>
+  <path class="ln" d="M700 435H728"/>
+  <path class="ln" d="M700 519H728"/>
+
+  <rect x="264" y="568" width="692" height="46" rx="8" fill="#f3f4ec" stroke="#56652a" stroke-dasharray="4 3"/>
+  <text class="b" x="278" y="587"><tspan class="who kt">Kế toán</tspan> phân bổ tiền dầu vào đơn hoặc vòng xe → thành chi phí trực tiếp, trừ vào biên.</text>
+  <text class="b" x="278" y="604">Chưa phân bổ thì màn hiệu quả ghi rõ “Dầu chưa phân bổ”, không coi là không tốn dầu.</text>
+  <path class="ln" d="M127 552V591H262"/>
+
+  <!-- chu giai -->
+  <g transform="translate(24 640)">
+    <rect width="12" height="12" rx="2" class="vp"/><text class="b" x="18" y="10.5">Văn phòng điều hành</text>
+    <rect x="170" width="12" height="12" rx="2" class="lx"/><text class="b" x="188" y="10.5">Lái xe</text>
+    <rect x="258" width="12" height="12" rx="2" class="kt"/><text class="b" x="276" y="10.5">Kế toán</text>
+    <rect x="352" width="12" height="12" rx="2" fill="none" stroke="#6d7277" stroke-dasharray="3 2"/><text class="b" x="370" y="10.5">Hệ thống tự làm</text>
+  </g>
+</svg>

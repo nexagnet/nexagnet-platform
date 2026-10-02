@@ -8,7 +8,8 @@ import { mockLifecycle } from './lifecycle-server';
  * KIEM DIEU GI
  *
  *   1. Lai xe co VIEC DUOC DIEU (vong xe) ma KHONG co chuyen cu: khai duoc phieu; than yeu cau mang
- *      `runId`/`legId` va KHONG mang `tripId`/`vehicleId`/`driverId`; tien mat lai xe ung bi khoa.
+ *      `runId`/`legId` va KHONG mang `tripId`/`vehicleId`/`driverId`. Tien mat lai xe ung CHON DUOC
+ *      tren vong xe (`#380`, khop `#369` R-4) — khong con nhan "chỉ chuyến cũ".
  *   2. Khong vong xe, khong chuyen cu: man hinh noi ro chua khai duoc — khong bia ngu canh.
  *   3. Ke toan thay phieu KHONG chuyen trong hop thu, loc duoc theo MA VONG XE, va phan bo gia thanh
  *      o mot khoi RIENG — lenh ghi duy nhat la lenh phan bo, khong cham phieu.
@@ -50,7 +51,7 @@ const RUN = {
 };
 
 test.describe('lai xe — khai phieu theo viec duoc dieu (#364)', () => {
-  test('co vong xe, khong chuyen cu: than yeu cau theo vong xe, tien mat ung bi khoa', async ({
+  test('co vong xe, khong chuyen cu: than yeu cau theo vong xe, tien mat ung CHON DUOC', async ({
     page,
   }) => {
     const state = await mockLifecycle(page, 'SALE');
@@ -66,11 +67,13 @@ test.describe('lai xe — khai phieu theo viec duoc dieu (#364)', () => {
     await page.goto('/?surface=driver&screen=fuel');
     const slipForm = page.getByRole('region', { name: 'Ghi phiếu đổ nhiên liệu' });
     await expect(slipForm.getByText('Vòng xe RUN-364 · xe 29H-152.44')).toBeVisible();
-    // Thuoc tinh DOM chu khong `toBeDisabled()`: Playwright 1.62 bao `<option disabled>` la "enabled".
-    await expect(slipForm.getByRole('option', { name: /chỉ chuyến cũ/ })).toHaveJSProperty(
-      'disabled',
-      true,
-    );
+    // `#380` — thuoc tinh DOM chu khong `toBeEnabled()`: Playwright 1.62 doc sai `<option disabled>`.
+    await expect(slipForm.getByRole('option', { name: /chỉ chuyến cũ/ })).toHaveCount(0);
+    await expect(
+      slipForm.getByRole('option', { name: 'Lái xe trả tiền mặt', exact: true }),
+    ).toHaveJSProperty('disabled', false);
+    await slipForm.getByLabel('Thanh toán').selectOption('DRIVER_CASH');
+    await expect(slipForm.getByRole('note')).toContainText('trừ vào quỹ lái xe');
 
     await slipForm.getByLabel('Chặng').selectOption('leg-2');
     await slipForm.getByLabel('Cây xăng').selectOption({ label: 'Petrolimex Cầu Giấy' });
@@ -89,7 +92,7 @@ test.describe('lai xe — khai phieu theo viec duoc dieu (#364)', () => {
       runId: 'run-1',
       legId: 'leg-2',
       supplierId: 'sup-1',
-      paymentMethod: 'SUPPLIER_ACCOUNT',
+      paymentMethod: 'DRIVER_CASH',
     });
     for (const forbidden of ['tripId', 'vehicleId', 'driverId']) {
       expect(bodies[0]).not.toHaveProperty(forbidden);

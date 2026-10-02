@@ -1,0 +1,41 @@
+/*
+ * ===========================================================================
+ * KHUNG NEN BAN DO (#374) — rieng cho `TransportMap`, nam canh component.
+ *
+ * `.tx-map` (khung, vien, chieu cao hep o man nho) van o `transport-operations.css`. Tep nay chi
+ * them hai thu ma nen Google can: mot the chua PHU KIN khung de Google do kich thuoc, va mot dong
+ * trang thai de len khung trong luc Google dang tai.
+ *
+ * Khong mot quy tac nao o day cham vao `.gm-style` hay logo/ghi nguon cua Google: `#374` §6 cam
+ * che chung bang CSS.
+ */
+
+.tx-map-frame {
+  position: relative;
+}
+
+/* Google do kich thuoc the chua luc khoi tao — the phai co kich thuoc TRUOC khi `new Map()`. */
+.tx-map__canvas {
+  position: absolute;
+  inset: 0;
+}
+
+/*
+ * Dong trang thai nam NGOAI `role="img"`: con cua mot `img` la trinh bay thuan, trinh doc man hinh
+ * se khong doc `role="status"` ben trong no.
+ */
+.tx-map__status {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  text-align: center;
+  font-size: 0.9rem;
+  color: var(--tx-ink-soft);
+  background: color-mix(in srgb, var(--tx-canvas) 85%, transparent);
+  border-radius: var(--tx-radius-sm);
+  pointer-events: none;
+}

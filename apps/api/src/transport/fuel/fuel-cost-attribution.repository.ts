@@ -96,6 +96,13 @@ export abstract class FuelCostAttributionRepository {
   abstract listForEntry(fuelEntryId: string): Promise<FuelCostAttribution[]>;
   /** Moi dong co dich nam trong MOT vong chay (dich `RUN` va dich `LEG` cua chang thuoc no). */
   abstract listForRun(runId: string): Promise<FuelCostAttribution[]>;
+  /**
+   * `#385` — MOI vong chay tung la dich cua it nhat mot dong (cap phat LAN dao), sap theo ma.
+   *
+   * Bang tai chinh doc duong nay de khong mot dong phan bo nao ROT khoi bien cong ty: ke toan co the
+   * chon bat ky vong chay cung xe lam dich, ke ca mot vong chay khong chay don Run-first nao.
+   */
+  abstract listAttributedRunIds(): Promise<string[]>;
 }
 
 /**
@@ -201,6 +208,10 @@ export class InMemoryFuelCostAttributionRepository extends FuelCostAttributionRe
     return sortedRows([...this.rows.values()].filter((row) => row.runId === runId)).map((row) => ({
       ...row,
     }));
+  }
+
+  async listAttributedRunIds(): Promise<string[]> {
+    return [...new Set([...this.rows.values()].map((row) => row.runId))].sort();
   }
 
   private forEntry(fuelEntryId: string): FuelCostAttribution[] {
