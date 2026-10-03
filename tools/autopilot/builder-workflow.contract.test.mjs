@@ -77,20 +77,27 @@ test('Claude Code Action: che do tag theo nhan, nhanh autopilot/ tu main, khong 
   );
 });
 
-// Env scrub can bubblewrap; thieu thi action chet truoc khi model chay (run 37091975076).
-test('bubblewrap duoc cai TRUOC buoc Claude, va env scrub van bat', () => {
+// Env scrub chay Bash trong sandbox, can CA bubblewrap LAN socat: thieu bubblewrap thi action chet
+// truoc khi model chay (run 37091975076), thieu socat thi moi lenh Bash bi tu choi (run 37096635786).
+test('bubblewrap + socat duoc cai TRUOC buoc Claude, va env scrub van bat', () => {
   const build = job('build');
-  const install = build.indexOf('sudo apt-get install -y bubblewrap');
+  const install = /sudo apt-get install -y ([a-z ]+)\n/.exec(build);
   const claude = build.indexOf('uses: anthropics/claude-code-action@');
-  assert.ok(install !== -1, 'thieu buoc cai bubblewrap');
-  assert.ok(install < claude, 'bubblewrap phai duoc cai truoc buoc Claude');
+  assert.ok(install, 'thieu buoc cai phu thuoc sandbox');
+  assert.deepEqual(install[1].split(' ').sort(), ['bubblewrap', 'socat']);
+  assert.ok(install.index < claude, 'phu thuoc sandbox phai duoc cai truoc buoc Claude');
   assert.match(build, /CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: '1'\n/);
 });
 
-test('Bash cua Claude chi mo lenh can thiet; cam sua mat phang dieu khien', () => {
+test('Claude duoc Edit + Write va Bash toi thieu; cam sua mat phang dieu khien', () => {
   const allowed = /--allowedTools "([^"]+)"/.exec(job('build'))[1].split(',');
-  for (const tool of allowed)
+  // Thieu Edit/Write thi Builder khong sua duoc tep nao (run 37096635786).
+  for (const tool of ['Edit', 'Write']) assert.ok(allowed.includes(tool), `thieu ${tool}`);
+  for (const tool of allowed.filter((name) => !['Edit', 'Write'].includes(name)))
     assert.match(tool, /^Bash\((pnpm|node|git (status|diff|log|show)):\*\)$/, tool);
+
+  const settings = /settings: \|\n([\s\S]*?)\n {10}claude_args:/.exec(job('build'))[1];
+  const { deny } = JSON.parse(settings).permissions;
   for (const path of [
     '.github/**',
     'deploy/**',
@@ -98,10 +105,21 @@ test('Bash cua Claude chi mo lenh can thiet; cam sua mat phang dieu khien', () =
     'tools/autopilot/**',
     '**/AGENTS.md',
     '**/CLAUDE.md',
+    '**/.claude/**',
     '.mcp.json',
   ]) {
-    assert.ok(job('build').includes(`"Edit(${path})"`), `thieu deny Edit(${path})`);
+    // Luat `Edit(<duong dan>)` ap cho MOI cong cu sua tep, gom ca Write � day la luat duy nhat
+    // Claude Code xet khi kiem quyen ghi tep.
+    assert.ok(deny.includes(`Edit(${path})`), `thieu deny Edit(${path})`);
   }
+  // `Write(<duong dan>)` duoc nhan nhung KHONG BAO GIO duoc xet: co no la an toan gia. Va khong
+  // duoc deny tron `Edit`/`Write` (se khoa luon viec sua ma nguon).
+  assert.deepEqual(
+    deny.filter((rule) => /^(Write|MultiEdit|NotebookEdit)\(/.test(rule)),
+    [],
+    'luat duong dan phai viet bang Edit(...)',
+  );
+  for (const tool of ['Edit', 'Write']) assert.ok(!deny.includes(tool), `khong deny tron ${tool}`);
   const prompt = /--append-system-prompt "([^"]+)"/.exec(job('build'))[1];
   for (const phrase of [
     'Never merge',
