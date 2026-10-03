@@ -20,6 +20,7 @@ import { TransportPlacesController } from '../transport/places/places.controller
 import { PlaceAdminController } from '../transport/places/admin/place-admin.controller.js';
 import { DriverTripsController } from '../transport/trips/driver-trips.controller.js';
 import { TripsController } from '../transport/trips/trips.controller.js';
+import { ViBangController } from '../vi-bang/vi-bang.controller.js';
 import { UsersController } from './users.controller.js';
 import { IS_PUBLIC_KEY } from './public.decorator.js';
 import { DOMAIN_ACTION_GATE_KEY, ROLES_KEY } from './roles.decorator.js';
@@ -57,6 +58,8 @@ const CONTROLLERS = [
   TransportPlacesController,
   // `#395` S3 — man "Dia diem van hanh": moi route ghi mang `@Roles('ADMIN')`.
   PlaceAdminController,
+  // Vi bang #427: moi POST (tao khach/hop dong/ho so, chuyen trang thai) mang `@Roles`.
+  ViBangController,
 ];
 
 /**

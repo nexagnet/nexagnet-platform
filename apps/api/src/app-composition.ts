@@ -277,6 +277,8 @@ import { PlaceAdminController } from './transport/places/admin/place-admin.contr
 import { TransportModule } from './transport/transport.module.js';
 import { DriverTripsController } from './transport/trips/driver-trips.controller.js';
 import { TripsController } from './transport/trips/trips.controller.js';
+import { ViBangController } from './vi-bang/vi-bang.controller.js';
+import { ViBangModule } from './vi-bang/vi-bang.module.js';
 import { WorkflowModule } from './workflow/workflow.module.js';
 import { tenantCampaignConfig } from '@netviet/tenant';
 
@@ -393,6 +395,8 @@ const IMPORTS: readonly Owned<NonNullable<ModuleMetadata['imports']>[number]>[] 
   // no — nhung mot khach bat `transport-settlement` KHONG duoc phep tat no: xem khoi phu thuoc
   // trong `tenant.schema.ts`. Mot cong tai chinh co che do tat thi khong con la mot cong.
   owned('transport-acceptance', TransportAcceptanceModule),
+  // VI BANG — HO SO (#427). Doc lap: khong keo theo transport, messaging hay LLM.
+  owned('vi-bang-management', ViBangModule),
 ];
 
 const CONTROLLERS: readonly Owned<Type<unknown>>[] = [
@@ -425,6 +429,7 @@ const CONTROLLERS: readonly Owned<Type<unknown>>[] = [
   // canh bao, chi la mot tin nhan den noi thieu anh.
   owned('knowledge', CatalogMediaController),
   owned('operations', MasterDataController),
+  owned('vi-bang-management', ViBangController),
   owned('operations', ReadinessController),
   owned('notifications', NotificationsController),
   owned('notifications', SettingsNotificationsController),
