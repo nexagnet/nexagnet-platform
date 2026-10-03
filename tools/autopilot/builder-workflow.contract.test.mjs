@@ -77,6 +77,16 @@ test('Claude Code Action: che do tag theo nhan, nhanh autopilot/ tu main, khong 
   );
 });
 
+// Env scrub can bubblewrap; thieu thi action chet truoc khi model chay (run 37091975076).
+test('bubblewrap duoc cai TRUOC buoc Claude, va env scrub van bat', () => {
+  const build = job('build');
+  const install = build.indexOf('sudo apt-get install -y bubblewrap');
+  const claude = build.indexOf('uses: anthropics/claude-code-action@');
+  assert.ok(install !== -1, 'thieu buoc cai bubblewrap');
+  assert.ok(install < claude, 'bubblewrap phai duoc cai truoc buoc Claude');
+  assert.match(build, /CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: '1'\n/);
+});
+
 test('Bash cua Claude chi mo lenh can thiet; cam sua mat phang dieu khien', () => {
   const allowed = /--allowedTools "([^"]+)"/.exec(job('build'))[1].split(',');
   for (const tool of allowed)

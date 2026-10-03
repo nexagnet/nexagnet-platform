@@ -128,6 +128,11 @@ jobs:
           pnpm install --frozen-lockfile
           pnpm --filter @netviet/api exec prisma generate
 
+      # `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1` chay moi lenh Bash cua Claude trong bubblewrap; runner
+      # khong cai san -> action chet truoc khi model chay (run 37091975076). Cai, KHONG tat isolation.
+      - name: Install bubblewrap
+        run: sudo apt-get update && sudo apt-get install -y bubblewrap
+
       # Che do TAG theo nhan: action tu kiem nguoi gan nhan la NGUOI co quyen GHI, tao nhanh
       # `autopilot/issue-<so>-<thoi-diem>` tu `main`, dang comment theo doi tien do, de Claude commit
       # bang git va push qua wrapper `git-push.sh` (chi `origin <ref>`, khong co). Action KHONG mo PR.
