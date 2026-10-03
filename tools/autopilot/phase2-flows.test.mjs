@@ -3,11 +3,11 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { MARKER_KINDS, encodeMarker } from './autopilot-core.mjs';
-import { GitHubError } from './github-api.mjs';
+import { GitHubError, createClient } from './github-api.mjs';
 import { runMergeEvaluate } from './merge-evaluate.mjs';
 import { evaluateRepair } from './repair-preflight.mjs';
 import { ReviewOutputError, reportReview } from './review-report.mjs';
-import { evaluateCiRun } from './reviewer-preflight.mjs';
+import { evaluateCiRun, runReviewerPreflight } from './reviewer-preflight.mjs';
 import {
   HEAD,
   OTHER_HEAD,
@@ -76,6 +76,107 @@ test('trigger tin cay: chi CI `ci` cua PR cung repo, xong va thanh cong, tro toi
   assert.equal(reason({ head_sha: 'abc' }), 'CI_HEAD_SHA_INVALID');
   assert.equal(reason({ pull_requests: [] }), 'CI_RUN_NO_PR');
   assert.equal(reason({ pull_requests: [{ number: 1 }, { number: 2 }] }), 'CI_RUN_MANY_PRS');
+});
+
+// ---- Reviewer: cong tat dinh TRUOC khi Claude / secret ---------------------------------------
+
+const CI_RUN_ID = 9001;
+const reviewerPreflight = (gh) =>
+  runReviewerPreflight({ read: gh.read, repository: REPO, runId: CI_RUN_ID });
+const preflightSetup = (overrides = {}) =>
+  fakeGitHub({ runs: { [CI_RUN_ID]: ciRun() }, ...overrides });
+
+test('Reviewer preflight: PR sach, diff day du -> RUN (mang HEAD + hop dong cho job Claude)', async () => {
+  const result = await reviewerPreflight(preflightSetup());
+  assert.equal(result.decision, 'RUN');
+  assert.equal(result.head_sha, HEAD);
+  assert.equal(result.pr, 77);
+  assert.equal(result.risk, 'R1');
+  assert.match(result.contract, /Task Contract/);
+});
+
+const PROTECTED_DIFFS = [
+  ['.mcp.json'],
+  ['.claude/settings.json'],
+  ['.claude/settings.local.json'],
+  ['.github/workflows/ci.yml'],
+  ['tools/autopilot/policy.mjs'],
+  ['AGENTS.md'],
+  ['CLAUDE.md'],
+  ['docs/CLAUDE.md'],
+  ['deploy/netviet/render-secrets.sh'],
+  // Rename tu vung cam ra ngoai: ten cu van phai bi chan.
+  ['docs/ok.md', '.mcp.json'],
+];
+
+test('Reviewer preflight: PR cham duong dan bao ve -> BLOCK PROTECTED_PATH, Claude/secret KHONG bao gio duoc cap', async () => {
+  for (const [path, previous] of PROTECTED_DIFFS) {
+    const gh = preflightSetup({
+      files: [
+        { filename: 'apps/api/src/x.ts' },
+        { filename: path, ...(previous ? { previous_filename: previous } : {}) },
+      ],
+    });
+    const result = await reviewerPreflight(gh);
+    assert.equal(result.decision, 'BLOCK', path);
+    assert.equal(result.reason, 'PROTECTED_PATH', path);
+    // Khong co dau ra nao cho job `review` (`if: decision == 'RUN'`): khong head_sha, khong hop dong.
+    assert.equal(result.head_sha, undefined, path);
+    assert.equal(result.contract, undefined, path);
+    assert.deepEqual(gh.state.calls, [], path);
+  }
+});
+
+test('Reviewer preflight: diff bi cat (changed_files > tep lay duoc) -> BLOCK DIFF_INCOMPLETE', async () => {
+  const gh = preflightSetup({ pr: makePr({ changed_files: 3000 }) });
+  const result = await reviewerPreflight(gh);
+  assert.equal(result.decision, 'BLOCK');
+  assert.equal(result.reason, 'DIFF_INCOMPLETE');
+  assert.equal(result.contract, undefined);
+});
+
+test('Reviewer preflight: cong diff dung TRUOC cong "da review roi" — HEAD cham vung cam khong the lot vao SKIP', async () => {
+  const gh = preflightSetup({
+    pr: makePr({ changed_files: 1 }),
+    files: [{ filename: '.mcp.json' }],
+    comments: [reviewComment({ verdict: 'PASS' })],
+  });
+  assert.equal((await reviewerPreflight(gh)).reason, 'PROTECTED_PATH');
+});
+
+test('Reviewer preflight: doc MOI trang cua /pulls/{pr}/files — tep cam o trang 2 van bi bat', async () => {
+  const many = Array.from({ length: 130 }, (_, i) => ({ filename: `apps/api/src/f${i}.ts` }));
+  many.push({ filename: '.claude/settings.json' });
+  const gh = preflightSetup({ pr: makePr({ changed_files: many.length }), files: [] });
+  const pages = [];
+  const fetchImpl = async (url) => {
+    const { pathname, searchParams } = new URL(url);
+    const json = (body) => ({ ok: true, status: 200, json: async () => body });
+    if (pathname.endsWith('/pulls/77/files')) {
+      const page = Number(searchParams.get('page'));
+      pages.push(page);
+      return json(many.slice((page - 1) * 100, page * 100));
+    }
+    if (/\/issues\/77\/comments$/.test(pathname)) return json(gh.state.comments);
+    return json(await gh.read.get(pathname));
+  };
+  const result = await runReviewerPreflight({
+    read: createClient({ token: 't', fetchImpl }),
+    repository: REPO,
+    runId: CI_RUN_ID,
+  });
+  assert.deepEqual(pages, [1, 2]);
+  assert.equal(result.decision, 'BLOCK');
+  assert.equal(result.reason, 'PROTECTED_PATH');
+});
+
+test('Reviewer preflight: cac cong sau van BLOCK nhu cu (nhan/nhanh/rui ro/CI) va khong doc diff khi chua can', async () => {
+  const noLabel = preflightSetup({ pr: makePr({ labels: [] }) });
+  assert.equal((await reviewerPreflight(noLabel)).reason, 'PR_NOT_GENERATED');
+  const r3 = preflightSetup({ issue: makeIssue('R3') });
+  assert.equal((await reviewerPreflight(r3)).reason, 'RISK_R3_BLOCKED');
+  const failed = fakeGitHub({ runs: { [CI_RUN_ID]: ciRun({ conclusion: 'failure' }) } });
+  assert.equal((await reviewerPreflight(failed)).reason, 'CI_NOT_SUCCESS');
 });
 
 // ---- Reviewer: bao cao ---------------------------------------------------------------------

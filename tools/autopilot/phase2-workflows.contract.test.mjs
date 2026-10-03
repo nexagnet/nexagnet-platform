@@ -88,6 +88,38 @@ test('exact-head binding: run-name, checkout theo SHA, kiem HEAD, bao cao nhan d
   assert.match(read('./review-report.mjs'), /expectedHeadSha: headSha/);
 });
 
+test('reviewer: cong diff/protected-path nam TRUOC secret — preflight chan, chi `RUN` moi toi job Claude', () => {
+  const preflight = reviewer.job('preflight');
+  const review = reviewer.job('review');
+  // Secret Claude chi o job `review`; job `review` chi chay khi preflight tat dinh tra RUN.
+  assert.doesNotMatch(preflight, /CLAUDE_CODE_OAUTH_TOKEN|AUTOPILOT_APP_PRIVATE_KEY/);
+  assert.match(review, /needs: preflight\n/);
+  assert.match(review, /if: needs\.preflight\.outputs\.decision == 'RUN'\n/);
+  assert.match(preflight, /pull-requests: read\n/);
+  assert.match(preflight, /run: node tools\/autopilot\/reviewer-preflight\.mjs\n/);
+
+  // Trong ma preflight: doc DAY DU diff, dung CHINH ham protected-path chuan, va hai cong do nam
+  // TRUOC cong tra `decision: 'RUN'` (cong sau cung).
+  const source = read('./reviewer-preflight.mjs');
+  assert.match(source, /import \{ protectedPathsInPullFiles \} from '\.\/policy\.mjs'/);
+  assert.match(read('./policy.mjs'), /import \{ isProtectedPath \} from '\.\/validate-diff\.mjs'/);
+  assert.match(read('./evidence.mjs'), /\/pulls\/\$\{pr\.number\}\/files/);
+  const at = (needle) => {
+    const index = source.indexOf(needle);
+    assert.ok(index >= 0, `reviewer-preflight.mjs thieu: ${needle}`);
+    return index;
+  };
+  const run = at("decision: 'RUN',");
+  assert.ok(at("block('DIFF_INCOMPLETE'") < run, 'DIFF_INCOMPLETE phai truoc RUN');
+  assert.ok(at("block('PROTECTED_PATH'") < run, 'PROTECTED_PATH phai truoc RUN');
+  assert.ok(at('loadPullFiles({') < at('protectedPathsInPullFiles(files)'));
+  assert.ok(at('protectedPathsInPullFiles(files)') < run);
+  assert.ok(
+    at("block('PROTECTED_PATH'") < at('latestTrustedReview(comments'),
+    'cong diff phai truoc cong ALREADY_REVIEWED',
+  );
+});
+
 test('reviewer chi doc: khong Edit/Write, khong token ghi, khong App key, khong chay ma PR', () => {
   const review = reviewer.job('review');
   assert.match(review, /permissions:\n {6}contents: read\n/);

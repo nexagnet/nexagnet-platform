@@ -22,6 +22,16 @@ export async function loadPullEvidence({ read, repository, prNumber, expectedHea
   return { pr, issue, evaluation: evaluatePullRequest({ pr, issue, repository, expectedHeadSha }) };
 }
 
+/**
+ * Moi tep cua diff PR, qua moi trang. `complete=false` khi GitHub tra it tep hon `pr.changed_files`
+ * (diff bi cat): nguoi goi PHAI coi do la BLOCK (`DIFF_INCOMPLETE`), khong duoc doan phan con thieu.
+ */
+export async function loadPullFiles({ read, repository, pr }) {
+  const files = await read.paginate(`/repos/${repository}/pulls/${pr.number}/files`);
+  const complete = !(typeof pr.changed_files === 'number' && pr.changed_files > files.length);
+  return { files, complete };
+}
+
 export const loadComments = (read, repository, prNumber) =>
   read.paginate(`/repos/${repository}/issues/${prNumber}/comments`);
 

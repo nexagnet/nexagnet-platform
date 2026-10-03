@@ -16,7 +16,7 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { addNeedsHumanLabel, escalateToHuman, postMarkedComment } from './actions.mjs';
 import { MARKER_KINDS, NEEDS_HUMAN_LABEL, isFullSha, labelNames } from './autopilot-core.mjs';
-import { loadComments, loadPullEvidence, parsePrNumber } from './evidence.mjs';
+import { loadComments, loadPullEvidence, loadPullFiles, parsePrNumber } from './evidence.mjs';
 import { GitHubError, createClient, writeOutputs, writeSummary } from './github-api.mjs';
 import { decideAutonomy, evaluateRequiredChecks, protectedPathsInPullFiles } from './policy.mjs';
 import { latestTrustedReview, verifyReviewRun } from './review-result.mjs';
@@ -61,9 +61,8 @@ export async function gatherAndDecide({ read, repository, payload }) {
   );
   const ci = evaluateRequiredChecks(checkRuns, headSha);
 
-  const files = await read.paginate(`/repos/${repository}/pulls/${prNumber}/files`);
-  if (typeof pr.changed_files === 'number' && pr.changed_files > files.length)
-    return blocked('DIFF_INCOMPLETE');
+  const { files, complete } = await loadPullFiles({ read, repository, pr });
+  if (!complete) return blocked('DIFF_INCOMPLETE');
 
   const decision = decideAutonomy({
     risk: evaluation.risk,
