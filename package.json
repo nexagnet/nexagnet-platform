@@ -16,7 +16,7 @@
     "test": "pnpm test:autopilot && pnpm --filter \"@netviet/tenant...\" build && pnpm -r test && pnpm test:source-manifest && pnpm test:customer-sources && pnpm test:deploy-routes && pnpm test:deploy-contracts && pnpm test:git-hooks",
     "hooks:install": "node tools/git-hooks/install.mjs",
     "test:git-hooks": "node --test tools/git-hooks/pre-push.test.mjs",
-    "test:autopilot": "node --test tools/autopilot/preflight.test.mjs tools/autopilot/validate-diff.test.mjs tools/autopilot/builder-workflow.contract.test.mjs",
+    "test:autopilot": "node --test tools/autopilot/preflight.test.mjs tools/autopilot/validate-diff.test.mjs tools/autopilot/builder-workflow.contract.test.mjs tools/autopilot/autopilot-core.test.mjs tools/autopilot/review-result.test.mjs tools/autopilot/policy.test.mjs tools/autopilot/phase2-flows.test.mjs tools/autopilot/repair-publish.test.mjs tools/autopilot/phase2-workflows.contract.test.mjs",
     "gen:source-manifest": "node tools/source-manifest/generate.mjs",
     "test:source-manifest": "node --test tools/source-manifest/manifest.test.mjs",
     "test:customer-sources": "node --test tools/customer-source-guardrail/guardrail.test.mjs",

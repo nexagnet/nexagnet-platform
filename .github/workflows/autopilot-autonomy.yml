@@ -1,0 +1,72 @@
+# AUTOPILOT V4 / PHASE 2 — AUTONOMY: Reviewer PASS -> danh gia tat dinh -> R0/R1 tu merge, R2 cho nguoi.
+#
+#   `repository_dispatch: autopilot-merge-evaluate` (do job `report` cua Reviewer gui khi PASS)
+#     -> MOT job tat dinh tren ma cua `main` (tools/autopilot/merge-evaluate.mjs). Payload chi la goi y;
+#        workflow LAY LAI TAT CA bang chung:
+#          - PR mo; HEAD hien tai == head da review; nhan `autopilot:generated`; nhanh `autopilot/*`; cung repo;
+#          - Issue lien ket (`Closes #N`) co dung MOT `risk:R0..R3`;
+#          - dung 7 check bat buoc (verify, integration, workflow-integration, tenant-packs, e2e, audit,
+#            images) cua CHINH HEAD hien tai deu `success`;
+#          - ket qua Reviewer MOI NHAT cua `nexagnet-autopilot-v4[bot]` cho dung HEAD la PASS, tro toi run
+#            autopilot-reviewer that;
+#          - diff khong cham mat phang dieu khien.
+#     -> R0/R1: dua PR ra khoi draft roi merge bang endpoint merge cua GitHub, kem `sha` = HEAD (GitHub tu
+#               choi neu HEAD da doi). Ruleset `main-protection` van ap dung — KHONG bypass.
+#     -> R2: KHONG tu merge. Gan `needs-human` + comment `REVIEW_PASS_WAITING_HUMAN`.
+#     -> R3: BLOCK tuyet doi.
+#
+# KHONG deploy. KHONG nhan `workflow_dispatch`/`issue_comment`/`pull_request_target`: chi mot kenh,
+# dispatch cua App V4, va moi lan chay deu doi chieu lai bang chung — khong co duong merge truoc Reviewer PASS.
+#
+# Bat bien duoc khoa boi tools/autopilot/phase2-workflows.contract.test.mjs (chay trong `pnpm test`).
+
+name: autopilot-autonomy
+run-name: autopilot-autonomy PR#${{ github.event.client_payload.pr }} ${{ github.event.client_payload.head_sha }}
+
+on:
+  repository_dispatch:
+    types: [autopilot-merge-evaluate]
+
+permissions:
+  contents: read
+
+# Mot PR = mot lan danh gia tai mot thoi diem; khong huy lan dang chay (co the dang merge).
+concurrency:
+  group: autopilot-autonomy-pr-${{ github.event.client_payload.pr }}
+  cancel-in-progress: false
+
+jobs:
+  evaluate:
+    name: evaluate (lay lai bang chung -> merge / cho nguoi / block)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    # Doc bang chung (ke ca check-runs) bang GITHUB_TOKEN chi doc; GHI bang token App ngan han. KHONG
+    # `id-token`, KHONG deployments/workflows/administration: job nay khong deploy duoc gi.
+    permissions:
+      contents: read
+      actions: read
+      checks: read
+      pull-requests: read
+      issues: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: tools/autopilot
+
+      # `contents: write` + `pull-requests: write` cho endpoint merge; `issues: write` cho comment/nhan.
+      - name: Token App V4 (contents + issues + pull-requests, KHONG workflows)
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.AUTOPILOT_APP_CLIENT_ID }}
+          private-key: ${{ secrets.AUTOPILOT_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-issues: write
+          permission-pull-requests: write
+
+      - name: Danh gia va hanh dong
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          APP_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: node tools/autopilot/merge-evaluate.mjs
