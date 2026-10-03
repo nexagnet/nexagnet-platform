@@ -131,6 +131,7 @@ export const MARKER_KINDS = Object.freeze({
   needsHuman: 'autopilot-needs-human',
   waiting: 'autopilot-waiting-human',
   merged: 'autopilot-merged',
+  runtimeProof: 'autopilot-runtime-proof',
 });
 
 const MARKER_VALUE = /^[A-Za-z0-9_.+/=-]*$/;

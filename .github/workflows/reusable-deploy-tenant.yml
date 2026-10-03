@@ -11,6 +11,15 @@ on:
         description: 'Target GitHub environment (vi du: production, staging, pilot-ultty)'
         required: true
         type: string
+      git_sha:
+        # COMMIT DUOC DEPLOY, KHONG PHAI `github.sha`. Voi `workflow_dispatch` hai gia tri bang nhau, nen
+        # caller thu cong truyen `github.sha` va giu nguyen hanh vi cu. Voi `workflow_run` (Autopilot
+        # runtime proof) `github.sha` la commit MOI NHAT cua nhanh mac dinh — co the da vuot qua commit
+        # ma CI vua xanh — nen caller phai truyen SHA chinh xac. Checkout, cong "exact-main CI" va
+        # `GIT_SHA` cua script deploy deu bam vao input nay, khong bam vao `github.sha`.
+        description: 'Full SHA 40 ky tu cua commit tren main can deploy'
+        required: true
+        type: string
       workflow_engine:
         # CONG TAC VAN HANH, khong phai policy cua khach. `render-secrets.sh` TU CHOI `on` khi
         # DEPLOYMENT_ENVIRONMENT khac `gd1-test` (exit 64), nen input nay khong the vu trang
@@ -47,7 +56,26 @@ jobs:
     env:
       TENANT: ${{ inputs.tenant }}
     steps:
+      # Checkout DUNG commit duoc yeu cau. `fetch-depth` mac dinh (1) du: chi can cay thu muc cua commit do.
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.git_sha }}
+
+      # Khoa bat bien: thu muc dang deploy LA commit `inputs.git_sha` (full SHA, chu thuong). Input di qua
+      # bien moi truong — khong noi vao ma shell.
+      - name: Verify checkout is the requested git_sha
+        env:
+          REQUESTED_GIT_SHA: ${{ inputs.git_sha }}
+        run: |
+          set -euo pipefail
+          [[ "${REQUESTED_GIT_SHA}" =~ ^[0-9a-f]{40}$ ]] || {
+            echo 'git_sha phai la full SHA 40 ky tu chu thuong.' >&2
+            exit 1
+          }
+          [[ "$(git rev-parse HEAD)" == "${REQUESTED_GIT_SHA}" ]] || {
+            echo "Checkout HEAD $(git rev-parse HEAD) khac git_sha yeu cau ${REQUESTED_GIT_SHA}." >&2
+            exit 1
+          }
 
       - name: Validate tenant pack exists
         run: |
@@ -120,6 +148,7 @@ jobs:
         if: steps.target.outputs.requires_exact_main_ci == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
+          GIT_SHA: ${{ inputs.git_sha }}
         run: |
           set -euo pipefail
           [[ "${GITHUB_REF}" == 'refs/heads/main' ]] || {
@@ -128,11 +157,11 @@ jobs:
           }
           runs="$(gh api --method GET \
             "repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/runs" \
-            -f head_sha="${GITHUB_SHA}" -f branch=main -f status=completed -f per_page=20)"
-          conclusion="$(jq -r --arg sha "${GITHUB_SHA}" \
+            -f head_sha="${GIT_SHA}" -f branch=main -f status=completed -f per_page=20)"
+          conclusion="$(jq -r --arg sha "${GIT_SHA}" \
             '[.workflow_runs[] | select(.head_sha == $sha)][0].conclusion // ""' <<<"${runs}")"
           [[ "${conclusion}" == 'success' ]] || {
-            echo "Exact SHA ${GITHUB_SHA} does not have a successful completed CI run." >&2
+            echo "Exact SHA ${GIT_SHA} does not have a successful completed CI run." >&2
             exit 1
           }
           echo 'conclusion=success' >>"${GITHUB_OUTPUT}"
@@ -144,7 +173,7 @@ jobs:
         id: rollout
         run: bash deploy/netviet/deploy-ci.sh
         env:
-          GIT_SHA: ${{ github.sha }}
+          GIT_SHA: ${{ inputs.git_sha }}
           TENANT: ${{ inputs.tenant }}
           WORKFLOW_ENGINE: ${{ inputs.workflow_engine }}
           OBSERVABILITY_STACK: ${{ inputs.observability_stack }}

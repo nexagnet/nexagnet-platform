@@ -94,6 +94,8 @@ jobs:
     with:
       tenant: ${{ inputs.tenant }}
       environment: ${{ inputs.environment }}
+      # Chay tay tu `main`: commit duoc deploy la chinh commit cua lan dispatch — giu nguyen hanh vi cu.
+      git_sha: ${{ github.sha }}
       workflow_engine: ${{ inputs.workflow_engine }}
       observability_stack: ${{ inputs.observability_stack }}
     secrets: inherit

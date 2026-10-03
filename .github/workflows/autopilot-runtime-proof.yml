@@ -1,0 +1,142 @@
+# AUTOPILOT V4 / PHASE 3 — RUNTIME PROOF: exact-main CI xanh -> deploy DUNG commit merge len preview platform.
+#
+#   workflow `ci` xong (event push, nhanh main, THANH CONG)
+#     -> job `preflight`: GITHUB_TOKEN CHI DOC, KHONG OIDC, KHONG ghi. tools/autopilot/runtime-preflight.mjs
+#                         re-fetch run CI + PR da merge + Issue + comment `autopilot-merged` cua bot tin cay va
+#                         doc `RUNTIME PROOF` -> `TARGET:`. Chi `DEPLOY` khi: dung MOT PR da merge ra chinh
+#                         commit nay, mang `autopilot:generated`; Issue co dung MOT nhan R0/R1; marker merge khop;
+#                         TARGET nam trong allowlist. `TARGET: none` va moi commit khong phai cua Autopilot la
+#                         SKIP sach; thieu/nhieu/la TARGET -> BLOCK (khong deploy).
+#     -> job `deploy`   : goi `reusable-deploy-tenant.yml` voi tenant/moi truong GHI CUNG (transport-preview /
+#                         gd1-test) va `git_sha` = commit CUA CI VUA XANH — KHONG phai `main` hien tai. Day la
+#                         noi DUY NHAT trong workflow nay co `id-token: write` (theo khuon deploy hien co); moi
+#                         cong cua moi truong `gd1-test` (duyet, exact-main CI, preflight) giu nguyen.
+#     -> job `report`   : ma tu `main`, token App V4 ngan han CHI de comment. Ghi `RUNTIME_PROOF_PASSED` /
+#                         `RUNTIME_PROOF_FAILED` len PR + Issue kem marker `autopilot-runtime-proof`. Khong
+#                         rollback, khong promote.
+#
+# Vi sao `workflow_run`, KHONG phai `pull_request_target`/`push`: `workflow_run` luon chay ban workflow tren
+# nhanh mac dinh, va nhanh nay chi chay ma DA MERGE vao main sau khi CI chinh xac tren commit do xanh. Khong
+# buoc nao chay ma cua mot PR chua merge voi token dac quyen.
+#
+# KHONG deploy production hay tenant khach: tenant/moi truong la hang so trong job `deploy` (khong doc tu Issue,
+# khong doc tu payload). KHONG nhan `workflow_dispatch`/`issue_comment`/`pull_request_target`.
+#
+# Bat bien duoc khoa boi tools/autopilot/runtime-proof-workflows.contract.test.mjs (chay trong `pnpm test`).
+
+name: autopilot-runtime-proof
+run-name: autopilot-runtime-proof ${{ github.event.workflow_run.head_sha }}
+
+on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+
+# GITHUB_TOKEN mac dinh chi doc. Quyen ghi dac biet chi o job `deploy` (id-token, theo khuon deploy hien co);
+# moi thao tac ghi len GitHub dung token App V4 ngan han trong job `report`.
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    name: preflight (tat dinh, chi doc, khong OIDC)
+    # Chi push len main, CI THANH CONG moi cap runner: PR, nhanh khac, CI do/huy -> SKIP truoc khi ton phut.
+    if: github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: read
+      issues: read
+    outputs:
+      decision: ${{ steps.preflight.outputs.decision }}
+      git_sha: ${{ steps.preflight.outputs.git_sha }}
+      target: ${{ steps.preflight.outputs.target }}
+      pr: ${{ steps.preflight.outputs.pr }}
+      issue: ${{ steps.preflight.outputs.issue }}
+    steps:
+      # Event `workflow_run` luon chay ma cua nhanh mac dinh. Chi lay thu muc cua cong.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: tools/autopilot
+      - name: Preflight (lay lai bang chung qua API)
+        id: preflight
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node tools/autopilot/runtime-preflight.mjs
+
+  deploy:
+    name: deploy transport-preview -> gd1-test (exact SHA)
+    needs: preflight
+    # Hai dieu kien doc lap: preflight tra DEPLOY, VA target la muc duy nhat trong allowlist.
+    if: needs.preflight.outputs.decision == 'DEPLOY' && needs.preflight.outputs.target == 'transport-preview/gd1-test'
+    # Cung nhom voi deploy tay cua tenant nay: hai lan deploy cung mot stack khong chay song song.
+    concurrency:
+      group: deploy-tenant-transport-preview
+      cancel-in-progress: false
+    # Quyen y het `deploy-tenant.yml` (workflow goi can toi thieu cac quyen nay). Day la job DUY NHAT co OIDC.
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/reusable-deploy-tenant.yml
+    with:
+      tenant: transport-preview
+      environment: gd1-test
+      git_sha: ${{ needs.preflight.outputs.git_sha }}
+      workflow_engine: 'off'
+      observability_stack: 'off'
+    secrets: inherit
+
+  report:
+    name: report (comment bang chung, khong rollback)
+    needs: [preflight, deploy]
+    # Chay ca khi deploy that bai/bi huy de ghi `RUNTIME_PROOF_FAILED`; chi khi preflight da cho DEPLOY.
+    if: always() && needs.preflight.outputs.decision == 'DEPLOY'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: read
+      issues: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: tools/autopilot
+
+      # `deploy-signals.json` cua CHINH run nay (workflow duoc goi upload no `if: always()`). Khong co -> bao
+      # cao se ghi `SIGNALS_MISSING`, khong doan.
+      - name: Lay deploy signals
+        continue-on-error: true
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: deploy-signals-transport-preview-gd1-test
+          path: ${{ runner.temp }}/signals
+
+      # Chi `issues` + `pull-requests` (comment). KHONG contents, workflows, actions, deployments.
+      - name: Token App V4 (issues + pull-requests, chi comment)
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.AUTOPILOT_APP_CLIENT_ID }}
+          private-key: ${{ secrets.AUTOPILOT_APP_PRIVATE_KEY }}
+          permission-issues: write
+          permission-pull-requests: write
+
+      - name: Ghi bang chung runtime
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          APP_TOKEN: ${{ steps.app-token.outputs.token }}
+          PR_NUMBER: ${{ needs.preflight.outputs.pr }}
+          ISSUE_NUMBER: ${{ needs.preflight.outputs.issue }}
+          MERGE_SHA: ${{ needs.preflight.outputs.git_sha }}
+          TARGET: ${{ needs.preflight.outputs.target }}
+          DEPLOY_RESULT: ${{ needs.deploy.result }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          SIGNALS_PATH: ${{ runner.temp }}/signals/deploy-signals.json
+        run: node tools/autopilot/runtime-report.mjs
