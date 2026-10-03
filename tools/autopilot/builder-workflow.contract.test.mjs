@@ -89,6 +89,22 @@ test('bubblewrap + socat duoc cai TRUOC buoc Claude, va env scrub van bat', () =
   assert.match(build, /CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: '1'\n/);
 });
 
+// Ubuntu 24.04+ chan user namespace khong dac quyen qua AppArmor: bubblewrap chet voi
+// `setting up uid map: Permission denied`, moi lenh Bash that bai (run 37099633185).
+test('mo user namespace cho sandbox TRUOC buoc Claude, co dieu kien, va env scrub van bat', () => {
+  const build = job('build');
+  const sysctl =
+    /if \[ -f \/proc\/sys\/kernel\/apparmor_restrict_unprivileged_userns \]; then\n +sudo sysctl -w kernel\.apparmor_restrict_unprivileged_userns=0\n +fi\n/.exec(
+      build,
+    );
+  assert.ok(sysctl, 'thieu sysctl co dieu kien cho AppArmor userns');
+  const install = build.indexOf('sudo apt-get install -y');
+  const claude = build.indexOf('uses: anthropics/claude-code-action@');
+  assert.ok(install < sysctl.index, 'sysctl nam sau buoc cai bubblewrap + socat');
+  assert.ok(sysctl.index < claude, 'sysctl phai chay truoc buoc Claude');
+  assert.match(build, /CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: '1'\n/);
+});
+
 test('Claude duoc Edit + Write va Bash toi thieu; cam sua mat phang dieu khien', () => {
   const allowed = /--allowedTools "([^"]+)"/.exec(job('build'))[1].split(',');
   // Thieu Edit/Write thi Builder khong sua duoc tep nao (run 37096635786).

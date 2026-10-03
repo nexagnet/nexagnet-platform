@@ -137,6 +137,17 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y bubblewrap socat
 
+      # Ubuntu 24.04+ chan user namespace khong dac quyen qua AppArmor -> bubblewrap chet voi
+      # `bwrap: setting up uid map: Permission denied` va MOI lenh Bash cua Claude that bai (run
+      # 37099633185). Mo lai user namespace de sandbox CHAY DUOC — day la dieu kien cua isolation, khong
+      # phai tat no; `action.yml` cua claude-code-action cung lam dung lenh nay. Kernel cu khong co
+      # sysctl nay nen phai kiem tep truoc.
+      - name: Allow unprivileged user namespaces for the sandbox (AppArmor)
+        run: |
+          if [ -f /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]; then
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          fi
+
       # Che do TAG theo nhan: action tu kiem nguoi gan nhan la NGUOI co quyen GHI, tao nhanh
       # `autopilot/issue-<so>-<thoi-diem>` tu `main`, dang comment theo doi tien do, de Claude commit
       # bang git va push qua wrapper `git-push.sh` (chi `origin <ref>`, khong co). Action KHONG mo PR.
