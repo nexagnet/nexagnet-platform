@@ -25,6 +25,26 @@ export function parseUsernameList(value: string): readonly string[] {
  * Nguyen tac (CLAUDE.md - Luu y bao mat): khong hardcode secret,
  * validate ngay khi khoi dong, fail fast voi thong bao ro rang.
  */
+/**
+ * MOT BIEN RONG NGHIA LA KHONG DAT, voi dung nhung truong ma chuoi rong khong mang nghia gi.
+ *
+ * VI SAO CAN. `compose.yaml` truyen bien tuy chon dang `${VAR:-}`. Docker Compose KHONG bo qua
+ * bien khi gia tri rong — no dat bien do bang chuoi rong. Nen `z.string().min(1).optional()` van
+ * nhan duoc `''`, van validate, va van do. Ket qua la mot stack KHONG dung S3 khong boot noi vi
+ * thieu `MEDIA_ENDPOINT` — mot bien no khong can.
+ *
+ * Cai bay nay nam san trong repo tu lau ma chua no, chi vi `BACKUP_BUCKET` con la BAT BUOC nen
+ * `MEDIA_BUCKET` chua bao gio rong. #224 bo rang buoc do (may chu cua khach khong co bucket GCS),
+ * va no no ngay trong lan dung stack dau tien tren mot Ubuntu sach.
+ *
+ * KHONG AP DUNG TRAN CHO MOI TRUONG. `MEDIA_ALLOWED_HOSTS` co chuoi rong mang MOT NGHIA THAT —
+ * "chan het" — nen bien no thanh "khong dat" se am tham roi ve mac dinh `zdn.vn`, tuc NOI LONG mot
+ * cong SSRF. Chi dung ham nay o nhung truong ma rong that su vo nghia.
+ */
+function blankIsAbsent<T extends z.ZodTypeAny>(schema: T) {
+  return z.preprocess((value) => (value === '' ? undefined : value), schema.optional());
+}
+
 export const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().positive().default(3001),
@@ -233,11 +253,15 @@ export const envSchema = z.object({
   // danh tinh may chu, khong sinh bi mat dai han nao — an toan hon han khoa tinh. `s3` giu nguyen
   // cho OVHcloud; chuyen nha cung cap van chi la doi bien moi truong.
   MEDIA_STORE: z.enum(['none', 'local', 'gcs', 's3']).default('none'),
-  MEDIA_BUCKET: z.string().min(1).optional(),
-  MEDIA_ENDPOINT: z.string().url().optional(),
+  // `blankIsAbsent` CHU KHONG PHAI `.optional()` TRAN — xem chu thich cua ham. `compose.yaml`
+  // truyen bon bien nay dang `${VAR:-}`, va Docker Compose dat MOT CHUOI RONG chu khong bo qua
+  // bien. Voi `.optional()` tran thi chuoi rong VAN di vao zod va do o `min(1)`/`url()`, nen mot
+  // stack khong dung S3 se KHONG BOOT NOI du no khong can bien nao trong so do.
+  MEDIA_BUCKET: blankIsAbsent(z.string().min(1)),
+  MEDIA_ENDPOINT: blankIsAbsent(z.string().url()),
   MEDIA_REGION: z.string().default('auto'),
-  MEDIA_ACCESS_KEY_ID: z.string().min(1).optional(),
-  MEDIA_SECRET_ACCESS_KEY: z.string().min(1).optional(),
+  MEDIA_ACCESS_KEY_ID: blankIsAbsent(z.string().min(1)),
+  MEDIA_SECRET_ACCESS_KEY: blankIsAbsent(z.string().min(1)),
   MEDIA_LOCAL_DIR: z.string().default('./tmp/media'),
   /** Diem cuoi JSON API cua GCS. Tach khoi MEDIA_ENDPOINT (cua S3) de hai duong khong lan nhau. */
   MEDIA_GCS_ENDPOINT: z.string().url().default('https://storage.googleapis.com'),

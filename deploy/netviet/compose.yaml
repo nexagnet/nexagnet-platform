@@ -148,6 +148,22 @@ services:
       MEDIA_STORE: ${MEDIA_STORE:-none}
       MEDIA_BUCKET: ${MEDIA_BUCKET:-}
       MEDIA_GCS_ENDPOINT: ${MEDIA_GCS_ENDPOINT:-https://storage.googleapis.com}
+      # NAM BIEN DUOI DAY LA DIEU KIEN DE `s3` VA `local` TON TAI THAT — #224 Phase F.
+      #
+      # `packages/shared/src/env.ts` nhan `none|local|gcs|s3` tu lau va `MediaStore` co du bon hien
+      # thuc, nhung khoi `environment` nay chi truyen ba bien cua duong GCS. Ma khoi nay liet ke
+      # TUONG MINH: mot bien co trong `secrets.env` nhung khong co o day thi KHONG BAO GIO toi
+      # container. Nghia la `MEDIA_STORE=s3` se fail-fast luc boot vi "thieu MEDIA_ENDPOINT" du
+      # `secrets.env` co no — tuc GCS khong phai lua chon TOT NHAT, no la lua chon DUY NHAT voi
+      # tay len duoc. Dung cai bay da lam `ADVICE_COMPOSER` rong suot 19/08-21/08/2026.
+      MEDIA_ENDPOINT: ${MEDIA_ENDPOINT:-}
+      MEDIA_REGION: ${MEDIA_REGION:-auto}
+      MEDIA_ACCESS_KEY_ID: ${MEDIA_ACCESS_KEY_ID:-}
+      MEDIA_SECRET_ACCESS_KEY: ${MEDIA_SECRET_ACCESS_KEY:-}
+      # Kho anh tren DIA cua chinh host — duong cua ho so gia thap tren may khach, noi khong co
+      # object store nao. Duong dan nay tro vao volume `media-data` ben duoi, nen anh song qua moi
+      # lan deploy va nam trong pham vi cua `deploy/portable/backup.sh`.
+      MEDIA_LOCAL_DIR: ${MEDIA_LOCAL_DIR:-/srv/media}
       # Cong chan SSRF: chi tai anh tu host cua Zalo. Khop theo bien dau cham nen `evil-zdn.vn`
       # bi chan; de rong = chan het.
       MEDIA_ALLOWED_HOSTS: ${MEDIA_ALLOWED_HOSTS:-zdn.vn}
@@ -257,6 +273,7 @@ services:
         fi
         exec node apps/api/dist/main.js
     volumes:
+      - media-data:/srv/media
       - ./.runtime/zalo:/runtime/zalo
       # DANH TINH BAN PHAT HANH. Mount theo TEP chu khong theo thu muc: `./.runtime` chua
       # `secrets.env`, va dua ca thu muc do vao mot tien trinh nghiep vu la dua toan bo bi mat
@@ -845,6 +862,10 @@ services:
 
 volumes:
   postgres-data:
+  # ANH KHACH GUI VAO khi ho so chon `MEDIA_STORE=local` (#224 Phase F). Mot volume co ten chu
+  # khong phai bind mount: bind mount vao `./` se dat anh co PII canh `secrets.env` trong cung mot
+  # cay thu muc, va `deploy-remote.sh` rsync cay do.
+  media-data:
   # `flowise-data` khai trong `compose.flowise.yaml` cung voi service dung no.
   # Ba volume cua engine. CA BA deu phai vao backup (D6), khong chi cai dau: `hatchet-config` giu
   # khoa ma hoa, nen dump Postgres ma mat config thi restore ra du lieu khong giai ma duoc.

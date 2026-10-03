@@ -125,15 +125,40 @@ fi
 # `caddy.env` va docker compose tu bo CR khi doc env file. Tu khi key duoc dat thang vao cau hinh
 # Caddy thi CR do vao gia tri header va Caddy tra 502 "invalid header field value for X-Api-Key"
 # (su co 15/08/2026). Loc tai NGUON de moi secret deu sach, khong rieng API key.
-secret() {
-  gcloud secrets versions access latest --project "${PROJECT_ID}" --secret "$1" | tr -d '\r'
-}
-
-# Secret CHUA duoc tao -> tra chuoi rong thay vi lam hong ca lan deploy. Chi dung cho secret
-# that su tuy chon; secret bat buoc van goi secret() de fail fast.
-optional_secret() {
-  gcloud secrets versions access latest --project "${PROJECT_ID}" --secret "$1" 2>/dev/null | tr -d '\r' || true
-}
+# NGUON BI MAT LA MOT DIEM CAM, KHONG PHAI MOT DONG LENH CO DINH.
+#
+# Hai dong `gcloud secrets versions access` truoc day o day la TOAN BO cho GCP con lai trong
+# duong render — `deploy-stack.sh` (735 dong, ca lan rollout) khong nhac toi GCP mot lan nao. Nen
+# de mot Ubuntu cua khach dung duoc stack nay, thu duy nhat phai doi la CHO NAY.
+#
+# MAC DINH GIU NGUYEN HANH VI HOM NAY. Thu vien portable mac dinh `file` (mot tang trung tinh
+# khong duoc coi mot nha cung cap la mac dinh), nhung tep NAY nam trong `deploy/netviet/` — thu
+# muc cua ban trien khai GCP dang chay — nen no tu ghim `gcp-secret-manager`. Khong stack nao
+# dang chay doi hanh vi mot ky tu. Host khach dat `SECRET_BACKEND=file`.
+export SECRET_BACKEND="${SECRET_BACKEND:-gcp-secret-manager}"
+NETVIET_SECRET_SOURCE=''
+for candidate in "${SCRIPT_DIR}/secret-source.sh" "${SCRIPT_DIR}/../portable/secret-source.sh"; do
+  [[ -r "${candidate}" ]] && NETVIET_SECRET_SOURCE="${candidate}" && break
+done
+if [[ -n "${NETVIET_SECRET_SOURCE}" ]]; then
+  # `NETVIET_PROVIDER_DIR` phai suy tu NOI TIM THAY thu vien, khong tu thu muc lam viec: tren VM
+  # cac tep nay nam phang trong `/srv/netviet/apps/zalo-<slug>/`, khong giu cay thu muc cua repo.
+  NETVIET_SECRET_LIB_DIR="$(cd "$(dirname "${NETVIET_SECRET_SOURCE}")" && pwd)"
+  for provider_dir in "${NETVIET_SECRET_LIB_DIR}/providers" "${NETVIET_SECRET_LIB_DIR}/../providers"; do
+    [[ -d "${provider_dir}" ]] && export NETVIET_PROVIDER_DIR="$(cd "${provider_dir}" && pwd)" && break
+  done
+  # shellcheck source=../portable/secret-source.sh
+  . "${NETVIET_SECRET_SOURCE}"
+else
+  # DUONG LUI CO CHU Y: mot ban rsync cu chua mang `secret-source.sh` len VM van phai deploy
+  # duoc. Xoa nhanh nay khi moi stack da nhan ban moi.
+  secret() {
+    gcloud secrets versions access latest --project "${PROJECT_ID}" --secret "$1" | tr -d '\r'
+  }
+  optional_secret() {
+    gcloud secrets versions access latest --project "${PROJECT_ID}" --secret "$1" 2>/dev/null | tr -d '\r' || true
+  }
+fi
 
 POSTGRES_ADMIN_PASSWORD="$(secret zalo-${STACK_SLUG}-postgres-admin-password)"
 ZALO_DB_PASSWORD="$(secret zalo-${STACK_SLUG}-zalo-db-password)"
@@ -400,13 +425,49 @@ AUTH_MODE='session'
 # (60 ngay -> Nearline, 365 ngay -> Coldline, KHONG co rule Delete) — xem gcs-lifecycle.json va
 # deploy.ps1 (`$BackupBucket`). Tro nham bucket thi rule giu anh khong co tac dung MA CUNG KHONG
 # bao loi, nen mac dinh o day duoc chot theo bucket that thay vi de nguoi deploy tu go.
-# BACKUP_BUCKET den tu deploy duoi dang `gs://<ten>`; API chi can ten tran.
+# KHO ANH KHONG CON MAC DINH LA GCS — #224 Phase F.
+#
+# Truoc ban nay hai dong o day quyet dinh ca kien truc luu tru: `BACKUP_BUCKET` la BAT BUOC (mot
+# URL `gs://`), va he qua la `MEDIA_STORE` chi co the la `gcs` hoac `none`. Tren mot may chu cua
+# KHACH khong co bucket GCS nao, nen buoc render CHET NGAY o dong nay voi
+# `BACKUP_BUCKET: unbound variable` — do la cho duong portable dut, va no dut TRUOC khi ai kip
+# hoi "co nen dung GCS khong".
+#
+# `packages/shared/src/env.ts` da nhan du bon kho tu lau (`none|local|gcs|s3`) va `MediaStore` da
+# co ca bon hien thuc. Cai thieu chua bao gio la code ung dung — la mot duong tu day len den do.
+#
+# THU TU QUYET DINH, va no giu nguyen hanh vi cua moi stack dang chay:
+#   1. Operator noi ro `MEDIA_STORE`  -> ton trong, khong doan lai.
+#   2. Biet mot bucket GCS            -> `gcs`. Day la duong cua moi stack hom nay.
+#   3. Co thu muc anh cuc bo          -> `local`. Duong ho so gia thap tren may khach.
+#   4. Khong biet gi                  -> `none`, va NOI RA rang anh se khong duoc luu.
+BACKUP_BUCKET="${BACKUP_BUCKET:-}"
 MEDIA_BUCKET="${MEDIA_BUCKET:-${BACKUP_BUCKET#gs://}}"
-if [[ -n "${MEDIA_BUCKET}" ]]; then
+MEDIA_ENDPOINT="${MEDIA_ENDPOINT:-}"
+MEDIA_REGION="${MEDIA_REGION:-auto}"
+MEDIA_LOCAL_DIR="${MEDIA_LOCAL_DIR:-}"
+MEDIA_ACCESS_KEY_ID=""
+MEDIA_SECRET_ACCESS_KEY=""
+if [[ -n "${MEDIA_STORE:-}" ]]; then
+  : # Operator da chon tuong minh.
+elif [[ -n "${MEDIA_BUCKET}" ]]; then
   MEDIA_STORE='gcs'
+elif [[ -n "${MEDIA_LOCAL_DIR}" ]]; then
+  MEDIA_STORE='local'
 else
   MEDIA_STORE='none'
-  echo "render-secrets: MEDIA_STORE=none (khong biet bucket) — anh Zalo se KHONG duoc luu." >&2
+  echo "render-secrets: MEDIA_STORE=none (khong biet kho anh) — anh Zalo se KHONG duoc luu." >&2
+fi
+# Kho S3 doi bon thu, va `loadEnv()` fail-fast neu thieu bat ky thu nao. Doc khoa qua nguon bi
+# mat (khong phai bien moi truong cua nguoi goi) de chung khong nam trong bang tien trinh.
+if [[ "${MEDIA_STORE}" == 's3' ]]; then
+  MEDIA_ACCESS_KEY_ID="$(secret zalo-${STACK_SLUG}-media-access-key-id)"
+  MEDIA_SECRET_ACCESS_KEY="$(secret zalo-${STACK_SLUG}-media-secret-access-key)"
+  [[ -n "${MEDIA_ENDPOINT}" ]] || { echo "MEDIA_STORE=s3 nhung thieu MEDIA_ENDPOINT." >&2; exit 64; }
+  [[ -n "${MEDIA_BUCKET}" ]] || { echo "MEDIA_STORE=s3 nhung thieu MEDIA_BUCKET." >&2; exit 64; }
+fi
+if [[ "${MEDIA_STORE}" == 'local' && -z "${MEDIA_LOCAL_DIR}" ]]; then
+  MEDIA_LOCAL_DIR=/srv/media
 fi
 
 cat >"${RUNTIME_DIR}/secrets.env" <<EOF
@@ -473,6 +534,16 @@ PILOT_OPERATOR_PASSWORD=${PILOT_OPERATOR_PASSWORD}
 TRANSPORT_DEMO_DRIVER_PASSWORD=${TRANSPORT_DEMO_DRIVER_PASSWORD}
 MEDIA_STORE=${MEDIA_STORE}
 MEDIA_BUCKET=${MEDIA_BUCKET}
+# Bon bien cua duong S3 va mot bien cua duong local. Chung PHAI co mat o day VA trong khoi
+# environment cua compose.yaml: mot bien chi co o mot trong hai cho thi khong bao gio toi
+# container (cai bay da lam ADVICE_COMPOSER rong suot 19/08-21/08/2026).
+# KHONG DUNG DAU HUYEN NGUOC O DAY: khoi nay nam trong mot heredoc KHONG duoc quote, nen
+# dau huyen nguoc trong mot dong CHU THICH van bi chay nhu lenh (da xay ra that o ban nay).
+MEDIA_ENDPOINT=${MEDIA_ENDPOINT}
+MEDIA_REGION=${MEDIA_REGION}
+MEDIA_ACCESS_KEY_ID=${MEDIA_ACCESS_KEY_ID}
+MEDIA_SECRET_ACCESS_KEY=${MEDIA_SECRET_ACCESS_KEY}
+MEDIA_LOCAL_DIR=${MEDIA_LOCAL_DIR}
 # CONG TAC HE THONG CON, doc boi deploy-stack.sh tren VM. No KHONG di vao container nao: mot
 # container khong can biet Flowise co ton tai hay khong, con lop rollout thi phai biet — no quyet
 # dinh co keo compose.flowise.yaml vao, co doi Flowise healthy, va co doi chieu digest cua no.
