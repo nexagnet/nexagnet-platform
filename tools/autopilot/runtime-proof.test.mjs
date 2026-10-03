@@ -462,10 +462,35 @@ test('deploy signals: chi pass khi dung SHA merge + tenant + ba tang cung deu pa
     'SIGNALS_SHA_MISMATCH',
   );
   assert.equal(check(goodSignals({ release: null })).reason, 'SIGNALS_SHA_MISMATCH');
-  assert.equal(
-    check(goodSignals({ release: { tenant: 'ultty', gitSha: MERGE } })).reason,
-    'SIGNALS_TARGET_MISMATCH',
+  // Positive: pin ca tenant + environment cua TARGET.
+  assert.deepEqual(RUNTIME_TARGETS[TARGET], {
+    tenant: 'transport-preview',
+    environment: 'gd1-test',
+  });
+  assert.deepEqual(
+    check(
+      goodSignals({
+        release: { tenant: 'transport-preview', environment: 'gd1-test', gitSha: MERGE },
+      }),
+    ),
+    { ok: true, reason: 'OK' },
   );
+  // Negative: dung SHA, sai tenant HOAC sai environment HOAC thieu environment -> SIGNALS_TARGET_MISMATCH.
+  for (const release of [
+    { tenant: 'ultty', environment: 'gd1-test', gitSha: MERGE },
+    { tenant: 'transport-preview', environment: 'production', gitSha: MERGE },
+    { tenant: 'transport-preview', environment: 'dev', gitSha: MERGE },
+    { tenant: 'transport-preview', environment: 'prod', gitSha: MERGE },
+    { tenant: 'transport-preview', environment: 'GD1-TEST', gitSha: MERGE },
+    { tenant: 'transport-preview', environment: null, gitSha: MERGE },
+    { tenant: 'transport-preview', gitSha: MERGE },
+    { tenant: 'ultty', environment: 'production', gitSha: MERGE },
+  ])
+    assert.equal(
+      check(goodSignals({ release })).reason,
+      'SIGNALS_TARGET_MISMATCH',
+      JSON.stringify(release),
+    );
   for (const layer of ['rollout', 'health', 'deterministicSmoke'])
     assert.equal(check(goodSignals({ [layer]: 'pending' })).reason, 'SIGNALS_NOT_PASSING', layer);
   assert.equal(check(goodSignals({ hardFailure: true })).reason, 'SIGNALS_NOT_PASSING');
@@ -563,6 +588,12 @@ test('report: deploy fail / huy / bo qua -> RUNTIME_PROOF_FAILED, khong rollback
 test('report: deploy success nhung tin hieu thieu / sai SHA -> failure, khong tuyen bo PASSED', async () => {
   for (const [signals, reason] of [
     [null, 'SIGNALS_MISSING'],
+    [
+      goodSignals({
+        release: { tenant: 'transport-preview', environment: 'production', gitSha: MERGE },
+      }),
+      'SIGNALS_TARGET_MISMATCH',
+    ],
     [
       goodSignals({ release: { tenant: 'transport-preview', gitSha: NEWER_MAIN } }),
       'SIGNALS_SHA_MISMATCH',

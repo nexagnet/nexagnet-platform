@@ -189,7 +189,12 @@ export function evaluateDeploySignals({ signals, mergeSha, target }) {
   const release = signals.release;
   if (!release || release.gitSha !== mergeSha) return { ok: false, reason: 'SIGNALS_SHA_MISMATCH' };
   const expected = RUNTIME_TARGETS[target];
-  if (!expected || release.tenant !== expected.tenant)
+  // Ca CAP (tenant, environment) phai khop TARGET: dung tenant nhung sai moi truong van la false-positive.
+  if (
+    !expected ||
+    release.tenant !== expected.tenant ||
+    release.environment !== expected.environment
+  )
     return { ok: false, reason: 'SIGNALS_TARGET_MISMATCH' };
   const notPassing = HARD_PASS_LAYERS.filter((layer) => signals[layer] !== 'pass');
   if (notPassing.length > 0 || signals.hardFailure !== false)
