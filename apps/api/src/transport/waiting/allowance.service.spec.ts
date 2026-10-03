@@ -397,6 +397,53 @@ describe('WaitingAllowanceService — WA-030', () => {
     expect(await service.approvedTotalsBetween('2026-09-09', '2026-09-09')).toHaveLength(1);
   });
 
+  // `#401`: ngay nghiep vu cua khoan phu cap la ngay DE NGHI theo MUI GIO NGHIEP VU, va ky luong
+  // cat theo ngay do. Clock ghim o day nen bai khong phu thuoc thang ma CI dang chay — dung cai
+  // bay da lam bai boot do tu 01/10/2026. Hai phia cua moi ranh gioi deu duoc do.
+  it.each([
+    {
+      label: '23:59:59 ngay 30/09 gio VN',
+      proposedAt: '2026-09-30T16:59:59.999Z',
+      businessDate: '2026-09-30',
+      inside: { start: '2026-09-01', end: '2026-09-30' },
+      outside: { start: '2026-10-01', end: '2026-10-31' },
+    },
+    {
+      label: '00:00 ngay 01/10 gio VN',
+      proposedAt: '2026-09-30T17:00:00.000Z',
+      businessDate: '2026-10-01',
+      inside: { start: '2026-10-01', end: '2026-10-31' },
+      outside: { start: '2026-09-01', end: '2026-09-30' },
+    },
+    {
+      label: '00:00 ngay 01/01 gio VN',
+      proposedAt: '2026-12-31T17:00:00.000Z',
+      businessDate: '2027-01-01',
+      inside: { start: '2027-01-01', end: '2027-01-31' },
+      outside: { start: '2026-12-01', end: '2026-12-31' },
+    },
+  ])(
+    'de nghi luc $label thuoc dung ky cua ngay nghiep vu, ky ben kia ranh gioi khong tinh',
+    async ({ proposedAt, businessDate, inside, outside }) => {
+      now = new Date(proposedAt);
+      const allowance = await propose();
+      expect(allowance.businessDate).toBe(businessDate);
+      await service.decide({
+        allowanceId: allowance.id,
+        outcome: 'APPROVED',
+        approvedAmount: 300_000,
+        note: null,
+        idempotencyKey: 'k-boundary',
+        authUserId: 'u.sep',
+      });
+
+      expect(await service.approvedTotalsBetween(inside.start, inside.end)).toEqual([
+        { driverId: 'drv_a', totalAmount: 300_000, count: 1 },
+      ]);
+      expect(await service.approvedTotalsBetween(outside.start, outside.end)).toEqual([]);
+    },
+  );
+
   it('hang cho duyet chi chua nhung de nghi CHUA quyet', async () => {
     const first = await propose();
     expect(await service.listPending()).toHaveLength(1);

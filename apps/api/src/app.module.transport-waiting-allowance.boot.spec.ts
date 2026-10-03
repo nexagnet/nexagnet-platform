@@ -127,11 +127,36 @@ const replayed = await allowances.decide({
   note: 'Cat theo muc thoa thuan', idempotencyKey: 'k-1', authUserId: 'boot-boss',
 });
 
-const period = await payroll.openPeriod({
-  label: 'Ky boot', startDate: '2026-09-01', endDate: '2026-09-30', createdBy: 'boot',
-});
-const runOutcome = await payroll.runPayroll({ periodId: period.id, runBy: 'boot' });
-const detail = await payrollRead.payslipDetail(runOutcome.payslips[0].id);
+// KY LUONG SUY TU CHINH FACT, KHONG TU LICH CUA MAY CHAY CI. Production co y dat \`businessDate\`
+// cua khoan phu cap theo LUC DE NGHI (gio may chu, mui gio nghiep vu) — va khong mot module nao
+// cung cap \`TRANSPORT_CLOCK\` de bai boot nay ghim gio ma khong doi do thi production. Ky cung
+// \`2026-09-01..30\` truoc day xanh suot thang 9 roi do tu 01/10: khoan phu cap roi dung vao thang
+// 10, va phieu luong thang 9 (dung) khong co no. Nen: ky = THANG chua \`businessDate\` cua khoan
+// vua duyet, cong hai ky lan can (thang truoc, thang sau) phai KHONG an nham khoan do.
+// Ranh gioi 30/09 -> 01/10 va 31/12 -> 01/01 do tat dinh o \`allowance.service.spec.ts\`.
+const monthOf = (businessDate, offset) => {
+  const [year, month] = businessDate.split('-').map(Number);
+  const first = new Date(Date.UTC(year, month - 1 + offset, 1));
+  const last = new Date(Date.UTC(year, month + offset, 0));
+  return { startDate: first.toISOString().slice(0, 10), endDate: last.toISOString().slice(0, 10) };
+};
+const allowanceComponentsIn = async (label, range) => {
+  const opened = await payroll.openPeriod({ label, ...range, createdBy: 'boot' });
+  const outcome = await payroll.runPayroll({ periodId: opened.id, runBy: 'boot' });
+  const slip = await payrollRead.payslipDetail(outcome.payslips[0].id);
+  return { outcome, slip };
+};
+
+const { outcome: runOutcome, slip: detail } = await allowanceComponentsIn(
+  'Ky boot', monthOf(approved.businessDate, 0),
+);
+const neighbourAllowanceAmounts = [];
+for (const [label, offset] of [['Ky thang truoc', -1], ['Ky thang sau', 1]]) {
+  const { slip } = await allowanceComponentsIn(label, monthOf(approved.businessDate, offset));
+  neighbourAllowanceAmounts.push(slip.components
+    .filter((component) => component.source === 'WAITING_ALLOWANCE')
+    .map((component) => component.amount));
+}
 
 const proof = {
   allowanceController: has(WaitingAllowanceController),
@@ -146,6 +171,7 @@ const proof = {
       source: component.source, kind: component.kind, amount: component.amount,
       quantity: component.quantity, recordedBy: component.recordedBy,
     })),
+  neighbourAllowanceAmounts,
   candidateAmount: approved.candidateAmount,
   approvedAmount: approved.approvedAmount,
   replayStatus: replayed.status,
@@ -202,6 +228,8 @@ describe('transport waiting allowance process boot contract', () => {
             recordedBy: null,
           },
         ],
+        /* Ky thang truoc va thang sau KHONG an nham khoan nay — ranh gioi ky la that. */
+        neighbourAllowanceAmounts: [[], []],
         candidateAmount: 500000,
         approvedAmount: 300000,
         /* Duyet lai bang CUNG mot khoa khong tra tien lan hai. */
