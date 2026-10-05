@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 2,
+  "slug": "vi-bang",
+  "identity": {
+    "displayName": "Vi Bang Fixture",
+    "shortName": "ViBang"
+  },
+  "branding": {
+    "productName": "Knowledge Workspace",
+    "installName": "Knowledge Workspace",
+    "pageTitle": "Knowledge Workspace",
+    "pageDescription": "Synthetic vi-bang tenant fixture.",
+    "themeColor": "#0f62fe",
+    "backgroundColor": "#f5f7fb",
+    "monogram": "V",
+    "composerPlaceholder": "Search shared knowledge"
+  },
+  "experience": "knowledge-workspace",
+  "capabilities": ["knowledge", "vi-bang-management"],
+  "policies": {
+    "readiness": { "blockedCapabilities": [] }
+  },
+  "integrations": {
+    "contentSource": { "adapter": "local_manifest" }
+  },
+  "bootstrap": {
+    "knowledge": { "path": "data/knowledge.json" }
+  }
+}

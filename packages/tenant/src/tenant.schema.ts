@@ -295,6 +295,15 @@ export const CAPABILITY_IDS = [
    * quyet toan DOC nghiem thu, nghiem thu khong bao gio nhin thay so tien.
    */
   'transport-acceptance',
+  /**
+   * VI BANG — HO SO (Issue #427): khach hang, hop dong dich vu va ho so vi bang, cung may trang
+   * thai den `WAITING_PAYMENT`.
+   *
+   * MOT CAPABILITY DOC LAP, `dependencies: []`: mien nay khong doc doi xe, khong nhan tin, khong
+   * goi LLM. Mot khach vi bang chay duoc ma KHONG bat `transport-*`, `messaging` hay
+   * `turn-processing`. Thanh toan, cap so, tai lieu cuoi la viec cua cac issue sau.
+   */
+  'vi-bang-management',
 ] as const;
 export const EXPERIENCE_IDS = [
   'operations-console',
@@ -952,6 +961,8 @@ const capabilityRequirements = {
    * chung tu duoc buoc that, dong nay them mot phan tu, va luc do no moi dung.
    */
   'transport-acceptance': { dependencies: ['transport-core'] },
+  /** KHONG phu thuoc capability nao — xem khoi chu thich o `CAPABILITY_IDS`. */
+  'vi-bang-management': { dependencies: [] },
 } as const satisfies Record<
   z.infer<typeof capabilityIdSchema>,
   {

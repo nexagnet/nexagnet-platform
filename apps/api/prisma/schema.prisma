@@ -711,6 +711,9 @@ model User {
   /// Chuc danh hien thi ("Dieu hanh ca dem") — KHONG mang nghia phan quyen nao.
   jobTitle                   String?
   permissionGrants           UserPermissionGrant[]
+  /// Vi bang (#427): ho so ma tai khoan nay la Thua hanh vien / Thu ky.
+  viBangExecuting            ViBangCase[]          @relation("ViBangCaseExecutor")
+  viBangSecretarial          ViBangCase[]          @relation("ViBangCaseSecretary")
 }
 
 /// QUYEN RIENG cua mot tai khoan (#395) — lop tren vai khoi diem (`User.role`).
@@ -6200,4 +6203,127 @@ model PlatformFileLink {
 
   @@index([businessOwnerType, businessOwnerId, state])
   @@index([fileId, state])
+}
+
+// ============================================================================
+// VI BANG — HO SO (Issue #427). Capability `vi-bang-management`, doc lap voi van tai.
+// Moi bang mang `tenantId` do MAY CHU dat tu goi khach (`trustedTenantScope()`), khong bao gio
+// tu dau vao cua nguoi goi. Thanh toan, cap so, tai lieu cuoi KHONG nam o day.
+// ============================================================================
+
+enum ViBangCustomerKind {
+  PERSON
+  ORGANIZATION
+}
+
+enum ViBangCaseStatus {
+  DRAFT
+  IN_PROGRESS
+  WAITING_PAYMENT
+  WAITING_NUMBER
+  NUMBERED
+  STAMPED
+  ISSUED
+  RETURNED
+}
+
+enum ViBangParticipantKind {
+  REQUESTER
+  PARTICIPANT
+}
+
+/// Khach hang. KHONG unique tren `phone`/`nationalId`: hai nguoi co the chung so dien thoai, va mot
+/// rang buoc cung se ep mot lan hop nhat nham. Trung chi duoc CANH BAO.
+model ViBangCustomer {
+  id          String             @id @default(cuid())
+  tenantId    String
+  kind        ViBangCustomerKind
+  displayName String
+  /// Nguon khach va phan loai (tu do); chua co danh muc dong cua.
+  source      String?
+  category    String?
+  phone       String?
+  nationalId  String?
+  email       String?
+  address     String?
+  taxCode     String?
+  note        String?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  contracts    ViBangServiceContract[]
+  cases        ViBangCase[]
+  participants ViBangCaseParticipant[]
+
+  @@index([tenantId, displayName])
+  @@index([tenantId, phone])
+  @@index([tenantId, nationalId])
+}
+
+/// Hop dong dich vu. MOT hop dong co nhieu ho so; ho so co the chua gan hop dong.
+model ViBangServiceContract {
+  id          String         @id @default(cuid())
+  tenantId    String
+  customerId  String
+  customer    ViBangCustomer @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  contractRef String
+  title       String?
+  signedAt    DateTime?
+  note        String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  cases ViBangCase[]
+
+  @@index([tenantId, customerId])
+  @@index([tenantId, contractRef])
+}
+
+/// Ho so vi bang — ban ghi co cau truc chuan. `registrationNumber`/`registeredAt` la sieu du lieu
+/// DANG KY PHAP LY, tach han voi so vi bang (cap o issue sau).
+model ViBangCase {
+  id                 String                 @id @default(cuid())
+  tenantId           String
+  customerId         String
+  customer           ViBangCustomer         @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  contractId         String?
+  contract           ViBangServiceContract? @relation(fields: [contractId], references: [id], onDelete: Restrict)
+  status             ViBangCaseStatus       @default(DRAFT)
+  /// Thua hanh vien phu trach / Thu ky (tuy chon) — tai khoan nhan vien.
+  executorUserId     String?
+  executor           User?                  @relation("ViBangCaseExecutor", fields: [executorUserId], references: [id], onDelete: Restrict)
+  secretaryUserId    String?
+  secretary          User?                  @relation("ViBangCaseSecretary", fields: [secretaryUserId], references: [id], onDelete: Restrict)
+  branch             String?
+  occurredAt         DateTime?
+  location           String?
+  content            String?
+  registrationNumber String?
+  registeredAt       DateTime?
+  createdBy          String
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+
+  participants ViBangCaseParticipant[]
+
+  @@index([tenantId, status])
+  @@index([tenantId, customerId])
+  @@index([tenantId, contractId])
+  @@index([tenantId, createdAt])
+}
+
+/// Nguoi yeu cau / ben tham gia cua mot ho so (0..N). `customerId` tuy chon: ben tham gia co the
+/// chua la khach hang.
+model ViBangCaseParticipant {
+  id          String                @id @default(cuid())
+  caseId      String
+  case        ViBangCase            @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  kind        ViBangParticipantKind
+  customerId  String?
+  customer    ViBangCustomer?       @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  displayName String
+  roleLabel   String?
+
+  @@index([caseId])
+  @@index([customerId])
 }
