@@ -142,6 +142,27 @@ test('thong bao loi khong bao gio chua than yeu cau (env, tep runtime)', async (
   assert.equal(error.message.includes('SESSION_SECRET'), false);
 });
 
+test('loi validation 400: bao TEN truong vi pham, khong bao gio bao thong diep nhac lai gia tri', async () => {
+  const { impl } = fakeFetch({
+    status: 400,
+    body: {
+      error: {
+        message: 'Request failed payload validation - see details.',
+        details: {
+          'healthChecks.0.periodSeconds': ['must be >= 10. Received "super-secret-value"'],
+          'bad key with spaces and "quotes"': ['x'],
+        },
+      },
+    },
+  });
+  const client = createNorthflankClient({ token: TOKEN, fetchImpl: impl });
+  const error = await client.patchDeploymentService('p-1', 'web', {}).catch((e) => e);
+  assert.equal(error.status, 400);
+  assert.match(error.message, /\[truong vi pham: healthChecks\.0\.periodSeconds\]/);
+  assert.equal(error.message.includes('super-secret-value'), false);
+  assert.equal(error.message.includes('quotes'), false);
+});
+
 test('scrub: xoa Bearer, JWT va moi gia tri bi mat truyen vao; cat do dai', () => {
   const jwt = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghijklmnopqrstuvwx';
   const text = scrub(`a Bearer abc.def-123 b ${jwt} c super-secret-value d`, [

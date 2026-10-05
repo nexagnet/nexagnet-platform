@@ -264,6 +264,14 @@ export function buildServicePatch(role, { imageRef, webOrigin, manifest }) {
   return body;
 }
 
+// Rang buoc cua API Northflank (PATCH deployment service), DO TRUC TIEP tu loi HTTP 400 cua API that
+// 05/10/2026 (run 37265249316 + probe payload co y sai de khong doi service):
+//   - initialDelaySeconds >= 1, periodSeconds >= 10
+//   - successThreshold CHI duoc phep khi type == 'readinessProbe' (them vao startup/liveness la 400).
+// Tai lieu .md cua endpoint khong neu cac can duoi nay: tin phan hoi cua API, khong tin tai lieu.
+export const HEALTH_CHECK_MIN_INITIAL_DELAY_SECONDS = 1;
+export const HEALTH_CHECK_MIN_PERIOD_SECONDS = 10;
+
 function buildHealthChecks(role) {
   const { port, healthPath } = SERVICE_ROLES[role];
   const probe = (type, overrides) => ({
@@ -271,18 +279,18 @@ function buildHealthChecks(role) {
     type,
     path: healthPath,
     port,
-    initialDelaySeconds: 0,
-    periodSeconds: 10,
+    initialDelaySeconds: HEALTH_CHECK_MIN_INITIAL_DELAY_SECONDS,
+    periodSeconds: HEALTH_CHECK_MIN_PERIOD_SECONDS,
     timeoutSeconds: 5,
     failureThreshold: 3,
-    successThreshold: 1,
     ...overrides,
   });
   return [
-    // api: migrate + seed chay LUC KHOI DONG nen can mot cua so khoi dong rong (60 x 5s = 5 phut)
-    // truoc khi liveness bat dau — neu khong liveness se giet container dang migrate.
-    probe('startupProbe', { periodSeconds: 5, timeoutSeconds: 3, failureThreshold: 60 }),
-    probe('readinessProbe', {}),
+    // api: migrate + seed chay LUC KHOI DONG nen can mot cua so khoi dong rong (30 x 10s = 5 phut,
+    // giu y do 60 x 5s truoc day) truoc khi liveness bat dau — neu khong liveness se giet container
+    // dang migrate.
+    probe('startupProbe', { timeoutSeconds: 3, failureThreshold: 30 }),
+    probe('readinessProbe', { successThreshold: 1 }),
     probe('livenessProbe', { periodSeconds: 20, failureThreshold: 5 }),
   ];
 }

@@ -41,6 +41,22 @@ export function scrub(text, secrets = []) {
     .slice(0, MAX_MESSAGE);
 }
 
+const FIELD_PATH = /^[A-Za-z0-9_.[\]-]{1,80}$/;
+
+/**
+ * Ten truong Northflank bao vi pham validation (`error.details`). CHI in TEN truong, KHONG in thong
+ * diep: thong diep nhac lai gia tri da gui ("Received ...") nen co the mang env/tep runtime — vi
+ * pham quy tac "than yeu cau khong bao gio duoc ghi lai" o tren.
+ */
+function invalidFields(json) {
+  const details = json?.error?.details ?? json?.details;
+  if (details === null || typeof details !== 'object' || Array.isArray(details)) return '';
+  const names = Object.keys(details)
+    .filter((name) => FIELD_PATH.test(name))
+    .slice(0, 10);
+  return names.length === 0 ? '' : ` [truong vi pham: ${names.join(', ')}]`;
+}
+
 function segment(value, label) {
   if (typeof value !== 'string' || !SEGMENT.test(value)) {
     throw new TypeError(`${label} khong phai slug Northflank hop le.`);
@@ -96,7 +112,10 @@ export function createNorthflankClient({
         method,
         path,
         status: response.status,
-        message: scrub(json?.error?.message ?? json?.message ?? 'khong co noi dung', [token]),
+        message: scrub(
+          `${json?.error?.message ?? json?.message ?? 'khong co noi dung'}${invalidFields(json)}`,
+          [token],
+        ),
       });
     }
     return json?.data ?? json;

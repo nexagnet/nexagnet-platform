@@ -305,13 +305,30 @@ test('PATCH: image bam DIGEST, mot request mang ca env + tep runtime + cong + he
         'periodSeconds',
         'timeoutSeconds',
         'failureThreshold',
-        'successThreshold',
       ]) {
         assert.notEqual(check[field], undefined, `${role}.${check.type}.${field}`);
       }
       assert.equal(check.port, SERVICE_ROLES[role].port);
       assert.equal(check.path, SERVICE_ROLES[role].healthPath);
     }
+  }
+});
+
+test('PATCH: health check thoa rang buoc THAT cua API Northflank (da do tren HTTP 400 live)', () => {
+  for (const role of ['api', 'web']) {
+    const checks = patch(role).healthChecks;
+    for (const check of checks) {
+      const label = `${role}.${check.type}`;
+      assert.ok(check.initialDelaySeconds >= 1, `${label} initialDelaySeconds >= 1`);
+      assert.ok(check.periodSeconds >= 10, `${label} periodSeconds >= 10`);
+      assert.ok(Number.isInteger(check.timeoutSeconds) && check.timeoutSeconds >= 1, label);
+      assert.ok(Number.isInteger(check.failureThreshold) && check.failureThreshold >= 1, label);
+      // successThreshold chi hop le o readinessProbe: o loai khac API tra 400.
+      assert.equal('successThreshold' in check, check.type === 'readinessProbe', label);
+    }
+    // Y do khoi dong giu nguyen: cua so startup >= 5 phut truoc khi liveness bat dau.
+    const startup = checks.find((check) => check.type === 'startupProbe');
+    assert.ok(startup.periodSeconds * startup.failureThreshold >= 300);
   }
 });
 
