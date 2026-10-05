@@ -68,26 +68,28 @@ test('preflight: chi doc, khong OIDC, khong secret, khong token App, khong ghi',
     );
 });
 
-test('quyen: GITHUB_TOKEN mac dinh chi doc; id-token: write DUNG MOT cho, o job deploy (theo khuon hien co)', () => {
+test('quyen: GITHUB_TOKEN mac dinh chi doc; KHONG con id-token (khong GCP); packages: write DUNG MOT cho, o job deploy', () => {
   assert.match(CODE, /^permissions:\n {2}contents: read\n/m);
-  assert.equal(CODE.match(/id-token/g)?.length, 1);
+  // Khong con danh tinh GCP nao de doi: khong OIDC o BAT KY job nao.
+  assert.equal(CODE.match(/id-token/g), null);
   const deploy = job('deploy');
   assert.match(
     deploy,
-    /permissions:\n {6}actions: read\n {6}contents: read\n {6}id-token: write\n/,
+    /permissions:\n {6}actions: read\n {6}contents: read\n {6}packages: write\n/,
   );
-  // Khong job nao khac co quyen ghi bang GITHUB_TOKEN.
+  // Khong job nao khac co quyen ghi bang GITHUB_TOKEN; quyen ghi duy nhat la day image len GHCR.
   const tokenWrites = CODE.split('\n').filter(
     (line) => /^\s+[a-z-]+: write\s*$/.test(line) && !/permission-/.test(line),
   );
-  assert.deepEqual(tokenWrites, ['      id-token: write']);
-  assert.doesNotMatch(job('preflight') + job('report'), /id-token/);
+  assert.deepEqual(tokenWrites, ['      packages: write']);
+  assert.doesNotMatch(job('preflight') + job('report'), /id-token|packages:/);
 });
 
-test('deploy: CHI transport-preview/gd1-test, hang so; git_sha = SHA da bind tu preflight; engine/quan sat off', () => {
+test('deploy: CHI transport-preview/gd1-test, hang so; git_sha = SHA da bind tu preflight; Northflank, khong GCP', () => {
   assert.deepEqual(RUNTIME_TARGETS[TARGET], {
     tenant: 'transport-preview',
     environment: 'gd1-test',
+    provider: 'northflank',
   });
   assert.deepEqual(Object.keys(RUNTIME_TARGETS), ['transport-preview/gd1-test']);
   const deploy = job('deploy');
@@ -96,15 +98,24 @@ test('deploy: CHI transport-preview/gd1-test, hang so; git_sha = SHA da bind tu 
     deploy,
     /if: needs\.preflight\.outputs\.decision == 'DEPLOY' && needs\.preflight\.outputs\.target == 'transport-preview\/gd1-test'\n/,
   );
-  assert.match(deploy, /uses: \.\/\.github\/workflows\/reusable-deploy-tenant\.yml\n/);
+  assert.match(deploy, /uses: \.\/\.github\/workflows\/reusable-deploy-northflank\.yml\n/);
   assert.match(
     deploy,
-    /with:\n {6}tenant: transport-preview\n {6}environment: gd1-test\n {6}git_sha: \$\{\{ needs\.preflight\.outputs\.git_sha \}\}\n {6}workflow_engine: 'off'\n {6}observability_stack: 'off'\n {4}secrets: inherit\n/,
+    /with:\n {6}tenant: transport-preview\n {6}environment: gd1-test\n {6}git_sha: \$\{\{ needs\.preflight\.outputs\.git_sha \}\}\n {4}secrets: inherit\n/,
   );
   // Tenant/moi truong khong bao gio den tu Issue, payload hay output.
   assert.doesNotMatch(deploy, /(tenant|environment): \$\{\{/);
-  assert.equal(CODE.match(/reusable-deploy-tenant\.yml/g).length, 1, 'khong nhan ban logic deploy');
-  assert.doesNotMatch(CODE, /gcloud|google-github-actions|deploy-ci\.sh|docker /);
+  assert.equal(
+    CODE.match(/reusable-deploy-northflank\.yml/g).length,
+    1,
+    'khong nhan ban logic deploy',
+  );
+  // Khong con duong GCP nao: khong workflow VM, khong WIF, khong gcloud, khong OS Login, khong build tai cho.
+  assert.doesNotMatch(CODE, /reusable-deploy-tenant\.yml/);
+  assert.doesNotMatch(
+    CODE,
+    /gcloud|google-github-actions|workload.?identity|os.?login|GCP_|deploy-ci\.sh|docker |workflow_engine|observability_stack/i,
+  );
 });
 
 test('khong con duong nao toi production / tenant khach', () => {

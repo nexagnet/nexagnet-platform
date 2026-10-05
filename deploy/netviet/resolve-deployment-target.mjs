@@ -36,15 +36,22 @@ export const RESOLVE_EXIT_CODES = Object.freeze({
   stackSlugMismatch: 68,
   unknownProfile: 69,
   profileRejected: 70,
+  unknownProvider: 71,
 });
 
-const REQUIRED_TARGET_FIELDS = Object.freeze([
-  'vmName',
-  'gcpProjectId',
-  'region',
-  'zone',
-  'primaryTenant',
-]);
+/**
+ * NHA CUNG CAP DEPLOY. `gcp-vm` la duong CU (VM `netviet` qua WIF + OS Login + compose) va la MAC DINH
+ * khi target khong khai `provider` — nen moi hang registry co truoc Phase 3 giu NGUYEN ngu nghia.
+ * `northflank` la duong cua ban xem truoc nen tang (Developer Sandbox), khong dung GCP.
+ */
+export const DEPLOY_PROVIDERS = Object.freeze({
+  'gcp-vm': Object.freeze(['vmName', 'gcpProjectId', 'region', 'zone', 'primaryTenant']),
+  northflank: Object.freeze(['projectId', 'apiServiceId', 'webServiceId']),
+});
+export const DEFAULT_DEPLOY_PROVIDER = 'gcp-vm';
+
+/** ID Northflank (project/service) la slug chu thuong; chan ky tu la truoc khi di vao URL API. */
+const NORTHFLANK_ID = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
 
 export class DeploymentResolutionError extends Error {
   constructor(exitCode, reasons) {
@@ -87,10 +94,22 @@ export function resolveDeploymentTarget(registry, request, switches = {}) {
     ]);
   }
 
-  for (const field of REQUIRED_TARGET_FIELDS) {
+  const provider = target.provider ?? DEFAULT_DEPLOY_PROVIDER;
+  if (!Object.hasOwn(DEPLOY_PROVIDERS, provider)) {
+    throw new DeploymentResolutionError(RESOLVE_EXIT_CODES.unknownProvider, [
+      `Unsupported deploy provider for target ${entry.target}: ${JSON.stringify(provider)}`,
+    ]);
+  }
+
+  for (const field of DEPLOY_PROVIDERS[provider]) {
     if (typeof target[field] !== 'string' || target[field].trim() === '') {
       throw new DeploymentResolutionError(RESOLVE_EXIT_CODES.incompleteTarget, [
         `Deployment target ${entry.target} is missing ${field}`,
+      ]);
+    }
+    if (provider === 'northflank' && !NORTHFLANK_ID.test(target[field])) {
+      throw new DeploymentResolutionError(RESOLVE_EXIT_CODES.incompleteTarget, [
+        `Deployment target ${entry.target} has an invalid Northflank id in ${field}`,
       ]);
     }
   }
@@ -119,38 +138,65 @@ export function resolveDeploymentTarget(registry, request, switches = {}) {
     throw new DeploymentResolutionError(RESOLVE_EXIT_CODES.profileRejected, profileErrors);
   }
 
-  return Object.freeze({
+  const common = {
     tenant,
     environment,
     stackSlug,
+    provider,
     profileId: profile.id,
     gate: profile.gate,
     // Derived from the ENVIRONMENT. A registry author cannot set this, which is the point.
     requiresExactMainCi: isGatedEnvironment(environment),
     runtimeEnvironment: entry.runtimeEnvironment,
     targetId: entry.target,
+    secretContract: describeSecretContract(profile, stackSlug, switches),
+  };
+
+  // Moi provider chi mang truong cua CHINH no. Plan Northflank khong co `gcpProjectId`/`vmName` —
+  // khong de lai gia tri rong de mot buoc phia sau lo tay doc nham no.
+  if (provider === 'northflank') {
+    return Object.freeze({
+      ...common,
+      northflankProjectId: target.projectId,
+      northflankApiServiceId: target.apiServiceId,
+      northflankWebServiceId: target.webServiceId,
+    });
+  }
+  return Object.freeze({
+    ...common,
     vmName: target.vmName,
     gcpProjectId: target.gcpProjectId,
     gcpRegion: target.region,
     gcpZone: target.zone,
     primaryTenant: target.primaryTenant,
-    secretContract: describeSecretContract(profile, stackSlug, switches),
   });
 }
 
 /** Flat `key=value` step outputs for GitHub Actions. Secret NAMES only; never values. */
 export function toStepOutputs(plan) {
-  return Object.freeze({
+  const common = {
     stack_slug: plan.stackSlug,
     target_id: plan.targetId,
+    provider: plan.provider,
+    runtime_environment: plan.runtimeEnvironment,
+    deployment_profile: plan.profileId,
+    deployment_gate: plan.gate,
+    requires_exact_main_ci: plan.requiresExactMainCi ? 'true' : 'false',
+  };
+  if (plan.provider === 'northflank') {
+    return Object.freeze({
+      ...common,
+      northflank_project_id: plan.northflankProjectId,
+      northflank_api_service_id: plan.northflankApiServiceId,
+      northflank_web_service_id: plan.northflankWebServiceId,
+    });
+  }
+  return Object.freeze({
+    ...common,
     vm_name: plan.vmName,
     gcp_project_id: plan.gcpProjectId,
     gcp_region: plan.gcpRegion,
     gcp_zone: plan.gcpZone,
     primary_tenant: plan.primaryTenant,
-    runtime_environment: plan.runtimeEnvironment,
-    deployment_profile: plan.profileId,
-    deployment_gate: plan.gate,
-    requires_exact_main_ci: plan.requiresExactMainCi ? 'true' : 'false',
   });
 }

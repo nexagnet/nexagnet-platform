@@ -25,6 +25,9 @@ export const RUNTIME_TARGETS = Object.freeze({
   'transport-preview/gd1-test': Object.freeze({
     tenant: 'transport-preview',
     environment: 'gd1-test',
+    // NHA CUNG CAP DUOC PHEP deploy muc nay. Khong con GCP (WIF/VM/OS Login): bang chung `deploy-signals`
+    // phai tu chinh duong Northflank, neu khong thi la mot bang chung khong ai duoc phep tao ra.
+    provider: 'northflank',
   }),
 });
 export const TARGET_NONE = 'none';
@@ -196,6 +199,10 @@ export function evaluateDeploySignals({ signals, mergeSha, target }) {
     release.environment !== expected.environment
   )
     return { ok: false, reason: 'SIGNALS_TARGET_MISMATCH' };
+  // Dung SHA + dung muc tieu van chua du: bang chung phai den tu DUNG nha cung cap. `provider` thieu
+  // (duong cu khong phat no) hoac khac deu FAIL CLOSED — khong doan.
+  if (release.provider !== expected.provider)
+    return { ok: false, reason: 'SIGNALS_PROVIDER_MISMATCH' };
   const notPassing = HARD_PASS_LAYERS.filter((layer) => signals[layer] !== 'pass');
   if (notPassing.length > 0 || signals.hardFailure !== false)
     return { ok: false, reason: 'SIGNALS_NOT_PASSING', layers: notPassing };

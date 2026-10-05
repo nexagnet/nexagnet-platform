@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import test from 'node:test';
 
 import { DEPLOYMENT_PROFILES } from './deployment-profiles.mjs';
@@ -404,4 +406,243 @@ test('nhom Zalo duoc duyet KHONG di theo mot ho so khong chay kenh nao', () => {
     /if \[\[ "\$\{PROFILE_CHANNEL\}" == 'none' \]\]; then\n {4}approved_group_hashes=''/,
   );
   assert.match(deployCi, /GD1_TEST_APPROVED_GROUP_HASHES="\$\{approved_group_hashes\}"/);
+});
+
+// --- NHA CUNG CAP DEPLOY: Northflank la mot provider, gcp-vm la MAC DINH ----------------------------
+
+const northflankTarget = {
+  provider: 'northflank',
+  projectId: 'nexagnet-dev',
+  apiServiceId: 'api',
+  webServiceId: 'web',
+};
+const previewRow = {
+  tenant: 'transport-preview',
+  environment: 'gd1-test',
+  stackSlug: 'transport-preview-gd1-test',
+  githubEnvironment: 'gd1-test',
+  runtimeEnvironment: 'gd1-test',
+  target: 'northflank-sandbox',
+  profile: 'transport-preview-gd1-test',
+};
+const northflankRegistry = (target = northflankTarget) => ({
+  schemaVersion: 1,
+  targets: { 'northflank-sandbox': target },
+  deployments: [previewRow],
+});
+const resolvePreview = (target) =>
+  resolveDeploymentTarget(northflankRegistry(target), {
+    tenant: 'transport-preview',
+    environment: 'gd1-test',
+  });
+
+function refusalOf(fn) {
+  try {
+    fn();
+  } catch (error) {
+    assert.ok(error instanceof DeploymentResolutionError, 'phai la loi co kieu');
+    return error;
+  }
+  return assert.fail('phai bi tu choi');
+}
+
+test('moi hang VM cu van phan giai ra gcp-vm, voi DUNG cac truong GCP va cac khoa output nhu truoc', () => {
+  const legacyRows = registry.deployments.filter(
+    (entry) => registry.targets[entry.target].provider !== 'northflank',
+  );
+  assert.ok(legacyRows.length >= 7, 'phai con du cac hang khach tren VM');
+  for (const entry of legacyRows) {
+    const plan = resolveDeploymentTarget(registry, {
+      tenant: entry.tenant,
+      environment: entry.environment,
+    });
+    assert.equal(plan.provider, 'gcp-vm', `${entry.tenant}/${entry.environment}`);
+    assert.equal(plan.vmName, 'netviet');
+    assert.equal(plan.gcpProjectId, 'netviet-host-968934832433');
+    assert.equal(plan.gcpRegion, 'asia-southeast1');
+    assert.equal(plan.gcpZone, 'asia-southeast1-b');
+    assert.equal(plan.primaryTenant, 'ultty');
+    assert.deepEqual(Object.keys(toStepOutputs(plan)).sort(), [
+      'deployment_gate',
+      'deployment_profile',
+      'gcp_project_id',
+      'gcp_region',
+      'gcp_zone',
+      'primary_tenant',
+      'provider',
+      'requires_exact_main_ci',
+      'runtime_environment',
+      'stack_slug',
+      'target_id',
+      'vm_name',
+    ]);
+    assert.equal(toStepOutputs(plan).provider, 'gcp-vm');
+  }
+});
+
+test('target KHONG khai provider mac dinh la gcp-vm: hang registry co truoc Phase 3 khong doi ngu nghia', () => {
+  const { provider: _omitted, ...withoutProvider } = registry.targets['current-shared-vm'];
+  const plan = resolveDeploymentTarget(
+    {
+      schemaVersion: 1,
+      targets: { 'current-shared-vm': withoutProvider },
+      deployments: [
+        registry.deployments.find((e) => e.tenant === 'ultty' && e.environment === 'dev'),
+      ],
+    },
+    { tenant: 'ultty', environment: 'dev' },
+  );
+  assert.equal(plan.provider, 'gcp-vm');
+  assert.equal(plan.vmName, 'netviet');
+});
+
+test('transport-preview/gd1-test phan giai ra Northflank: dung cong cu cua Ultty, KHONG mang truong GCP nao', () => {
+  const plan = resolveDeploymentTarget(registry, {
+    tenant: 'transport-preview',
+    environment: 'gd1-test',
+  });
+  assert.equal(plan.provider, 'northflank');
+  assert.equal(plan.targetId, 'northflank-sandbox');
+  assert.equal(plan.northflankProjectId, 'nexagnet-dev');
+  assert.equal(plan.northflankApiServiceId, 'api');
+  assert.equal(plan.northflankWebServiceId, 'web');
+  for (const gcpField of ['vmName', 'gcpProjectId', 'gcpRegion', 'gcpZone', 'primaryTenant']) {
+    assert.equal(gcpField in plan, false, `${gcpField} khong duoc ton tai tren plan Northflank`);
+  }
+  // CONG KHONG DOI: chuyen provider khong lam nhe cong exact-main CI cua gd1-test.
+  assert.equal(plan.requiresExactMainCi, true);
+  assert.equal(plan.gate, 'gd1-test');
+  assert.equal(plan.profileId, 'transport-preview-gd1-test');
+  assert.equal(plan.stackSlug, 'transport-preview-gd1-test');
+
+  const outputs = toStepOutputs(plan);
+  assert.deepEqual(Object.keys(outputs).sort(), [
+    'deployment_gate',
+    'deployment_profile',
+    'northflank_api_service_id',
+    'northflank_project_id',
+    'northflank_web_service_id',
+    'provider',
+    'requires_exact_main_ci',
+    'runtime_environment',
+    'stack_slug',
+    'target_id',
+  ]);
+  for (const key of Object.keys(outputs)) {
+    assert.doesNotMatch(key, /^(gcp_|vm_name|primary_tenant)/, `${key} la khoa GCP`);
+  }
+  assert.equal(outputs.requires_exact_main_ci, 'true');
+});
+
+test('target Northflank khong can (va khong duoc doi) truong GCP nao de phan giai', () => {
+  const plan = resolvePreview(northflankTarget);
+  assert.equal(plan.provider, 'northflank');
+  // Khai kem truong GCP o target northflank cung KHONG lam chung xuat hien tren plan.
+  const withGcp = resolvePreview({
+    ...northflankTarget,
+    vmName: 'netviet',
+    gcpProjectId: 'x-y-z-1',
+  });
+  assert.equal('vmName' in withGcp, false);
+  assert.equal('gcpProjectId' in withGcp, false);
+});
+
+test('provider la / hoa thuong sai -> bi tu choi voi ma rieng, truoc khi phan giai bat ky thu gi', () => {
+  for (const provider of ['azure', 'aws', 'Northflank', 'NORTHFLANK', 'gcp', 'railway', '', 5]) {
+    const error = refusalOf(() => resolvePreview({ ...northflankTarget, provider }));
+    assert.equal(error.exitCode, RESOLVE_EXIT_CODES.unknownProvider, String(provider));
+    assert.match(error.message, /Unsupported deploy provider/);
+  }
+});
+
+test('target Northflank thieu truong hoac id khong phai slug -> incompleteTarget', () => {
+  for (const field of ['projectId', 'apiServiceId', 'webServiceId']) {
+    for (const bad of [undefined, '', '   ', null, 7]) {
+      const target = { ...northflankTarget, [field]: bad };
+      const error = refusalOf(() => resolvePreview(target));
+      assert.equal(error.exitCode, RESOLVE_EXIT_CODES.incompleteTarget, `${field}=${String(bad)}`);
+      assert.match(error.message, new RegExp(field));
+    }
+    for (const bad of ['../x', 'a/b', 'A', 'a b', '-a', 'a_b', 'a?x=1', '9a']) {
+      const error = refusalOf(() => resolvePreview({ ...northflankTarget, [field]: bad }));
+      assert.equal(error.exitCode, RESOLVE_EXIT_CODES.incompleteTarget, `${field}=${bad}`);
+      assert.match(error.message, /invalid Northflank id/);
+    }
+  }
+});
+
+test('hang Northflank van phai di qua cong ho so: gd1-test + dung ho so + dung stack slug', () => {
+  // Doi hang sang `standard` / sai slug van bi tu choi nhu truoc — provider KHONG la duong vong qua cong.
+  const wrongProfile = refusalOf(() =>
+    resolveDeploymentTarget(
+      { ...northflankRegistry(), deployments: [{ ...previewRow, profile: 'standard' }] },
+      { tenant: 'transport-preview', environment: 'gd1-test' },
+    ),
+  );
+  assert.equal(wrongProfile.exitCode, RESOLVE_EXIT_CODES.profileRejected);
+  const wrongSlug = refusalOf(() =>
+    resolveDeploymentTarget(
+      { ...northflankRegistry(), deployments: [{ ...previewRow, stackSlug: 'transport-preview' }] },
+      { tenant: 'transport-preview', environment: 'gd1-test' },
+    ),
+  );
+  assert.equal(wrongSlug.exitCode, RESOLVE_EXIT_CODES.stackSlugMismatch);
+});
+
+test('CLI resolver in provider; Northflank KHONG in ten bi mat GCP, VM van in nhu cu', () => {
+  const run = (tenant, environment) =>
+    spawnSync(process.execPath, ['deploy/netviet/run-resolve-deployment-target.mjs'], {
+      encoding: 'utf8',
+      env: {
+        PATH: process.env.PATH,
+        REQUESTED_TENANT: tenant,
+        REQUESTED_ENVIRONMENT: environment,
+      },
+    });
+  const preview = run('transport-preview', 'gd1-test');
+  assert.equal(preview.status, 0, preview.stderr);
+  assert.match(preview.stdout, /Provider: northflank/);
+  assert.match(preview.stdout, /Northflank project nexagnet-dev/);
+  assert.match(preview.stdout, /Services: api=api web=web/);
+  assert.doesNotMatch(
+    preview.stdout,
+    /Required secret names|zalo-transport-preview-gd1-test-|netviet/,
+  );
+
+  const vm = run('ultty', 'gd1-test');
+  assert.equal(vm.status, 0, vm.stderr);
+  assert.match(vm.stdout, /Provider: gcp-vm/);
+  assert.match(vm.stdout, /Required secret names \(13\):/);
+  assert.match(vm.stdout, /on netviet/);
+});
+
+test('CLI resolver ghi output GITHUB_OUTPUT dang key=value cho ca hai provider', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'nf-resolve-'));
+  try {
+    const out = join(dir, 'out.txt');
+    const result = spawnSync(
+      process.execPath,
+      ['deploy/netviet/run-resolve-deployment-target.mjs'],
+      {
+        encoding: 'utf8',
+        env: {
+          PATH: process.env.PATH,
+          REQUESTED_TENANT: 'transport-preview',
+          REQUESTED_ENVIRONMENT: 'gd1-test',
+          GITHUB_OUTPUT: out,
+        },
+      },
+    );
+    assert.equal(result.status, 0, result.stderr);
+    const lines = readFileSync(out, 'utf8').trim().split('\n');
+    assert.ok(lines.includes('provider=northflank'));
+    assert.ok(lines.includes('northflank_project_id=nexagnet-dev'));
+    assert.ok(lines.includes('requires_exact_main_ci=true'));
+    assert.equal(
+      lines.some((line) => /^(gcp_|vm_name|primary_tenant)/.test(line)),
+      false,
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

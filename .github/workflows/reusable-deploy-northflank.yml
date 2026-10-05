@@ -1,0 +1,226 @@
+name: Reusable Deploy Northflank Preview
+
+# DUONG DEPLOY CUA BAN XEM TRUOC NEN TANG TREN NORTHFLANK (Autopilot V4 / Phase 3) — KHONG GCP.
+#
+# Khong `google-github-actions/auth`, khong WIF, khong `gcloud`, khong VM/OS Login, khong `id-token`.
+# Chi mot muc duoc phep: `transport-preview/gd1-test` tren Developer Sandbox (registry chon, va
+# `deploy/northflank/preview-contract.mjs` + `runtime-proof-core.mjs` KHOA lai bang hang so).
+#
+# Tach khoi `reusable-deploy-tenant.yml` CO Y: duong VM giu nguyen tung ky tu cho Ultty/Amico/Wata.
+# Hai workflow chung mot khuon cong (checkout dung `git_sha`, exact-main CI, resolver) va chung mot
+# schema bang chung (`deploy-signals/v1`), nen runtime proof doc ca hai nhu nhau.
+#
+# CHUOI BANG CHUNG EXACT-SHA:
+#   git_sha (CI da chung minh) -> image build tu checkout CHINH SHA do (`BUILD_REVISION` nuong trong
+#   image) -> Northflank chay `ghcr.io/...@sha256:<digest>` do -> tien trinh DANG CHAY tu bao cao cung
+#   SHA qua `release.json` do lan deploy nay mount -> smoke tat dinh doi chieu `EXPECTED_RELEASE_SHA`.
+#
+# TOKEN: `NORTHFLANK_API_TOKEN` la secret cua GitHub Environment (`gd1-test`), KHONG nam trong repo.
+# No chi vao `env:` cua hai buoc can no (preflight va deploy) — khong vao buoc build, khong vao `run:`.
+
+on:
+  workflow_call:
+    inputs:
+      tenant:
+        description: 'Tenant slug — chi transport-preview duoc chap nhan o tang sau'
+        required: true
+        type: string
+      environment:
+        description: 'GitHub environment dich — chi gd1-test duoc chap nhan o tang sau'
+        required: true
+        type: string
+      git_sha:
+        # COMMIT DUOC DEPLOY, KHONG PHAI `github.sha` (xem ghi chu o `reusable-deploy-tenant.yml`).
+        description: 'Full SHA 40 ky tu cua commit tren main can deploy'
+        required: true
+        type: string
+    secrets:
+      NORTHFLANK_API_TOKEN:
+        required: false
+
+# `packages: write` de day image len GHCR bang GITHUB_TOKEN (khong co secret registry nao). KHONG co
+# `id-token`: khong con danh tinh GCP nao de doi.
+permissions:
+  actions: read
+  contents: read
+  packages: write
+
+jobs:
+  deploy-preview:
+    name: Deploy Northflank [${{ inputs.tenant }} -> ${{ inputs.environment }}]
+    runs-on: ubuntu-24.04
+    environment: ${{ inputs.environment }}
+    timeout-minutes: 60
+    env:
+      TENANT: ${{ inputs.tenant }}
+    steps:
+      # Checkout DUNG commit duoc yeu cau; khong luu credential (cac buoc sau khong can git).
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.git_sha }}
+          persist-credentials: false
+
+      # Khoa bat bien: thu muc dang deploy LA commit `inputs.git_sha`. Input di qua bien moi truong.
+      - name: Verify checkout is the requested git_sha
+        env:
+          REQUESTED_GIT_SHA: ${{ inputs.git_sha }}
+        run: |
+          set -euo pipefail
+          [[ "${REQUESTED_GIT_SHA}" =~ ^[0-9a-f]{40}$ ]] || {
+            echo 'git_sha phai la full SHA 40 ky tu chu thuong.' >&2
+            exit 1
+          }
+          [[ "$(git rev-parse HEAD)" == "${REQUESTED_GIT_SHA}" ]] || {
+            echo "Checkout HEAD $(git rev-parse HEAD) khac git_sha yeu cau ${REQUESTED_GIT_SHA}." >&2
+            exit 1
+          }
+
+      - name: Validate tenant pack exists
+        env:
+          REQUESTED_TENANT: ${{ inputs.tenant }}
+        run: |
+          set -euo pipefail
+          [[ "${REQUESTED_TENANT}" =~ ^[a-z0-9-]+$ ]] || {
+            echo 'Ten tenant khong hop le.' >&2
+            exit 1
+          }
+          [[ -d "tenants/${REQUESTED_TENANT}" ]] || {
+            echo "Thu muc tenant 'tenants/${REQUESTED_TENANT}' khong ton tai trong repository." >&2
+            exit 1
+          }
+
+      # MOT CUA DUY NHAT phan giai (tenant, environment) -> ke hoach: chinh resolver ma duong VM dung.
+      - name: Resolve deployment target
+        id: target
+        env:
+          REQUESTED_TENANT: ${{ inputs.tenant }}
+          REQUESTED_ENVIRONMENT: ${{ inputs.environment }}
+        run: node deploy/netviet/run-resolve-deployment-target.mjs
+
+      # Workflow nay CHI chay provider `northflank`. Mot hang registry tro ve VM/GCP phai di duong cu,
+      # khong duoc lot vao day (va nguoc lai: `reusable-deploy-tenant.yml` tu choi hang northflank).
+      - name: Require Northflank provider
+        env:
+          PROVIDER: ${{ steps.target.outputs.provider }}
+        run: |
+          set -euo pipefail
+          [[ "${PROVIDER}" == 'northflank' ]] || {
+            echo "Workflow nay chi deploy provider 'northflank' (registry tra '${PROVIDER}')." >&2
+            exit 1
+          }
+
+      # CONG EXACT-MAIN CI — vo dieu kien (khac duong VM co `if:` theo moi truong): duong Northflank luon
+      # doi CI xanh o DUNG SHA tren nhanh main, va `run-deploy-preview.mjs` kiem lai mot lan nua.
+      - name: Verify exact main SHA passed CI
+        id: ci
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GIT_SHA: ${{ inputs.git_sha }}
+        run: |
+          set -euo pipefail
+          [[ "${GITHUB_REF}" == 'refs/heads/main' ]] || {
+            echo 'GD1-test deployment must run from refs/heads/main.' >&2
+            exit 1
+          }
+          runs="$(gh api --method GET \
+            "repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/runs" \
+            -f head_sha="${GIT_SHA}" -f branch=main -f status=completed -f per_page=20)"
+          conclusion="$(jq -r --arg sha "${GIT_SHA}" \
+            '[.workflow_runs[] | select(.head_sha == $sha)][0].conclusion // ""' <<<"${runs}")"
+          [[ "${conclusion}" == 'success' ]] || {
+            echo "Exact SHA ${GIT_SHA} does not have a successful completed CI run." >&2
+            exit 1
+          }
+          echo 'conclusion=success' >>"${GITHUB_OUTPUT}"
+
+      # PREFLIGHT — TRUOC build (build ~10 phut): token con dung khong, project co khong, doc duoc mat
+      # khau van hanh khong. That bai o day van ghi `deploy-signals.json` nen runtime proof noi duoc LY DO.
+      - name: Preflight Northflank (token, project, operator secret)
+        id: preflight
+        run: node deploy/northflank/run-deploy-preview.mjs --preflight
+        env:
+          PROVIDER: ${{ steps.target.outputs.provider }}
+          TENANT: ${{ inputs.tenant }}
+          ENVIRONMENT: ${{ inputs.environment }}
+          DEPLOYMENT_PROFILE: ${{ steps.target.outputs.deployment_profile }}
+          STACK_SLUG: ${{ steps.target.outputs.stack_slug }}
+          GIT_SHA: ${{ inputs.git_sha }}
+          NORTHFLANK_PROJECT_ID: ${{ steps.target.outputs.northflank_project_id }}
+          NORTHFLANK_API_SERVICE_ID: ${{ steps.target.outputs.northflank_api_service_id }}
+          NORTHFLANK_WEB_SERVICE_ID: ${{ steps.target.outputs.northflank_web_service_id }}
+          NORTHFLANK_API_TOKEN: ${{ secrets.NORTHFLANK_API_TOKEN }}
+          GITHUB_REF: ${{ github.ref }}
+          GD1_TEST_CI_CONCLUSION: ${{ steps.ci.outputs.conclusion }}
+          DEPLOY_SIGNAL_LOG: ${{ github.workspace }}/deploy-signals.log
+          DEPLOY_SIGNAL_JSON: ${{ github.workspace }}/deploy-signals.json
+
+      # IMAGE = image CHUNG (khong goi khach) + lop mong (goi mau transport-preview + Caddy + BUILD_REVISION).
+      # Day len GHCR bang GITHUB_TOKEN; trien khai theo DIGEST, khong theo tag.
+      - name: Build and push preview image (exact SHA)
+        id: image
+        env:
+          GIT_SHA: ${{ inputs.git_sha }}
+          REGISTRY_USER: ${{ github.actor }}
+          REGISTRY_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          image="ghcr.io/${REPOSITORY,,}/preview"
+          base="netviet-zalo:${GIT_SHA}"
+          docker build \
+            --file deploy/netviet/Dockerfile \
+            --label "org.opencontainers.image.revision=${GIT_SHA}" \
+            --tag "${base}" \
+            .
+          # Image chung phai mang DUNG nhan SHA truoc khi xep lop len no.
+          [[ "$(docker inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "${base}")" == "${GIT_SHA}" ]] || {
+            echo 'Image chung khong mang nhan revision dung SHA.' >&2
+            exit 1
+          }
+          docker build \
+            --file deploy/northflank/Dockerfile \
+            --build-arg "BASE_IMAGE=${base}" \
+            --build-arg "GIT_SHA=${GIT_SHA}" \
+            --tag "${image}:sha-${GIT_SHA}" \
+            .
+          printf '%s' "${REGISTRY_TOKEN}" | docker login ghcr.io --username "${REGISTRY_USER}" --password-stdin
+          trap 'docker logout ghcr.io >/dev/null 2>&1 || true' EXIT
+          docker push "${image}:sha-${GIT_SHA}"
+          digest_ref="$(docker inspect --format '{{index .RepoDigests 0}}' "${image}:sha-${GIT_SHA}")"
+          [[ "${digest_ref}" == "${image}@sha256:"* && "${digest_ref#"${image}@sha256:"}" =~ ^[a-f0-9]{64}$ ]] || {
+            echo "Khong doc duoc digest sau khi push: ${digest_ref}" >&2
+            exit 1
+          }
+          echo "image_ref=${digest_ref}" >>"${GITHUB_OUTPUT}"
+
+      # ROLLOUT + HEALTH + DETERMINISTIC SMOKE — ba tin hieu CUNG, cung schema `deploy-signals/v1`.
+      - name: Deploy to Northflank (ROLLOUT + HEALTH + DETERMINISTIC SMOKE)
+        id: rollout
+        run: node deploy/northflank/run-deploy-preview.mjs
+        env:
+          PROVIDER: ${{ steps.target.outputs.provider }}
+          TENANT: ${{ inputs.tenant }}
+          ENVIRONMENT: ${{ inputs.environment }}
+          DEPLOYMENT_PROFILE: ${{ steps.target.outputs.deployment_profile }}
+          STACK_SLUG: ${{ steps.target.outputs.stack_slug }}
+          GIT_SHA: ${{ inputs.git_sha }}
+          IMAGE_REF: ${{ steps.image.outputs.image_ref }}
+          NORTHFLANK_PROJECT_ID: ${{ steps.target.outputs.northflank_project_id }}
+          NORTHFLANK_API_SERVICE_ID: ${{ steps.target.outputs.northflank_api_service_id }}
+          NORTHFLANK_WEB_SERVICE_ID: ${{ steps.target.outputs.northflank_web_service_id }}
+          NORTHFLANK_API_TOKEN: ${{ secrets.NORTHFLANK_API_TOKEN }}
+          GITHUB_REF: ${{ github.ref }}
+          GD1_TEST_CI_CONCLUSION: ${{ steps.ci.outputs.conclusion }}
+          DEPLOY_SIGNAL_LOG: ${{ github.workspace }}/deploy-signals.log
+          DEPLOY_SIGNAL_JSON: ${{ github.workspace }}/deploy-signals.json
+
+      # Ket qua MAY DOC DUOC. `if: always()`: mot lan deploy that bai la luc ban ghi nay co gia tri nhat,
+      # va runtime proof doc no de dang `RUNTIME_PROOF_FAILED` kem ly do co kieu.
+      - name: Upload deploy signals
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: deploy-signals-${{ inputs.tenant }}-${{ inputs.environment }}
+          path: deploy-signals.json
+          if-no-files-found: warn
+          retention-days: 30

@@ -120,6 +120,8 @@ test('cong tay deploy-tenant.yml: van chi workflow_dispatch, truyen github.sha d
   assert.match(manual, /uses: \.\/\.github\/workflows\/reusable-deploy-tenant\.yml/);
 });
 
+// Autopilot runtime proof KHONG con goi duong VM/GCP: no goi `reusable-deploy-northflank.yml` (bam
+// `git_sha` tuong tu — khoa o `deploy/northflank/northflank-workflow.contract.test.mjs`).
 test('moi noi goi reusable-deploy-tenant.yml deu truyen git_sha tuong minh', () => {
   const dir = new URL('../../.github/workflows/', import.meta.url);
   const callers = readdirSync(dir)
@@ -128,7 +130,7 @@ test('moi noi goi reusable-deploy-tenant.yml deu truyen git_sha tuong minh', () 
       /uses: \.\/\.github\/workflows\/reusable-deploy-tenant\.yml/.test(workflow(file)),
     )
     .sort();
-  assert.deepEqual(callers, ['autopilot-runtime-proof.yml', 'deploy-tenant.yml']);
+  assert.deepEqual(callers, ['deploy-tenant.yml']);
   for (const file of callers)
     assert.match(code(workflow(file)), /^ {6}git_sha: \$\{\{ .+ \}\}$/m, `${file} thieu git_sha`);
 });

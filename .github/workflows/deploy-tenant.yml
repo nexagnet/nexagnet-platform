@@ -90,6 +90,9 @@ concurrency:
 
 jobs:
   deploy:
+    # DUONG VM/GCP — giu nguyen cho moi muc tru ban xem truoc. `transport-preview/gd1-test` da chuyen
+    # sang Northflank (registry: provider `northflank`) nen khong con di duong nay.
+    if: ${{ !(inputs.tenant == 'transport-preview' && inputs.environment == 'gd1-test') }}
     uses: ./.github/workflows/reusable-deploy-tenant.yml
     with:
       tenant: ${{ inputs.tenant }}
@@ -98,4 +101,20 @@ jobs:
       git_sha: ${{ github.sha }}
       workflow_engine: ${{ inputs.workflow_engine }}
       observability_stack: ${{ inputs.observability_stack }}
+    secrets: inherit
+
+  # BAN XEM TRUOC NEN TANG tren Northflank Developer Sandbox: khong GCP, khong id-token. Chi muc nay —
+  # `workflow_engine`/`observability_stack` khong ap dung (ho so khong bat). Cung nhom concurrency voi
+  # Autopilot runtime proof (`deploy-tenant-transport-preview`) nen hai lan deploy khong chay song song.
+  deploy-northflank:
+    if: ${{ inputs.tenant == 'transport-preview' && inputs.environment == 'gd1-test' }}
+    permissions:
+      actions: read
+      contents: read
+      packages: write
+    uses: ./.github/workflows/reusable-deploy-northflank.yml
+    with:
+      tenant: ${{ inputs.tenant }}
+      environment: ${{ inputs.environment }}
+      git_sha: ${{ github.sha }}
     secrets: inherit

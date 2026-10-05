@@ -41,10 +41,22 @@ try {
   // Printed so the run log carries the contract a reviewer has to check. NAMES ONLY — this is the
   // deployment control plane, and it never handles a secret value.
   console.log(`Deployment profile: ${plan.profileId} (gate=${plan.gate})`);
-  console.log(`Stack: ${plan.stackSlug} on ${plan.vmName} (runtime=${plan.runtimeEnvironment})`);
+  console.log(`Provider: ${plan.provider}`);
   console.log(`Exact-main CI required: ${plan.requiresExactMainCi ? 'YES' : 'no'}`);
-  console.log(`Required secret names (${plan.secretContract.secretNames.length}):`);
-  for (const name of plan.secretContract.secretNames) console.log(`  - ${name}`);
+  if (plan.provider === 'northflank') {
+    // Ten bi mat GCP Secret Manager khong ap dung cho Northflank (bi mat nam trong secret group cua
+    // chinh project), nen khong in ra de khoi lam nguoi doc tuong chung can duoc tao tren GCP.
+    console.log(
+      `Stack: ${plan.stackSlug} on Northflank project ${plan.northflankProjectId} (runtime=${plan.runtimeEnvironment})`,
+    );
+    console.log(
+      `Services: api=${plan.northflankApiServiceId} web=${plan.northflankWebServiceId}`,
+    );
+  } else {
+    console.log(`Stack: ${plan.stackSlug} on ${plan.vmName} (runtime=${plan.runtimeEnvironment})`);
+    console.log(`Required secret names (${plan.secretContract.secretNames.length}):`);
+    for (const name of plan.secretContract.secretNames) console.log(`  - ${name}`);
+  }
 } catch (error) {
   if (error instanceof DeploymentResolutionError) {
     for (const reason of error.reasons) console.error(reason);
