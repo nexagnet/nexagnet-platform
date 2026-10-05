@@ -2,11 +2,18 @@
   "schemaVersion": 1,
   "targets": {
     "current-shared-vm": {
+      "provider": "gcp-vm",
       "vmName": "netviet",
       "gcpProjectId": "netviet-host-968934832433",
       "region": "asia-southeast1",
       "zone": "asia-southeast1-b",
       "primaryTenant": "ultty"
+    },
+    "northflank-sandbox": {
+      "provider": "northflank",
+      "projectId": "nexagnet-dev",
+      "apiServiceId": "api",
+      "webServiceId": "web"
     }
   },
   "deployments": [
@@ -43,7 +50,7 @@
       "stackSlug": "transport-preview-gd1-test",
       "githubEnvironment": "gd1-test",
       "runtimeEnvironment": "gd1-test",
-      "target": "current-shared-vm",
+      "target": "northflank-sandbox",
       "profile": "transport-preview-gd1-test"
     },
     {

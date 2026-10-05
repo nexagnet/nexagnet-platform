@@ -44,6 +44,10 @@ push main ──┬─→ ci.yml ─────────────── 7
             └─→ deploy-marketing.yml ─ chỉ khi đụng apps/marketing/** hoặc pnpm-lock.yaml
 
 chạy tay ───→ deploy-tenant.yml ─────→ reusable-deploy-tenant.yml (chọn tenant + env dev/production)
+                       │
+                       └─ transport-preview/gd1-test ─→ reusable-deploy-northflank.yml (KHÔNG GCP — xem northflank-preview.md)
+
+push main (R0/R1 Autopilot) ─→ ci.yml xanh ─→ autopilot-runtime-proof.yml ─→ reusable-deploy-northflank.yml
 ```
 
 | Workflow | Kích hoạt | Cổng duyệt | Đích |
@@ -51,7 +55,9 @@ chạy tay ───→ deploy-tenant.yml ─────→ reusable-deploy-ten
 | `ci.yml` | push `main`, mọi PR | — | 7 job: `verify`, `integration`, `workflow-integration`, `tenant-packs`, `e2e`, `audit`, `images` |
 | `deploy-tenant.yml` | **chạy tay** | `dev` = không; `production` = có | Stack một khách trên VM |
 | `deploy-marketing.yml` | push `main` (đường dẫn marketing) | không | Cloud Run `nexagnet-marketing` |
-| `reusable-deploy-tenant.yml` | `workflow_call` | theo `environment` truyền vào | — (thư viện, không tự chạy) |
+| `reusable-deploy-tenant.yml` | `workflow_call` | theo `environment` truyền vào | — (thư viện, không tự chạy); **chỉ provider `gcp-vm`** — hàng `northflank` bị từ chối trước bước GCP auth |
+| `reusable-deploy-northflank.yml` | `workflow_call` | `gd1-test` | Bản xem trước `transport-preview` trên Northflank Sandbox; không `id-token`; xem [`northflank-preview.md`](northflank-preview.md) |
+| `autopilot-runtime-proof.yml` | `workflow_run` của `ci` (push `main`, CI xanh) | `gd1-test` + preflight chỉ đọc | Deploy **đúng SHA vừa xanh** của PR Autopilot R0/R1 lên Northflank (gọi workflow ở trên), rồi comment `RUNTIME_PROOF_*` |
 
 **Stack khách KHÔNG deploy theo push.** Với nhiều khách thì "deploy khi push" không trả lời được câu
 hỏi *đưa lên khách nào*; và trên thực tế đường tự động cũ (`deploy.yml`) chưa deploy thành công lần
@@ -361,6 +367,8 @@ trình đụng compose đều lấy chung một khoá (`.runtime/compose.lock`) 
 ## 9. Liên quan
 
 - [`../ke-hoach/tong-quan.md`](../ke-hoach/tong-quan.md) — nguồn trạng thái duy nhất.
+- [`northflank-preview.md`](northflank-preview.md) — **bản xem trước trên Northflank** (Autopilot Phase 3): kiến trúc,
+  chuỗi bằng chứng exact-SHA, giới hạn có chủ ý (kể cả lệch so với bất biến #1/#2), thiết lập một lần, token tối thiểu.
 - [`deployment-profiles.md`](deployment-profiles.md) — **hồ sơ triển khai**: danh mục đóng, cổng
   exact-main không bỏ qua được, ma trận bí mật theo hệ thống con, ma trận cách ly.
 - [`chay-kiem-workflow-engine.md`](chay-kiem-workflow-engine.md) — **hướng dẫn dùng cổng `workflow-integration`**: đọc kết quả CI, chạy lại 24 bài trên máy mình, 4 kiểu đỏ đã đo.

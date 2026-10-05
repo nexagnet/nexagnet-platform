@@ -726,3 +726,39 @@ test('quan sat — ket qua cho MAY doc mang theo danh sach that bai mem', () => 
   assert.strictEqual(machine.reasons.observability, 'OBSERVABILITY_QUERY_FAILED');
   assert.deepStrictEqual(machine.softFailures, ['observability']);
 });
+
+// --- `release.provider`: truong TUY CHON va CONG THEM (duong Northflank phat no, duong VM thi khong) ---
+
+const allPass = [
+  rolloutPass,
+  healthPass,
+  deterministicPass,
+  { layer: 'liveAiSmoke', status: 'skipped', reason: 'PROFILE_HAS_NO_PARSER' },
+  { layer: 'observability', status: 'skipped', reason: 'OFF' },
+  { layer: 'channelListener', status: 'skipped', reason: 'OFF' },
+];
+
+test('release.provider: duoc giu khi meta mang no, va null khi duong VM cu khong phat no', () => {
+  const withProvider = parseSignalJournal(
+    [line(meta({ provider: 'northflank' })), ...allPass.map(line)].join('\n'),
+  );
+  const northflank = toMachineResult(evaluateDeploySignals({ entries: withProvider.entries }));
+  assert.equal(northflank.release.provider, 'northflank');
+  assert.equal(northflank.ok, true);
+
+  const legacy = parseSignalJournal([line(meta()), ...allPass.map(line)].join('\n'));
+  const machine = toMachineResult(evaluateDeploySignals({ entries: legacy.entries }));
+  // Khoa `provider` ton tai nhung la `null`: hinh dang cu khong doi them gi ngoai mot truong rong.
+  assert.equal(machine.release.provider, null);
+  assert.equal(machine.release.gitSha, GIT_SHA);
+  assert.equal(machine.ok, true);
+});
+
+test('release.provider: chuoi rong / khong phai chuoi bi coi la null; khong anh huong ket luan deploy', () => {
+  for (const provider of ['', '   ', 5, null, {}]) {
+    const parsed = parseSignalJournal([line(meta({ provider })), ...allPass.map(line)].join('\n'));
+    const machine = toMachineResult(evaluateDeploySignals({ entries: parsed.entries }));
+    assert.equal(machine.release.provider, null, JSON.stringify(provider));
+    assert.equal(machine.ok, true);
+  }
+});

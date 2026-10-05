@@ -7,10 +7,12 @@
 #                         commit nay, mang `autopilot:generated`; Issue co dung MOT nhan R0/R1; marker merge khop;
 #                         TARGET nam trong allowlist. `TARGET: none` va moi commit khong phai cua Autopilot la
 #                         SKIP sach; thieu/nhieu/la TARGET -> BLOCK (khong deploy).
-#     -> job `deploy`   : goi `reusable-deploy-tenant.yml` voi tenant/moi truong GHI CUNG (transport-preview /
-#                         gd1-test) va `git_sha` = commit CUA CI VUA XANH — KHONG phai `main` hien tai. Day la
-#                         noi DUY NHAT trong workflow nay co `id-token: write` (theo khuon deploy hien co); moi
-#                         cong cua moi truong `gd1-test` (duyet, exact-main CI, preflight) giu nguyen.
+#     -> job `deploy`   : goi `reusable-deploy-northflank.yml` voi tenant/moi truong GHI CUNG (transport-preview
+#                         / gd1-test) va `git_sha` = commit CUA CI VUA XANH — KHONG phai `main` hien tai. Deploy len
+#                         Northflank Developer Sandbox, KHONG GCP: khong `id-token`, khong WIF, khong gcloud. Quyen
+#                         ghi duy nhat la `packages: write` (day image len GHCR bang GITHUB_TOKEN); token Northflank
+#                         la secret cua Environment `gd1-test`. Moi cong cua moi truong `gd1-test` (duyet, exact-
+#                         main CI, preflight) giu nguyen.
 #     -> job `report`   : ma tu `main`, token App V4 ngan han CHI de comment. Ghi `RUNTIME_PROOF_PASSED` /
 #                         `RUNTIME_PROOF_FAILED` len PR + Issue kem marker `autopilot-runtime-proof`. Khong
 #                         rollback, khong promote.
@@ -32,7 +34,7 @@ on:
     workflows: [ci]
     types: [completed]
 
-# GITHUB_TOKEN mac dinh chi doc. Quyen ghi dac biet chi o job `deploy` (id-token, theo khuon deploy hien co);
+# GITHUB_TOKEN mac dinh chi doc. Quyen ghi dac biet chi o job `deploy` (`packages: write` de day image len GHCR);
 # moi thao tac ghi len GitHub dung token App V4 ngan han trong job `report`.
 permissions:
   contents: read
@@ -76,18 +78,16 @@ jobs:
     concurrency:
       group: deploy-tenant-transport-preview
       cancel-in-progress: false
-    # Quyen y het `deploy-tenant.yml` (workflow goi can toi thieu cac quyen nay). Day la job DUY NHAT co OIDC.
+    # Quyen toi thieu ma workflow goi can: doc Actions/contents, va ghi goi GHCR. KHONG co id-token.
     permissions:
       actions: read
       contents: read
-      id-token: write
-    uses: ./.github/workflows/reusable-deploy-tenant.yml
+      packages: write
+    uses: ./.github/workflows/reusable-deploy-northflank.yml
     with:
       tenant: transport-preview
       environment: gd1-test
       git_sha: ${{ needs.preflight.outputs.git_sha }}
-      workflow_engine: 'off'
-      observability_stack: 'off'
     secrets: inherit
 
   report:

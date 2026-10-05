@@ -138,6 +138,7 @@ test('TARGET: chi `none` va transport-preview/gd1-test duoc chap nhan', () => {
   assert.deepEqual(RUNTIME_TARGETS[TARGET], {
     tenant: 'transport-preview',
     environment: 'gd1-test',
+    provider: 'northflank',
   });
 });
 
@@ -443,7 +444,12 @@ test('preflight: moi nhanh khong-DEPLOY khong xuat git_sha/target cho job deploy
 
 const goodSignals = (overrides = {}) => ({
   schema: 'deploy-signals/v1',
-  release: { tenant: 'transport-preview', environment: 'gd1-test', gitSha: MERGE },
+  release: {
+    tenant: 'transport-preview',
+    environment: 'gd1-test',
+    gitSha: MERGE,
+    provider: 'northflank',
+  },
   rollout: 'pass',
   health: 'pass',
   deterministicSmoke: 'pass',
@@ -466,11 +472,17 @@ test('deploy signals: chi pass khi dung SHA merge + tenant + ba tang cung deu pa
   assert.deepEqual(RUNTIME_TARGETS[TARGET], {
     tenant: 'transport-preview',
     environment: 'gd1-test',
+    provider: 'northflank',
   });
   assert.deepEqual(
     check(
       goodSignals({
-        release: { tenant: 'transport-preview', environment: 'gd1-test', gitSha: MERGE },
+        release: {
+          tenant: 'transport-preview',
+          environment: 'gd1-test',
+          gitSha: MERGE,
+          provider: 'northflank',
+        },
       }),
     ),
     { ok: true, reason: 'OK' },
@@ -499,6 +511,47 @@ test('deploy signals: chi pass khi dung SHA merge + tenant + ba tang cung deu pa
   assert.equal(
     evaluateDeploySignals({ signals: goodSignals(), mergeSha: MERGE, target: 'production' }).ok,
     false,
+  );
+});
+
+test('deploy signals: bang chung PHAI den tu Northflank — thieu / GCP / la deu fail closed', () => {
+  const check = (signals) => evaluateDeploySignals({ signals, mergeSha: MERGE, target: TARGET });
+  const release = (provider) => ({
+    tenant: 'transport-preview',
+    environment: 'gd1-test',
+    gitSha: MERGE,
+    ...(provider === undefined ? {} : { provider }),
+  });
+  // Duong VM/GCP cu khong phat `provider` (collectRelease tra null): dung SHA, dung muc tieu, ba tang
+  // deu pass — van KHONG duoc tinh la bang chung cua Phase 3.
+  for (const provider of [
+    undefined,
+    null,
+    '',
+    'gcp-vm',
+    'gcp',
+    'railway',
+    'Northflank',
+    'northflank ',
+  ]) {
+    assert.equal(
+      check(goodSignals({ release: release(provider) })).reason,
+      'SIGNALS_PROVIDER_MISMATCH',
+      String(provider),
+    );
+  }
+  assert.deepEqual(check(goodSignals({ release: release('northflank') })), {
+    ok: true,
+    reason: 'OK',
+  });
+  // Thu tu kiem: sai SHA / sai muc tieu van duoc bao dung ly do cua no, khong bi che boi provider.
+  assert.equal(
+    check(goodSignals({ release: { ...release('northflank'), gitSha: NEWER_MAIN } })).reason,
+    'SIGNALS_SHA_MISMATCH',
+  );
+  assert.equal(
+    check(goodSignals({ release: { ...release('northflank'), environment: 'dev' } })).reason,
+    'SIGNALS_TARGET_MISMATCH',
   );
 });
 
@@ -597,6 +650,17 @@ test('report: deploy success nhung tin hieu thieu / sai SHA -> failure, khong tu
     [
       goodSignals({ release: { tenant: 'transport-preview', gitSha: NEWER_MAIN } }),
       'SIGNALS_SHA_MISMATCH',
+    ],
+    [
+      goodSignals({
+        release: {
+          tenant: 'transport-preview',
+          environment: 'gd1-test',
+          gitSha: MERGE,
+          provider: 'gcp-vm',
+        },
+      }),
+      'SIGNALS_PROVIDER_MISMATCH',
     ],
     [goodSignals({ rollout: 'fail', hardFailure: true }), 'SIGNALS_NOT_PASSING'],
   ]) {

@@ -103,6 +103,20 @@ jobs:
           OBSERVABILITY_STACK: ${{ inputs.observability_stack }}
         run: node deploy/netviet/run-resolve-deployment-target.mjs
 
+      # Duong VM/GCP CHI phuc vu hang registry `gcp-vm`. Mot hang `northflank` (ban xem truoc
+      # transport-preview) di `reusable-deploy-northflank.yml`; de no lot xuong day se doi GCP auth cho
+      # mot muc tieu khong con GCP. Dat TRUOC `google-github-actions/auth` de khong mo mot danh tinh
+      # nao cho mot lan deploy khong thuoc duong nay.
+      - name: Refuse non-GCP deploy provider
+        env:
+          PROVIDER: ${{ steps.target.outputs.provider }}
+        run: |
+          set -euo pipefail
+          [[ "${PROVIDER}" == 'gcp-vm' ]] || {
+            echo "Duong nay chi deploy provider 'gcp-vm' (registry tra '${PROVIDER}'). Dung reusable-deploy-northflank.yml." >&2
+            exit 1
+          }
+
       - id: auth
         uses: google-github-actions/auth@v2
         with:

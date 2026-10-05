@@ -1,0 +1,63 @@
+# EDGE CUA CONTAINER `web` TREN NORTHFLANK (Developer Sandbox, 2 service). KHONG phai gateway dung chung
+# cua VM: o do Caddy giu :443 cho nhieu khach (xem `deploy/netviet/edge/Caddyfile`); o day moi project
+# Northflank co dung MOT edge, TLS cat o ingress cua Northflank, nen chi nghe HTTP :3000.
+#
+# HOP DONG GIU NGUYEN SO VOI VM (khoa boi `deploy/northflank/northflank-image.contract.test.mjs`):
+#   · danh sach route API la CUNG MOT danh sach voi `app_routes` cua edge VM (test so khop tung duong);
+#   · `X-Forwarded-Proto https` ep cung. Northflank cat TLS roi di tiep bang HTTP, nen Caddy chi thay
+#     http va mac dinh khai `http` — Express doc ra `http` va express-session am tham bo cookie secure
+#     (`GET /auth/csrf` 200 roi `POST /auth/login` 403 CSRF, giong het mot loi CSRF that). Xem
+#     memory `gateway-phai-ep-x-forwarded-proto`;
+#   · `flush_interval -1` cho SSE (`/events`).
+#
+# KHAC VM CO Y: KHONG tiem `x-api-key`. Tren VM edge tiem khoa dich vu cua khach; o day api chay
+# `AUTH_MODE=session` va khong co duong nao can no tu trinh duyet. Khong tiem nghia la cac route
+# noi bo (`InternalServiceGuard`) KHONG toi duoc tu Internet. Cung khong ap CSP cua VM (preview chua do
+# tren Northflank, ma mot CSP sai se lam hong man hinh ban do) — day la khoang trong da biet.
+#
+# `api` KHONG cong khai: day la dia chi noi bo cua project, nen khong co duong nao di vong qua edge.
+{
+	admin off
+	auto_https off
+	# Ingress cua Northflank la hop DUNG TRUOC Caddy: khong tin no thi Caddy ghi de X-Forwarded-For bang
+	# dia chi cua ingress, va moi khach dung chung MOT IP (throttler 120 req/phut + khoa dang nhap 5 lan
+	# se khoa ca nguoi van hanh lan smoke chi vi mot nguoi la). `private_ranges` la gia dinh ingress nam
+	# trong dai rieng cua cluster — CHUA do tren Northflank that (xem northflank-preview.md muc 7); sai
+	# thi quay ve hanh vi cu, khong te hon.
+	servers {
+		trusted_proxies static private_ranges
+	}
+}
+
+:3000 {
+	header {
+		-Server
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+	}
+
+	# SUC KHOE CUA RIENG EDGE — KHONG di toi api, de readiness cua web khong phu thuoc api dang khoi dong.
+	handle /__edge_health {
+		respond "edge ok" 200
+	}
+
+	# Liet ke TUNG endpoint API duoi /settings thay vi /settings/*: `/settings/` van khop /settings/* nen
+	# se bi day sang NestJS va tra 404. Danh sach nay PHAI THEO KIP controller — xem ghi chu o edge VM.
+	@api path /events /orders* /messages* /notifications* /demo* /erp* /kiotviet* /knowledge* /broadcast* /campaigns* /auth* /health /health/media /media/catalog/* /files* /zalo/* /groups/* /observability/traces* /observability/debug* /settings/summary /settings/source-truth* /settings/groups/* /settings/rules* /settings/automation* /settings/notifications* /settings/audit* /settings/readiness /settings/price-periods* /settings/dealers/* /settings/deals/* /settings/content* /settings/master-data* /settings/users* /transport* /admin*
+	handle @api {
+		reverse_proxy {$API_UPSTREAM} {
+			header_up X-Forwarded-Proto https
+			header_up -Authorization
+			flush_interval -1
+		}
+	}
+
+	handle {
+		reverse_proxy 127.0.0.1:3100 {
+			header_up X-Forwarded-Proto https
+			header_up -Authorization
+		}
+	}
+}

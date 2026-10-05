@@ -202,6 +202,10 @@ function collectRelease(entries) {
     environment: nonEmptyString(metaEntry.environment) ?? null,
     stack: nonEmptyString(metaEntry.stack) ?? null,
     gitSha: nonEmptyString(metaEntry.gitSha) ?? null,
+    // NHA CUNG CAP da deploy ban nay (`northflank`). TUY CHON va CONG THEM: duong VM/GCP cu khong
+    // phat truong nay nen no ra `null`, giu nguyen hinh dang cu. Runtime proof (Phase 3) dung no de
+    // tu choi mot bang chung den tu duong khac voi duong da duoc phep (xem runtime-proof-core.mjs).
+    provider: nonEmptyString(metaEntry.provider) ?? null,
     appDigest: nonEmptyString(metaEntry.appDigest) ?? null,
     flowiseDigest: nonEmptyString(metaEntry.flowiseDigest) ?? null,
     workflowRunId: nonEmptyString(metaEntry.workflowRunId) ?? null,

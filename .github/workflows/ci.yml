@@ -272,3 +272,18 @@ jobs:
         run: node --test deploy/netviet/image-isolation.contract.mjs
         env:
           APP_IMAGE: netviet-zalo:${{ github.sha }}
+      # IMAGE XEM TRUOC NORTHFLANK (Autopilot Phase 3) = image chung o tren + mot LOP MONG (goi mau
+      # transport-preview + Caddy + BUILD_REVISION). Build lop mong o day de Dockerfile va Caddyfile duoc
+      # kiem tren binary that TRUOC KHI co project Northflank: khong co buoc nay chung chi duoc "viet ra",
+      # va lan deploy that dau tien se la noi dau tien phat hien Caddyfile sai.
+      - name: Build image xem truoc Northflank (lop mong tren image chung)
+        run: >-
+          docker build -f deploy/northflank/Dockerfile
+          --build-arg BASE_IMAGE=netviet-zalo:${{ github.sha }}
+          --build-arg GIT_SHA=${{ github.sha }}
+          -t netviet-preview:${{ github.sha }} .
+      - name: Image xem truoc — goi mau duy nhat, danh tinh, Caddy hop le, edge + Next len that
+        run: node --test deploy/northflank/preview-image.contract.mjs
+        env:
+          PREVIEW_IMAGE: netviet-preview:${{ github.sha }}
+          PREVIEW_GIT_SHA: ${{ github.sha }}
