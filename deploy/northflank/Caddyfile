@@ -19,6 +19,14 @@
 {
 	admin off
 	auto_https off
+	# Ingress cua Northflank la hop DUNG TRUOC Caddy: khong tin no thi Caddy ghi de X-Forwarded-For bang
+	# dia chi cua ingress, va moi khach dung chung MOT IP (throttler 120 req/phut + khoa dang nhap 5 lan
+	# se khoa ca nguoi van hanh lan smoke chi vi mot nguoi la). `private_ranges` la gia dinh ingress nam
+	# trong dai rieng cua cluster — CHUA do tren Northflank that (xem northflank-preview.md muc 7); sai
+	# thi quay ve hanh vi cu, khong te hon.
+	servers {
+		trusted_proxies static private_ranges
+	}
 }
 
 :3000 {

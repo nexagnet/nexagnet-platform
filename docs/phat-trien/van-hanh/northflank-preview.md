@@ -145,6 +145,10 @@ Northflank kéo `ghcr.io/<owner>/<repo>/preview` **không kèm thông tin đăng
    → _Environment secrets_ → **`NORTHFLANK_API_TOKEN`**. (Environment, không phải repository secret: chỉ job
    khai `environment: gd1-test` đọc được, và chịu cổng duyệt của environment đó.)
 
+   Environment `gd1-test` **đã** giới hạn deployment branch ở `main` (đo 05/10/2026: `custom_branch_policies`,
+   chỉ `main`) — đây là thứ chặn một nhánh khác `workflow_dispatch` rồi đọc token; **đừng gỡ**. Bước
+   `GITHUB_REF == refs/heads/main` trong workflow chỉ là lớp thứ hai, không phải cổng phát hành secret.
+
 Giá trị token **không bao giờ** vào repo, nhật ký, comment hay chat. Workflow đưa nó vào `env:` của đúng hai
 bước (preflight, deploy) và **không** truyền cho tiến trình smoke (có test khóa).
 
@@ -188,5 +192,15 @@ cho xanh giả:
 - Plan Sandbox (`nf-compute-10/20`) đủ RAM cho api (Nest + Prisma + argon2) và web (Next + Caddy).
 - Khởi động api (migrate + seed) hoàn tất trong cửa sổ startup probe (5 phút).
 - `deterministic-smoke.mjs` chạy được qua edge HTTPS (cookie `secure` + `X-Forwarded-Proto`).
+- **IP client qua ingress:** Caddyfile đặt `trusted_proxies static private_ranges` với giả định ingress Northflank
+  nằm trong dải riêng của cluster. Chưa đo. Nếu sai, mọi client dùng chung một IP ở API (throttler 120 req/phút,
+  khoá đăng nhập 5 lần/phút): một người lạ có thể khoá login của người vận hành và smoke — chỉ là từ chối dịch vụ
+  (proof thất bại fail-closed), không phải bypass. Cách đo: gửi `X-Forwarded-For` giả qua URL công khai và đọc IP
+  mà api ghi log.
+- **`secrets: inherit`** ở hai nơi gọi (`autopilot-runtime-proof.yml`, `deploy-tenant.yml`) — cùng khuôn đường VM, và
+  các test hiện hành ghim nó — nên workflow được gọi _nhìn thấy_ mọi repository secret dù chỉ dùng
+  `NORTHFLANK_API_TOKEN`. Hiện không tham chiếu cái nào khác (test khoá: chỉ `secrets.NORTHFLANK_API_TOKEN`).
+  Muốn thu hẹp: bỏ `secrets: inherit` (environment secret của job có `environment: gd1-test` vẫn tới job) — cần
+  xác nhận ở lần chạy live đầu trước khi đổi.
 - Image, Caddyfile và container `web` (Caddy + Next) được kiểm trên binary thật **trong CI** (job `images`,
   `preview-image.contract.mjs`) — không cần Northflank.
