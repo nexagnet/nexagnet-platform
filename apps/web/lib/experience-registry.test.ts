@@ -125,7 +125,15 @@ describe('ExperienceRegistry', () => {
     expect(resolveExperience('knowledge-workspace').id).toBe('knowledge-workspace');
     expect(resolveExperience('agent-workforce').id).toBe('agent-workforce');
     expect(resolveExperience('b2b-sales-operations').id).toBe('b2b-sales-operations');
+    expect(resolveExperience('legal-office').id).toBe('legal-office');
     expect(() => resolveExperience('missing' as never)).toThrow(/experience/i);
+  });
+
+  it('keeps legal-office a distinct view-only component gated by its own capability', () => {
+    expect(resolveExperience('legal-office').Component).not.toBe(
+      resolveExperience('knowledge-workspace').Component,
+    );
+    expect(resolveExperience('legal-office').requiredCapabilities).toEqual(['legal-office-core']);
   });
 
   it('does not require optional campaign and notification settings for operations console', () => {
