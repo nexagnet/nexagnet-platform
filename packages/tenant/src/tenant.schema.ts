@@ -295,6 +295,16 @@ export const CAPABILITY_IDS = [
    * quyet toan DOC nghiem thu, nghiem thu khong bao gio nhin thay so tien.
    */
   'transport-acceptance',
+  /**
+   * VAN PHONG PHAP LY — LOI (Issue #465): dinh danh nen cho be mat van phong phap ly trung tinh ve
+   * khach. CHI la cong vao be mat, KHONG mot nghiep vu nao da co: Vi bang, Tong dat, Xac minh dieu
+   * kien thi hanh an, To chuc thi hanh an va quan tri van phong deu CHUA co API/du lieu/phan quyen.
+   *
+   * `dependencies: []` co y — cac capability mien sau (moi mien mot ma rieng, them khi mien do co
+   * API that) se phu thuoc NO, khong nguoc lai. Bat capability nay KHONG cap quyen ky van ban phap
+   * ly hay xac nhan thanh toan: quyen do phai den tu phan quyen mien, khong tu viec bat goi.
+   */
+  'legal-office-core',
 ] as const;
 export const EXPERIENCE_IDS = [
   'operations-console',
@@ -328,6 +338,12 @@ export const EXPERIENCE_IDS = [
    * Thuong hieu, chinh sach va cac nang luc bi chan deu den tu goi khach (`tenants/<slug>/`).
    */
   'b2b-sales-operations',
+  /**
+   * Be mat VAN PHONG PHAP LY (Issue #465) — trung tinh ve khach; thuong hieu den tu goi khach.
+   * Hien la khung CHI XEM: khong mot mien nghiep vu nao duoc coi la da trien khai (xem
+   * `legal-office-core`).
+   */
+  'legal-office',
 ] as const;
 
 export const capabilityIdSchema = z.enum(CAPABILITY_IDS);
@@ -952,6 +968,8 @@ const capabilityRequirements = {
    * chung tu duoc buoc that, dong nay them mot phan tu, va luc do no moi dung.
    */
   'transport-acceptance': { dependencies: ['transport-core'] },
+  /** KHONG khai policy/integration: khung chi xem, chua co mien nao de cau hinh (Issue #465). */
+  'legal-office-core': { dependencies: [] },
 } as const satisfies Record<
   z.infer<typeof capabilityIdSchema>,
   {
@@ -984,6 +1002,7 @@ export const EXPERIENCE_REQUIREMENTS = {
     'sales-order',
     'operations',
   ],
+  'legal-office': ['legal-office-core'],
 } as const satisfies Record<
   z.infer<typeof experienceIdSchema>,
   readonly z.infer<typeof capabilityIdSchema>[]

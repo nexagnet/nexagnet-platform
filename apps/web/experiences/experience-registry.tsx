@@ -3,6 +3,7 @@ import type { ComponentType } from 'react';
 import { AgentWorkforce } from './agent-workforce/AgentWorkforce';
 import { B2bSalesOperations } from './b2b-sales-operations/B2bSalesOperations';
 import { KnowledgeWorkspace } from './knowledge-workspace/KnowledgeWorkspace';
+import { LegalOffice } from './legal-office/LegalOffice';
 import { OperationsConsole } from './operations-console/OperationsConsole';
 import { TransportOperations } from './transport-operations/TransportOperations';
 
@@ -37,6 +38,11 @@ export const EXPERIENCE_REGISTRY = {
     id: 'b2b-sales-operations',
     requiredCapabilities: EXPERIENCE_REQUIREMENTS['b2b-sales-operations'],
     Component: B2bSalesOperations,
+  },
+  'legal-office': {
+    id: 'legal-office',
+    requiredCapabilities: EXPERIENCE_REQUIREMENTS['legal-office'],
+    Component: LegalOffice,
   },
 } as const satisfies Record<ExperienceId, ExperienceDefinition>;
 
