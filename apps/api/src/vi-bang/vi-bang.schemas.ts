@@ -47,7 +47,9 @@ export const createCaseSchema = z
   .object({
     customerId: text(100),
     contractId: text(100).nullish(),
-    executorUserId: text(100).nullish(),
+    // #448: chi Admin duoc phan cong THV. #427 khong co endpoint phan cong,
+    // nen intake khong duoc dat truoc assignment (ke ca caller quan tri).
+    executorUserId: z.null().optional(),
     secretaryUserId: text(100).nullish(),
     branch: text(100).nullish(),
     occurredAt: isoDateTime.nullish(),
