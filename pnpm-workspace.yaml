@@ -57,7 +57,7 @@ overrides:
   # 09/09/2026: san nang len 0.35.4 vi GHSA-rgj7-g3m4-5g8c (HIGH) — lo hong trong libheif ma
   # sharp dong goi san. Day dung la truong hop ma kieu ghim SAN o tren duoc chon de xu ly: chi
   # sua mot con so o day, khong phai di sua tung noi khai sharp.
-  sharp: '>=0.35.4'
+  sharp: '>=0.35.5'
   # GHSA-wc9g-mqfw-jrwm · GHSA-qfvm-cv95-jqjf · GHSA-535w-7cp7-47q4 — ba advisory HIGH (DoS) cua
   # multer, ca ba vao repo qua DUY NHAT mot duong bac cau:
   # apps/api -> @nestjs/platform-express -> multer. Khong goi nao trong workspace khai multer
@@ -94,3 +94,9 @@ overrides:
   # `>= 4.21.0` cua update-browserslist-db). Neu chi viet `>=4.28.7` thi ngay khi browserslist
   # 5.0.0 len npm, mot lan re-resolve se keo major moi vao va lam vo Babel — dung kieu do im lang.
   browserslist: '>=4.28.7 <5'
+  # GHSA proxy-addr (HIGH) - vao qua express (apps/api > @nestjs/platform-express). Cung dong 2.x.
+  proxy-addr: '>=2.0.8 <3'
+  # source-map-js (HIGH) - vao qua @vitest/coverage-v8 > magicast. Cung dong 1.x.
+  source-map-js: '>=1.2.2 <2'
+  # prosemirror-view (HIGH) - vao qua adminjs > @adminjs/design-system > @tiptap/pm. Cung dong 1.x.
+  prosemirror-view: '>=1.42.3 <2'
