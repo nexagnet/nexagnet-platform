@@ -127,14 +127,17 @@ describe.runIf(process.env.RUN_PRISMA_IT === '1')('Vi bang (Postgres THAT)', () 
     expect(winners).toHaveLength(1);
   });
 
-  it('Thua hanh vien khong ton tai bi tu choi bang loi mien, khong ro ri', async () => {
+  it('khong duoc gan THV qua intake, ke ca caller gui ID hop le/gia', async () => {
     const { customer } = await newCustomer('IT Khach Mau 4');
-    await expect(
-      service.createCase(
-        createCaseSchema.parse({ customerId: customer.id, executorUserId: 'khong-co-user' }),
-        'it',
-      ),
-    ).rejects.toMatchObject({ reason: 'REFERENCE_NOT_FOUND' });
+    expect(
+      createCaseSchema.safeParse({ customerId: customer.id, executorUserId: 'khong-co-user' })
+        .success,
+    ).toBe(false);
+    expect(
+      createCaseSchema.safeParse({ customerId: customer.id, executorUserId: null }).success,
+    ).toBe(true);
+    expect((await service.listCases({ customerId: customer.id, limit: 20, offset: 0 })).items)
+      .toHaveLength(0);
   });
 
   it('cach ly khach: du lieu khach nay khong doc duoc bang pham vi khach khac', async () => {
