@@ -7,7 +7,7 @@ import { ViBangController } from './vi-bang.controller.js';
 
 describe('ViBang #427 temporary legal PII role boundary', () => {
   const reflector = new Reflector();
-  const prototype = ViBangController.prototype as unknown as Record<string, unknown>;
+  const prototype = ViBangController.prototype as unknown as Record<string, (...args: never[]) => unknown>;
   const methods = Object.getOwnPropertyNames(prototype).filter((name) =>
     name !== 'constructor' &&
     typeof prototype[name] === 'function' &&
