@@ -64,14 +64,12 @@ async function guard<T>(run: () => Promise<T>): Promise<T> {
  * Be mat HTTP cua mien vi bang. KHONG co endpoint cap nhat tong quat: ghi duy nhat ngoai tao moi la
  * `POST cases/:id/transition`. KHONG route nao nhan `tenantId` — body `.strict()` tu choi no.
  */
-// Bridge gate for #427: never grant legacy SALE/MANAGER access to legal PII.
-// #428 must replace this with the canonical per-domain/branch/THV authorization.
-@Roles('ADMIN')
 @Controller('vi-bang')
 export class ViBangController {
   constructor(private readonly service: ViBangService) {}
 
   @Post('customers')
+  @Roles('SALE', 'MANAGER', 'ADMIN')
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   createCustomer(@Body() body: unknown, @Req() request: AuthenticatedRequest) {
     const input = parse(createCustomerSchema, body);
@@ -90,6 +88,7 @@ export class ViBangController {
   }
 
   @Post('contracts')
+  @Roles('SALE', 'MANAGER', 'ADMIN')
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   createContract(@Body() body: unknown, @Req() request: AuthenticatedRequest) {
     const input = parse(createContractSchema, body);
@@ -108,6 +107,7 @@ export class ViBangController {
   }
 
   @Post('cases')
+  @Roles('SALE', 'MANAGER', 'ADMIN')
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   createCase(@Body() body: unknown, @Req() request: AuthenticatedRequest) {
     const input = parse(createCaseSchema, body);
@@ -126,6 +126,7 @@ export class ViBangController {
   }
 
   @Post('cases/:id/transition')
+  @Roles('SALE', 'MANAGER', 'ADMIN')
   @Throttle({ default: { limit: 60, ttl: 60_000 } })
   transitionCase(
     @Param('id') id: string,

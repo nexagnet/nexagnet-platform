@@ -146,8 +146,7 @@ export class ViBangService {
     const created = await this.repository.insertCase(tenantId, {
       customerId: input.customerId,
       contractId: orNull(input.contractId),
-      // #448/#428: intake must never assign the responsible THV.
-      executorUserId: null,
+      executorUserId: orNull(input.executorUserId),
       secretaryUserId: orNull(input.secretaryUserId),
       branch: orNull(input.branch),
       occurredAt: orNull(input.occurredAt),
