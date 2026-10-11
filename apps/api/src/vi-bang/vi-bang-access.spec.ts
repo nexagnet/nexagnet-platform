@@ -19,7 +19,7 @@ describe('ViBang #427 temporary legal PII role boundary', () => {
     for (const name of methods) {
       expect(
         reflector.getAllAndOverride<readonly string[]>(ROLES_KEY, [
-          prototype[name], ViBangController,
+          prototype[name]!, ViBangController,
         ]),
         name,
       ).toEqual(['ADMIN']);
