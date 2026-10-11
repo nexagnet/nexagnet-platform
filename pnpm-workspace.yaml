@@ -94,9 +94,9 @@ overrides:
   # `>= 4.21.0` cua update-browserslist-db). Neu chi viet `>=4.28.7` thi ngay khi browserslist
   # 5.0.0 len npm, mot lan re-resolve se keo major moi vao va lam vo Babel â€” dung kieu do im lang.
   browserslist: '>=4.28.7 <5'
-  # GHSA proxy-addr (HIGH) — vao qua express (apps/api > @nestjs/platform-express). Cung dong 2.x.
+  # GHSA proxy-addr (HIGH) - vao qua express (apps/api > @nestjs/platform-express). Cung dong 2.x.
   proxy-addr: '>=2.0.8 <3'
-  # source-map-js (HIGH) — vao qua @vitest/coverage-v8 > magicast. Cung dong 1.x.
+  # source-map-js (HIGH) - vao qua @vitest/coverage-v8 > magicast. Cung dong 1.x.
   source-map-js: '>=1.2.2 <2'
-  # prosemirror-view (HIGH) — vao qua adminjs > @adminjs/design-system > @tiptap/pm. Cung dong 1.x.
+  # prosemirror-view (HIGH) - vao qua adminjs > @adminjs/design-system > @tiptap/pm. Cung dong 1.x.
   prosemirror-view: '>=1.42.3 <2'
